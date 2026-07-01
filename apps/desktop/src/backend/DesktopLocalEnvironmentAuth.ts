@@ -1,6 +1,12 @@
-import { bootstrapRemoteBearerSession } from "@t3tools/client-runtime/authorization";
-import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
+import {
+  bootstrapRemoteBearerSession,
+  type RemoteEnvironmentAuthError,
+  RemoteEnvironmentAuthFetchError,
+  RemoteEnvironmentAuthTimeoutError,
+} from "@t3tools/client-runtime/authorization";
+import { PRIMARY_LOCAL_ENVIRONMENT_ID, type AuthAccessTokenResult } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -10,6 +16,10 @@ import * as Semaphore from "effect/Semaphore";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 
 import * as DesktopBackendPool from "./DesktopBackendPool.ts";
+
+const BEARER_SESSION_BOOTSTRAP_TIMEOUT_MS = 30_000;
+const BEARER_SESSION_BOOTSTRAP_RETRY_DELAY_MS = 500;
+const BEARER_SESSION_BOOTSTRAP_MAX_ATTEMPTS = 3;
 
 export class DesktopLocalEnvironmentAuthBackendNotConfiguredError extends Schema.TaggedErrorClass<DesktopLocalEnvironmentAuthBackendNotConfiguredError>()(
   "DesktopLocalEnvironmentAuthBackendNotConfiguredError",
@@ -42,6 +52,48 @@ export class DesktopLocalEnvironmentAuth extends Context.Service<
   }
 >()("@t3tools/desktop/backend/DesktopLocalEnvironmentAuth") {}
 
+function isTransientBearerSessionBootstrapError(cause: unknown): boolean {
+  return (
+    cause instanceof RemoteEnvironmentAuthTimeoutError ||
+    cause instanceof RemoteEnvironmentAuthFetchError
+  );
+}
+
+function bootstrapLocalBearerSession(input: {
+  readonly httpBaseUrl: string;
+  readonly credential: string;
+  readonly attempt?: number;
+}): Effect.Effect<AuthAccessTokenResult, RemoteEnvironmentAuthError, HttpClient.HttpClient> {
+  const attempt = input.attempt ?? 1;
+  return bootstrapRemoteBearerSession({
+    httpBaseUrl: input.httpBaseUrl,
+    credential: input.credential,
+    timeoutMs: BEARER_SESSION_BOOTSTRAP_TIMEOUT_MS,
+    clientMetadata: {
+      label: "Mognet Desktop",
+      deviceType: "desktop",
+    },
+  }).pipe(
+    Effect.catch((cause) => {
+      if (
+        attempt >= BEARER_SESSION_BOOTSTRAP_MAX_ATTEMPTS ||
+        !isTransientBearerSessionBootstrapError(cause)
+      ) {
+        return Effect.fail(cause);
+      }
+      return Effect.sleep(Duration.millis(BEARER_SESSION_BOOTSTRAP_RETRY_DELAY_MS)).pipe(
+        Effect.flatMap(() =>
+          bootstrapLocalBearerSession({
+            httpBaseUrl: input.httpBaseUrl,
+            credential: input.credential,
+            attempt: attempt + 1,
+          }),
+        ),
+      );
+    }),
+  );
+}
+
 export const make = Effect.gen(function* () {
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const httpClient = yield* HttpClient.HttpClient;
@@ -67,13 +119,9 @@ export const make = Effect.gen(function* () {
         if (!credential) {
           return yield* new DesktopLocalEnvironmentAuthBackendNotConfiguredError();
         }
-        const session = yield* bootstrapRemoteBearerSession({
+        const session = yield* bootstrapLocalBearerSession({
           httpBaseUrl: config.httpBaseUrl.href,
           credential,
-          clientMetadata: {
-            label: "T3 Code Desktop",
-            deviceType: "desktop",
-          },
         }).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
           Effect.mapError(

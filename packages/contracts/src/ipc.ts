@@ -162,7 +162,7 @@ export type DesktopUpdateStatus =
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
 export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
-export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
+export type DesktopAppStageLabel = "Stable" | "Dev" | "Nightly";
 
 export const DesktopUpdateStatusSchema = Schema.Literals([
   "disabled",
@@ -177,7 +177,7 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
-export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly"]);
+export const DesktopAppStageLabelSchema = Schema.Literals(["Stable", "Dev", "Nightly"]);
 
 export interface DesktopAppBranding {
   baseName: string;
@@ -394,11 +394,6 @@ export const PersistedSavedEnvironmentRecordSchema = Schema.Struct({
   createdAt: Schema.String,
   lastConnectedAt: Schema.NullOr(Schema.String),
   desktopSsh: Schema.optionalKey(DesktopSshEnvironmentTargetSchema),
-  relayManaged: Schema.optionalKey(
-    Schema.Struct({
-      relayUrl: Schema.String,
-    }),
-  ),
 });
 export type PersistedSavedEnvironmentRecord = typeof PersistedSavedEnvironmentRecordSchema.Type;
 
@@ -572,7 +567,7 @@ export const DesktopPreviewPointerEventSchema: Schema.Codec<DesktopPreviewPointe
  * can attach.
  */
 export interface DesktopPreviewWebviewConfig {
-  /** `persist:t3code-preview` (or whatever the desktop chose). */
+  /** `persist:mognet-preview` (or whatever the desktop chose). */
   partition: string;
   /**
    * Canonical `<webview webpreferences="...">` string. Encodes the security

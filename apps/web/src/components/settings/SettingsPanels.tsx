@@ -4,7 +4,11 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   defaultInstanceIdForDriver,
+  EDITORS,
+  EXTERNAL_TERMINALS,
   type DesktopUpdateChannel,
+  type EditorId,
+  type ExternalTerminalId,
   PROVIDER_DISPLAY_NAMES,
   ProviderDriverKind,
   type ProviderInstanceConfig,
@@ -24,7 +28,7 @@ import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Result from "effect/Result";
-import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import { APP_VERSION } from "../../branding";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -35,7 +39,6 @@ import {
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { isElectron } from "../../env";
-import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
 import { useTheme } from "../../hooks/useTheme";
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { useThreadActions } from "../../hooks/useThreadActions";
@@ -51,6 +54,8 @@ import {
 } from "../../providerInstances";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import {
+  primaryServerAvailableEditorsAtom,
+  primaryServerAvailableTerminalsAtom,
   primaryServerObservabilityAtom,
   primaryServerProvidersAtom,
   serverEnvironment,
@@ -110,7 +115,20 @@ const TIMESTAMP_FORMAT_LABELS = {
   "24-hour": "24-hour",
 } as const;
 
+const AUTOMATIC_OPEN_WITH_VALUE = "__automatic__";
+const EDITOR_LABELS = new Map(EDITORS.map((editor) => [editor.id, editor.label]));
+const TERMINAL_LABELS = new Map(
+  EXTERNAL_TERMINALS.map((terminal) => [terminal.id, terminal.label]),
+);
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
+
+function editorLabel(editor: EditorId): string {
+  return EDITOR_LABELS.get(editor) ?? editor;
+}
+
+function terminalLabel(terminal: ExternalTerminalId): string {
+  return TERMINAL_LABELS.get(terminal) ?? terminal;
+}
 
 function withoutProviderInstanceKey<V>(
   record: Readonly<Record<ProviderInstanceId, V>> | undefined,
@@ -166,10 +184,9 @@ function AboutVersionTitle() {
 function AboutVersionSection() {
   const updateState = useDesktopUpdateState();
   const [isChangingUpdateChannel, setIsChangingUpdateChannel] = useState(false);
+  const hasDesktopBridge = isElectron && typeof window.desktopBridge !== "undefined";
 
-  const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
   const selectedUpdateChannel = updateState?.channel ?? "latest";
-  const selectedHostedAppChannel = hasDesktopBridge ? null : HOSTED_APP_CHANNEL;
 
   const handleUpdateChannelChange = useCallback(
     (channel: DesktopUpdateChannel) => {
@@ -339,34 +356,6 @@ function AboutVersionSection() {
             </Select>
           }
         />
-      ) : selectedHostedAppChannel ? (
-        <SettingsRow
-          title="Update track"
-          description="Switches the hosted app release channel."
-          control={
-            <Select
-              value={selectedHostedAppChannel}
-              onValueChange={(value) => {
-                if (value === selectedHostedAppChannel) return;
-                window.location.assign(
-                  buildHostedChannelSelectionUrl({ channel: value as HostedAppChannel }),
-                );
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Update track">
-                <SelectValue>{HOSTED_APP_CHANNEL_LABEL}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem hideIndicator value="latest">
-                  Latest
-                </SelectItem>
-                <SelectItem hideIndicator value="nightly">
-                  Nightly
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
       ) : null}
     </>
   );
@@ -394,6 +383,12 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
       ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
         ? ["Diff whitespace changes"]
+        : []),
+      ...(settings.defaultEditor !== DEFAULT_UNIFIED_SETTINGS.defaultEditor
+        ? ["Default editor"]
+        : []),
+      ...(settings.defaultTerminal !== DEFAULT_UNIFIED_SETTINGS.defaultTerminal
+        ? ["Default terminal"]
         : []),
       ...(settings.autoOpenPlanSidebar !== DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar
         ? ["Auto-open task panel"]
@@ -429,6 +424,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
       settings.addProjectBaseDirectory,
+      settings.defaultEditor,
+      settings.defaultTerminal,
       settings.defaultThreadEnvMode,
       settings.newWorktreesStartFromOrigin,
       settings.diffIgnoreWhitespace,
@@ -456,6 +453,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
+      defaultEditor: DEFAULT_UNIFIED_SETTINGS.defaultEditor,
+      defaultTerminal: DEFAULT_UNIFIED_SETTINGS.defaultTerminal,
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       autoOpenPlanSidebar: DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar,
       enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
@@ -482,6 +481,8 @@ export function GeneralSettingsPanel() {
   const updateSettings = useUpdatePrimarySettings();
   const observability = useAtomValue(primaryServerObservabilityAtom);
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
+  const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
+  const availableTerminals = useAtomValue(primaryServerAvailableTerminalsAtom);
   const diagnosticsDescription = formatDiagnosticsDescription({
     localTracingEnabled: observability?.localTracingEnabled ?? false,
     otlpTracesEnabled: observability?.otlpTracesEnabled ?? false,
@@ -512,13 +513,19 @@ export function GeneralSettingsPanel() {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const selectedDefaultEditorLabel = settings.defaultEditor
+    ? editorLabel(settings.defaultEditor)
+    : "Automatic";
+  const selectedDefaultTerminalLabel = settings.defaultTerminal
+    ? terminalLabel(settings.defaultTerminal)
+    : "Automatic";
 
   return (
     <SettingsPageContainer>
       <SettingsSection title="General">
         <SettingsRow
           title="Theme"
-          description="Choose how T3 Code looks across the app."
+          description="Choose how Mognet looks across the app."
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
@@ -542,6 +549,100 @@ export function GeneralSettingsPanel() {
                 {THEME_OPTIONS.map((option) => (
                   <SelectItem hideIndicator key={option.value} value={option.value}>
                     {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Default editor"
+          description="Used by top-bar and file open actions."
+          resetAction={
+            settings.defaultEditor !== DEFAULT_UNIFIED_SETTINGS.defaultEditor ? (
+              <SettingResetButton
+                label="default editor"
+                onClick={() =>
+                  updateSettings({
+                    defaultEditor: DEFAULT_UNIFIED_SETTINGS.defaultEditor,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.defaultEditor ?? AUTOMATIC_OPEN_WITH_VALUE}
+              onValueChange={(value) => {
+                updateSettings({
+                  defaultEditor: value === AUTOMATIC_OPEN_WITH_VALUE ? null : (value as EditorId),
+                });
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-44" aria-label="Default editor">
+                <SelectValue>{selectedDefaultEditorLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value={AUTOMATIC_OPEN_WITH_VALUE}>
+                  Automatic
+                </SelectItem>
+                {settings.defaultEditor && !availableEditors.includes(settings.defaultEditor) ? (
+                  <SelectItem hideIndicator disabled value={settings.defaultEditor}>
+                    {editorLabel(settings.defaultEditor)} (unavailable)
+                  </SelectItem>
+                ) : null}
+                {availableEditors.map((editor) => (
+                  <SelectItem hideIndicator key={editor} value={editor}>
+                    {editorLabel(editor)}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Default terminal"
+          description="Used by the top-bar terminal action."
+          resetAction={
+            settings.defaultTerminal !== DEFAULT_UNIFIED_SETTINGS.defaultTerminal ? (
+              <SettingResetButton
+                label="default terminal"
+                onClick={() =>
+                  updateSettings({
+                    defaultTerminal: DEFAULT_UNIFIED_SETTINGS.defaultTerminal,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.defaultTerminal ?? AUTOMATIC_OPEN_WITH_VALUE}
+              onValueChange={(value) => {
+                updateSettings({
+                  defaultTerminal:
+                    value === AUTOMATIC_OPEN_WITH_VALUE ? null : (value as ExternalTerminalId),
+                });
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-44" aria-label="Default terminal">
+                <SelectValue>{selectedDefaultTerminalLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value={AUTOMATIC_OPEN_WITH_VALUE}>
+                  Automatic
+                </SelectItem>
+                {settings.defaultTerminal &&
+                !availableTerminals.includes(settings.defaultTerminal) ? (
+                  <SelectItem hideIndicator disabled value={settings.defaultTerminal}>
+                    {terminalLabel(settings.defaultTerminal)} (unavailable)
+                  </SelectItem>
+                ) : null}
+                {availableTerminals.map((terminal) => (
+                  <SelectItem hideIndicator key={terminal} value={terminal}>
+                    {terminalLabel(terminal)}
                   </SelectItem>
                 ))}
               </SelectPopup>
@@ -953,7 +1054,7 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        {isElectron || HOSTED_APP_CHANNEL ? (
+        {isElectron ? (
           <AboutVersionSection />
         ) : (
           <SettingsRow

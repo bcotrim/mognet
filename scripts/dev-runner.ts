@@ -29,8 +29,8 @@ const MAX_PORT = 65535;
 const DESKTOP_DEV_LOOPBACK_HOST = "127.0.0.1";
 const DEV_PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0", "::1", "::"] as const;
 
-export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
-  path.join(NodeOS.homedir(), ".t3"),
+export const DEFAULT_MOGNET_HOME = Effect.map(Effect.service(Path.Path), (path) =>
+  path.join(NodeOS.homedir(), ".mognet"),
 );
 
 const MODE_ARGS = {
@@ -71,7 +71,7 @@ export class DevRunnerConfigurationError extends Schema.TaggedErrorClass<DevRunn
 export class DevRunnerInvalidPortOffsetError extends Schema.TaggedErrorClass<DevRunnerInvalidPortOffsetError>()(
   "DevRunnerInvalidPortOffsetError",
   {
-    configKey: Schema.Literal("T3CODE_PORT_OFFSET"),
+    configKey: Schema.String,
     portOffset: Schema.Number,
     minimum: Schema.Number,
   },
@@ -158,9 +158,10 @@ const optionalIntegerConfig = (name: string): Config.Config<number | undefined> 
     Config.option,
     Config.map((value) => Option.getOrUndefined(value)),
   );
+
 const OffsetConfig = Config.all({
-  portOffset: optionalIntegerConfig("T3CODE_PORT_OFFSET"),
-  devInstance: optionalStringConfig("T3CODE_DEV_INSTANCE"),
+  portOffset: optionalIntegerConfig("MOGNET_PORT_OFFSET"),
+  devInstance: optionalStringConfig("MOGNET_DEV_INSTANCE"),
 });
 
 export function resolveOffset(config: {
@@ -174,7 +175,7 @@ export function resolveOffset(config: {
     if (config.portOffset < 0) {
       return Effect.fail(
         new DevRunnerInvalidPortOffsetError({
-          configKey: "T3CODE_PORT_OFFSET",
+          configKey: "MOGNET_PORT_OFFSET",
           portOffset: config.portOffset,
           minimum: 0,
         }),
@@ -182,7 +183,7 @@ export function resolveOffset(config: {
     }
     return Effect.succeed({
       offset: config.portOffset,
-      source: `T3CODE_PORT_OFFSET=${config.portOffset}`,
+      source: `MOGNET_PORT_OFFSET=${config.portOffset}`,
     });
   }
 
@@ -194,12 +195,12 @@ export function resolveOffset(config: {
   if (/^\d+$/.test(seed)) {
     return Effect.succeed({
       offset: Number(seed),
-      source: `numeric T3CODE_DEV_INSTANCE=${seed}`,
+      source: `numeric MOGNET_DEV_INSTANCE=${seed}`,
     });
   }
 
   const offset = ((Hash.string(seed) >>> 0) % MAX_HASH_OFFSET) + 1;
-  return Effect.succeed({ offset, source: `hashed T3CODE_DEV_INSTANCE=${seed}` });
+  return Effect.succeed({ offset, source: `hashed MOGNET_DEV_INSTANCE=${seed}` });
 }
 
 function resolveBaseDir(baseDir: string | undefined): Effect.Effect<string, never, Path.Path> {
@@ -211,7 +212,7 @@ function resolveBaseDir(baseDir: string | undefined): Effect.Effect<string, neve
       return path.resolve(configured);
     }
 
-    return yield* DEFAULT_T3_HOME;
+    return yield* DEFAULT_MOGNET_HOME;
   });
 }
 
@@ -254,57 +255,57 @@ export function createDevRunnerEnv({
       VITE_DEV_SERVER_URL:
         devUrl?.toString() ??
         `http://${isDesktopMode ? DESKTOP_DEV_LOOPBACK_HOST : "localhost"}:${webPort}`,
-      T3CODE_HOME: resolvedBaseDir,
+      MOGNET_HOME: resolvedBaseDir,
     };
 
     if (!isDesktopMode) {
-      output.T3CODE_PORT = String(serverPort);
+      output.MOGNET_PORT = String(serverPort);
       output.VITE_HTTP_URL = `http://localhost:${serverPort}`;
       output.VITE_WS_URL = `ws://localhost:${serverPort}`;
     } else {
-      output.T3CODE_PORT = String(serverPort);
+      output.MOGNET_PORT = String(serverPort);
       output.VITE_HTTP_URL = `http://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
       output.VITE_WS_URL = `ws://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
-      delete output.T3CODE_MODE;
-      delete output.T3CODE_NO_BROWSER;
-      delete output.T3CODE_HOST;
+      delete output.MOGNET_MODE;
+      delete output.MOGNET_NO_BROWSER;
+      delete output.MOGNET_HOST;
     }
 
     if (!isDesktopMode && host !== undefined) {
-      output.T3CODE_HOST = host;
+      output.MOGNET_HOST = host;
     }
 
     if (!isDesktopMode && noBrowser !== undefined) {
-      output.T3CODE_NO_BROWSER = noBrowser ? "1" : "0";
+      output.MOGNET_NO_BROWSER = noBrowser ? "1" : "0";
     } else if (!isDesktopMode) {
-      delete output.T3CODE_NO_BROWSER;
+      delete output.MOGNET_NO_BROWSER;
     }
 
     if (autoBootstrapProjectFromCwd !== undefined) {
-      output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
+      output.MOGNET_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
     } else {
-      delete output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
+      delete output.MOGNET_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
     }
 
     if (logWebSocketEvents !== undefined) {
-      output.T3CODE_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
+      output.MOGNET_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
     } else {
-      delete output.T3CODE_LOG_WS_EVENTS;
+      delete output.MOGNET_LOG_WS_EVENTS;
     }
 
     if (mode === "dev") {
-      output.T3CODE_MODE = "web";
-      delete output.T3CODE_DESKTOP_WS_URL;
+      output.MOGNET_MODE = "web";
+      delete output.MOGNET_DESKTOP_WS_URL;
     }
 
     if (mode === "dev:server" || mode === "dev:web") {
-      output.T3CODE_MODE = "web";
-      delete output.T3CODE_DESKTOP_WS_URL;
+      output.MOGNET_MODE = "web";
+      delete output.MOGNET_DESKTOP_WS_URL;
     }
 
     if (isDesktopMode) {
       output.HOST = DESKTOP_DEV_LOOPBACK_HOST;
-      delete output.T3CODE_DESKTOP_WS_URL;
+      delete output.MOGNET_DESKTOP_WS_URL;
     }
 
     return output;
@@ -485,7 +486,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       Effect.mapError(
         (cause) =>
           new DevRunnerConfigurationError({
-            configKeys: ["T3CODE_PORT_OFFSET", "T3CODE_DEV_INSTANCE"],
+            configKeys: ["MOGNET_PORT_OFFSET", "MOGNET_DEV_INSTANCE"],
             cause,
           }),
       ),
@@ -521,7 +522,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
         : "";
 
     yield* Effect.logInfo(
-      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.T3CODE_PORT)} webPort=${String(env.PORT)} baseDir=${String(env.T3CODE_HOME)}`,
+      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.MOGNET_PORT)} webPort=${String(env.PORT)} baseDir=${String(env.MOGNET_HOME)}`,
     );
 
     if (input.dryRun) {
@@ -586,32 +587,30 @@ const devRunnerCli = Command.make("dev-runner", {
     Argument.withDescription("Development mode to run."),
   ),
   t3Home: Flag.string("home-dir").pipe(
-    Flag.withDescription("Base directory for all T3 Code data (equivalent to T3CODE_HOME)."),
-    Flag.withFallbackConfig(optionalStringConfig("T3CODE_HOME")),
+    Flag.withDescription("Base directory for all Mognet data (env: MOGNET_HOME)."),
+    Flag.withFallbackConfig(optionalStringConfig("MOGNET_HOME")),
   ),
   noBrowser: Flag.boolean("no-browser").pipe(
-    Flag.withDescription("Browser auto-open toggle (equivalent to T3CODE_NO_BROWSER)."),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_NO_BROWSER")),
+    Flag.withDescription("Browser auto-open toggle (env: MOGNET_NO_BROWSER)."),
+    Flag.withFallbackConfig(optionalBooleanConfig("MOGNET_NO_BROWSER")),
   ),
   autoBootstrapProjectFromCwd: Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
-    Flag.withDescription(
-      "Auto-bootstrap toggle (equivalent to T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).",
-    ),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
+    Flag.withDescription("Auto-bootstrap toggle (env: MOGNET_AUTO_BOOTSTRAP_PROJECT_FROM_CWD)."),
+    Flag.withFallbackConfig(optionalBooleanConfig("MOGNET_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
   ),
   logWebSocketEvents: Flag.boolean("log-websocket-events").pipe(
-    Flag.withDescription("WebSocket event logging toggle (equivalent to T3CODE_LOG_WS_EVENTS)."),
+    Flag.withDescription("WebSocket event logging toggle (env: MOGNET_LOG_WS_EVENTS)."),
     Flag.withAlias("log-ws-events"),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_LOG_WS_EVENTS")),
+    Flag.withFallbackConfig(optionalBooleanConfig("MOGNET_LOG_WS_EVENTS")),
   ),
   host: Flag.string("host").pipe(
-    Flag.withDescription("Server host/interface override (forwards to T3CODE_HOST)."),
-    Flag.withFallbackConfig(optionalStringConfig("T3CODE_HOST")),
+    Flag.withDescription("Server host/interface override (forwards to MOGNET_HOST)."),
+    Flag.withFallbackConfig(optionalStringConfig("MOGNET_HOST")),
   ),
   port: Flag.integer("port").pipe(
     Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
-    Flag.withDescription("Server port override (forwards to T3CODE_PORT)."),
-    Flag.withFallbackConfig(optionalPortConfig("T3CODE_PORT")),
+    Flag.withDescription("Server port override (forwards to MOGNET_PORT)."),
+    Flag.withFallbackConfig(optionalPortConfig("MOGNET_PORT")),
   ),
   devUrl: Flag.string("dev-url").pipe(
     Flag.withSchema(Schema.URLFromString),

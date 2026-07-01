@@ -6,6 +6,7 @@ import { applyServerConfigProjection, projectServerWelcome } from "./server.ts";
 
 const CONFIG = {
   availableEditors: [],
+  availableTerminals: [],
   issues: [],
   keybindings: {},
   keybindingsConfigPath: null,

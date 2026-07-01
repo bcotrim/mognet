@@ -1,6 +1,7 @@
 import {
   type EnvironmentId,
   type EditorId,
+  type ExternalTerminalId,
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
@@ -15,6 +16,7 @@ import ProjectScriptsControl, {
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
 import { OpenInPicker } from "./OpenInPicker";
+import { OpenInTerminalPicker } from "./OpenInTerminalPicker";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { cn } from "~/lib/utils";
 
@@ -29,6 +31,7 @@ interface ChatHeaderProps {
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
+  availableTerminals: ReadonlyArray<ExternalTerminalId>;
   rightPanelOpen: boolean;
   gitCwd: string | null;
   onRunProjectScript: (script: ProjectScript) => void;
@@ -63,6 +66,7 @@ export const ChatHeader = memo(function ChatHeader({
   preferredScriptId,
   keybindings,
   availableEditors,
+  availableTerminals,
   rightPanelOpen,
   gitCwd,
   onRunProjectScript,
@@ -112,12 +116,19 @@ export const ChatHeader = memo(function ChatHeader({
           />
         )}
         {showOpenInPicker && (
-          <OpenInPicker
-            environmentId={activeThreadEnvironmentId}
-            keybindings={keybindings}
-            availableEditors={availableEditors}
-            openInCwd={openInCwd}
-          />
+          <>
+            <OpenInPicker
+              environmentId={activeThreadEnvironmentId}
+              keybindings={keybindings}
+              availableEditors={availableEditors}
+              openInCwd={openInCwd}
+            />
+            <OpenInTerminalPicker
+              environmentId={activeThreadEnvironmentId}
+              availableTerminals={availableTerminals}
+              openInCwd={openInCwd}
+            />
+          </>
         )}
         {activeProjectName && (
           <GitActionsControl

@@ -2,8 +2,9 @@ import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
 
-export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
+export const PERSISTED_STATE_KEY = "mognet:ui-state:v1";
 const LEGACY_PERSISTED_STATE_KEYS = [
+  "t3code:ui-state:v1",
   "t3code:renderer-state:v8",
   "t3code:renderer-state:v7",
   "t3code:renderer-state:v6",

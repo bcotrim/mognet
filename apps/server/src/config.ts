@@ -165,7 +165,7 @@ const makeTest = Effect.fn("ServerConfig.makeTest")(function* (
     otlpTracesUrl: undefined,
     otlpMetricsUrl: undefined,
     otlpExportIntervalMs: 10_000,
-    otlpServiceName: "t3-server",
+    otlpServiceName: "mognet-server",
     cwd,
     baseDir,
     ...derivedPaths,

@@ -11,7 +11,6 @@ import {
   removeConnectionFromCatalog,
   replaceCatalogValue,
 } from "@t3tools/client-runtime/platform";
-import { TokenStore } from "@t3tools/client-runtime/authorization";
 import {
   ConnectionTransientError,
   CredentialStore,
@@ -31,7 +30,8 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
-const DATABASE_NAME = "t3code:connection-runtime";
+const DATABASE_NAME = "mognet:connection-runtime";
+const LEGACY_DATABASE_NAME = "t3code:connection-runtime";
 const DATABASE_VERSION = 2;
 const CATALOG_STORE_NAME = "catalog";
 const SHELL_STORE_NAME = "shell";
@@ -86,7 +86,9 @@ function persistenceError(
   });
 }
 
-const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* () {
+const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* (
+  databaseName = DATABASE_NAME,
+) {
   return yield* Effect.callback<IDBDatabase, ConnectionTransientError>((resume) => {
     if (typeof indexedDB === "undefined") {
       resume(
@@ -94,7 +96,7 @@ const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* (
       );
       return;
     }
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    const request = indexedDB.open(databaseName, DATABASE_VERSION);
     request.addEventListener("upgradeneeded", () => {
       if (!request.result.objectStoreNames.contains(CATALOG_STORE_NAME)) {
         request.result.createObjectStore(CATALOG_STORE_NAME);
@@ -113,6 +115,34 @@ const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* (
       resume(Effect.succeed(request.result));
     });
   });
+});
+
+const databaseExists = (databaseName: string) =>
+  Effect.tryPromise({
+    try: async () => {
+      if (typeof indexedDB === "undefined") {
+        return false;
+      }
+      const factory = indexedDB as IDBFactory & {
+        readonly databases?: () => Promise<ReadonlyArray<{ readonly name?: string | null }>>;
+      };
+      if (typeof factory.databases !== "function") {
+        return false;
+      }
+      const databases = await factory.databases();
+      return databases.some((database) => database.name === databaseName);
+    },
+    catch: () => false,
+  }).pipe(Effect.orElseSucceed(() => false));
+
+const openExistingDatabase = Effect.fn("web.connectionStorage.openExistingDatabase")(function* (
+  databaseName: string,
+) {
+  const exists = yield* databaseExists(databaseName);
+  if (!exists) {
+    return Option.none<IDBDatabase>();
+  }
+  return Option.some(yield* openDatabase(databaseName));
 });
 
 function readDatabaseValue(database: IDBDatabase, storeName: string, key: IDBValidKey) {
@@ -214,7 +244,10 @@ export interface CatalogBackend {
   readonly quarantine?: (raw: string) => Effect.Effect<void, ConnectionTransientError>;
 }
 
-export function makeCatalogBackend(database: IDBDatabase): CatalogBackend {
+export function makeCatalogBackend(
+  database: IDBDatabase,
+  legacyDatabase?: IDBDatabase,
+): CatalogBackend {
   const bridge = window.desktopBridge;
   if (bridge?.getConnectionCatalog !== undefined && bridge.setConnectionCatalog !== undefined) {
     return {
@@ -244,6 +277,30 @@ export function makeCatalogBackend(database: IDBDatabase): CatalogBackend {
   return {
     read: readDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY).pipe(
       Effect.map((value) => (typeof value === "string" ? value : null)),
+      Effect.flatMap((current) => {
+        if (current !== null && current.trim() !== "") {
+          return Effect.succeed(current);
+        }
+        if (legacyDatabase === undefined) {
+          return Effect.succeed(current);
+        }
+        return readDatabaseValue(legacyDatabase, CATALOG_STORE_NAME, CATALOG_KEY).pipe(
+          Effect.map((value) => (typeof value === "string" && value.trim() !== "" ? value : null)),
+          Effect.flatMap((legacy) => {
+            if (legacy === null) {
+              return Effect.succeed(current);
+            }
+            return writeDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY, legacy).pipe(
+              Effect.catch((cause) =>
+                Effect.logWarning("Could not migrate legacy web connection catalog.", {
+                  error: cause.message,
+                }),
+              ),
+              Effect.as(legacy),
+            );
+          }),
+        );
+      }),
     ),
     write: (raw) => writeDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY, raw),
     quarantine: (raw) =>
@@ -325,7 +382,18 @@ export const connectionStorageLayer = Layer.effectContext(
     const database = yield* Effect.acquireRelease(openDatabase(), (database) =>
       Effect.sync(() => database.close()),
     );
-    const catalog = yield* makeCatalogStore(makeCatalogBackend(database));
+    const legacyDatabase = yield* Effect.acquireRelease(
+      openExistingDatabase(LEGACY_DATABASE_NAME).pipe(
+        Effect.orElseSucceed((): Option.Option<IDBDatabase> => Option.none()),
+      ),
+      Option.match({
+        onNone: () => Effect.void,
+        onSome: (database) => Effect.sync(() => database.close()),
+      }),
+    );
+    const catalog = yield* makeCatalogStore(
+      makeCatalogBackend(database, Option.getOrUndefined(legacyDatabase)),
+    );
 
     const targetStore = ConnectionTargetStore.of({
       list: catalog.read.pipe(
@@ -391,34 +459,6 @@ export const connectionStorageLayer = Layer.effectContext(
             document.credentials,
             (value) => value.connectionId,
             connectionId,
-          ),
-        })),
-    });
-    const remoteTokenStore = TokenStore.make({
-      get: (environmentId) =>
-        catalog.read.pipe(
-          Effect.map((document) =>
-            Option.fromUndefinedOr(
-              document.remoteDpopTokens.find((token) => token.environmentId === environmentId),
-            ),
-          ),
-        ),
-      put: (token) =>
-        catalog.update((document) => ({
-          ...document,
-          remoteDpopTokens: replaceCatalogValue(
-            document.remoteDpopTokens,
-            (value) => value.environmentId,
-            token,
-          ),
-        })),
-      remove: (environmentId) =>
-        catalog.update((document) => ({
-          ...document,
-          remoteDpopTokens: removeCatalogValue(
-            document.remoteDpopTokens,
-            (value) => value.environmentId,
-            environmentId,
           ),
         })),
     });
@@ -529,7 +569,6 @@ export const connectionStorageLayer = Layer.effectContext(
       Context.add(ConnectionRegistrationStore, registrationStore),
       Context.add(ProfileStore.ConnectionProfileStore, profileStore),
       Context.add(CredentialStore.ConnectionCredentialStore, credentialStore),
-      Context.add(TokenStore.RemoteDpopAccessTokenStore, remoteTokenStore),
       Context.add(EnvironmentCacheStore, cacheStore),
     );
   }),

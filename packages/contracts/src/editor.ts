@@ -50,6 +50,35 @@ export const LaunchEditorInput = Schema.Struct({
 });
 export type LaunchEditorInput = typeof LaunchEditorInput.Type;
 
+type ExternalTerminalDefinition = {
+  readonly id: string;
+  readonly label: string;
+};
+
+export const EXTERNAL_TERMINALS = [
+  { id: "terminal-app", label: "Terminal" },
+  { id: "iterm", label: "iTerm2" },
+  { id: "ghostty", label: "Ghostty" },
+  { id: "warp", label: "Warp" },
+  { id: "wezterm", label: "WezTerm" },
+  { id: "alacritty", label: "Alacritty" },
+  { id: "kitty", label: "kitty" },
+  { id: "windows-terminal", label: "Windows Terminal" },
+  { id: "gnome-terminal", label: "GNOME Terminal" },
+  { id: "konsole", label: "Konsole" },
+] as const satisfies ReadonlyArray<ExternalTerminalDefinition>;
+
+export const ExternalTerminalId = Schema.Literals(
+  EXTERNAL_TERMINALS.map((terminal) => terminal.id),
+);
+export type ExternalTerminalId = typeof ExternalTerminalId.Type;
+
+export const LaunchTerminalInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  terminal: ExternalTerminalId,
+});
+export type LaunchTerminalInput = typeof LaunchTerminalInput.Type;
+
 export class ExternalLauncherUnknownEditorError extends Schema.TaggedErrorClass<ExternalLauncherUnknownEditorError>()(
   "ExternalLauncherUnknownEditorError",
   {
@@ -58,6 +87,17 @@ export class ExternalLauncherUnknownEditorError extends Schema.TaggedErrorClass<
 ) {
   override get message(): string {
     return `Unknown editor: ${this.editor}`;
+  }
+}
+
+export class ExternalLauncherUnknownTerminalError extends Schema.TaggedErrorClass<ExternalLauncherUnknownTerminalError>()(
+  "ExternalLauncherUnknownTerminalError",
+  {
+    terminal: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `Unknown terminal: ${this.terminal}`;
   }
 }
 
@@ -72,6 +112,17 @@ export class ExternalLauncherUnsupportedEditorError extends Schema.TaggedErrorCl
   }
 }
 
+export class ExternalLauncherUnsupportedTerminalError extends Schema.TaggedErrorClass<ExternalLauncherUnsupportedTerminalError>()(
+  "ExternalLauncherUnsupportedTerminalError",
+  {
+    terminal: ExternalTerminalId,
+  },
+) {
+  override get message(): string {
+    return `Unsupported terminal: ${this.terminal}`;
+  }
+}
+
 export class ExternalLauncherCommandNotFoundError extends Schema.TaggedErrorClass<ExternalLauncherCommandNotFoundError>()(
   "ExternalLauncherCommandNotFoundError",
   {
@@ -81,6 +132,18 @@ export class ExternalLauncherCommandNotFoundError extends Schema.TaggedErrorClas
 ) {
   override get message(): string {
     return `Editor command not found: ${this.command}`;
+  }
+}
+
+export class ExternalLauncherTerminalCommandNotFoundError extends Schema.TaggedErrorClass<ExternalLauncherTerminalCommandNotFoundError>()(
+  "ExternalLauncherTerminalCommandNotFoundError",
+  {
+    terminal: ExternalTerminalId,
+    command: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `Terminal command not found: ${this.command}`;
   }
 }
 
@@ -115,12 +178,29 @@ export class ExternalLauncherEditorSpawnError extends Schema.TaggedErrorClass<Ex
   }
 }
 
+export class ExternalLauncherTerminalSpawnError extends Schema.TaggedErrorClass<ExternalLauncherTerminalSpawnError>()(
+  "ExternalLauncherTerminalSpawnError",
+  {
+    ...ExternalLauncherSpawnFields,
+    terminal: ExternalTerminalId,
+    target: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `Failed to launch terminal '${this.terminal}' at '${this.target}' with '${[this.command, ...this.args].join(" ")}'`;
+  }
+}
+
 export const ExternalLauncherError = Schema.Union([
   ExternalLauncherUnknownEditorError,
+  ExternalLauncherUnknownTerminalError,
   ExternalLauncherUnsupportedEditorError,
+  ExternalLauncherUnsupportedTerminalError,
   ExternalLauncherCommandNotFoundError,
+  ExternalLauncherTerminalCommandNotFoundError,
   ExternalLauncherBrowserSpawnError,
   ExternalLauncherEditorSpawnError,
+  ExternalLauncherTerminalSpawnError,
 ]);
 export type ExternalLauncherError = typeof ExternalLauncherError.Type;
 

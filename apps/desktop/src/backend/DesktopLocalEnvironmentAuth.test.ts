@@ -1,9 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as TestClock from "effect/testing/TestClock";
 import * as HttpClient from "effect/unstable/http/HttpClient";
+import type { HttpClientRequest } from "effect/unstable/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 
@@ -29,6 +33,31 @@ const config = {
   captureOutput: true,
 };
 
+const bearerTokenResponse = (request: HttpClientRequest) =>
+  HttpClientResponse.fromWeb(
+    request,
+    new Response(
+      JSON.stringify({
+        access_token: "desktop-bearer-token",
+        issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: "orchestration:read",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  );
+
+const poolLayer = Layer.succeed(DesktopBackendPool.DesktopBackendPool, {
+  list: Effect.succeed([
+    {
+      id: PRIMARY_LOCAL_ENVIRONMENT_ID,
+      label: Effect.succeed("Windows"),
+      currentConfig: Effect.succeed(Option.some(config)),
+    },
+  ]),
+} as unknown as DesktopBackendPool.DesktopBackendPool["Service"]);
+
 describe("DesktopLocalEnvironmentAuth", () => {
   it.effect("exchanges the desktop bootstrap credential only once", () =>
     Effect.gen(function* () {
@@ -37,33 +66,10 @@ describe("DesktopLocalEnvironmentAuth", () => {
         HttpClient.HttpClient,
         HttpClient.make((request) =>
           Ref.update(requestCount, (count) => count + 1).pipe(
-            Effect.as(
-              HttpClientResponse.fromWeb(
-                request,
-                new Response(
-                  JSON.stringify({
-                    access_token: "desktop-bearer-token",
-                    issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
-                    token_type: "Bearer",
-                    expires_in: 3600,
-                    scope: "orchestration:read",
-                  }),
-                  { status: 200, headers: { "content-type": "application/json" } },
-                ),
-              ),
-            ),
+            Effect.as(bearerTokenResponse(request)),
           ),
         ),
       );
-      const poolLayer = Layer.succeed(DesktopBackendPool.DesktopBackendPool, {
-        list: Effect.succeed([
-          {
-            id: PRIMARY_LOCAL_ENVIRONMENT_ID,
-            label: Effect.succeed("Windows"),
-            currentConfig: Effect.succeed(Option.some(config)),
-          },
-        ]),
-      } as unknown as DesktopBackendPool.DesktopBackendPool["Service"]);
       const testLayer = DesktopLocalEnvironmentAuth.layer.pipe(
         Layer.provide(Layer.mergeAll(poolLayer, httpClientLayer)),
       );
@@ -77,5 +83,34 @@ describe("DesktopLocalEnvironmentAuth", () => {
       assert.strictEqual(second, "desktop-bearer-token");
       assert.strictEqual(yield* Ref.get(requestCount), 1);
     }),
+  );
+
+  it.effect("retries a transient desktop bearer session bootstrap failure", () =>
+    Effect.gen(function* () {
+      const requestCount = yield* Ref.make(0);
+      const httpClientLayer = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Ref.updateAndGet(requestCount, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 1 ? Effect.never : Effect.succeed(bearerTokenResponse(request)),
+            ),
+          ),
+        ),
+      );
+      const testLayer = DesktopLocalEnvironmentAuth.layer.pipe(
+        Layer.provide(Layer.mergeAll(poolLayer, httpClientLayer)),
+      );
+
+      const token = yield* Effect.gen(function* () {
+        const auth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
+        const tokenFiber = yield* Effect.forkChild(auth.getBearerToken);
+        yield* TestClock.adjust(Duration.millis(30_500));
+        return yield* Fiber.join(tokenFiber);
+      }).pipe(Effect.provide(testLayer));
+
+      assert.strictEqual(token, "desktop-bearer-token");
+      assert.strictEqual(yield* Ref.get(requestCount), 2);
+    }).pipe(Effect.provide(TestClock.layer())),
   );
 });

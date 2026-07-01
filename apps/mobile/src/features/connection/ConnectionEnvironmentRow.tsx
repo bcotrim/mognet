@@ -133,66 +133,56 @@ export function ConnectionEnvironmentRow(props: {
           exiting={FadeOut.duration(150)}
           className="gap-3 px-4 pb-4"
         >
-          {props.environment.isRelayManaged ? (
-            <Text className="text-sm leading-[18px] text-foreground-muted">
-              Managed by T3 Cloud. Tunnel details update automatically.
+          <View className="gap-1.5">
+            <Text
+              className="text-2xs font-t3-bold uppercase text-foreground-muted"
+              style={{ letterSpacing: 0.8 }}
+            >
+              Label
             </Text>
-          ) : (
-            <>
-              <View className="gap-1.5">
-                <Text
-                  className="text-2xs font-t3-bold uppercase text-foreground-muted"
-                  style={{ letterSpacing: 0.8 }}
-                >
-                  Label
-                </Text>
-                <TextInput
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  placeholder="My MacBook"
-                  placeholderTextColor={placeholderColor}
-                  value={label}
-                  onChangeText={setLabel}
-                  className="rounded-[14px] border border-input-border bg-input px-4 py-3 text-base text-foreground"
-                />
-              </View>
+            <TextInput
+              autoCapitalize="words"
+              autoCorrect={false}
+              placeholder="My MacBook"
+              placeholderTextColor={placeholderColor}
+              value={label}
+              onChangeText={setLabel}
+              className="rounded-[14px] border border-input-border bg-input px-4 py-3 text-base text-foreground"
+            />
+          </View>
 
-              <View className="gap-1.5">
-                <Text
-                  className="text-2xs font-t3-bold uppercase text-foreground-muted"
-                  style={{ letterSpacing: 0.8 }}
-                >
-                  URL
-                </Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  placeholder="192.168.1.100:8080"
-                  placeholderTextColor={placeholderColor}
-                  value={url}
-                  onChangeText={setUrl}
-                  className="rounded-[14px] border border-input-border bg-input px-4 py-3 text-base text-foreground"
-                />
-              </View>
-            </>
-          )}
+          <View className="gap-1.5">
+            <Text
+              className="text-2xs font-t3-bold uppercase text-foreground-muted"
+              style={{ letterSpacing: 0.8 }}
+            >
+              URL
+            </Text>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="192.168.1.100:8080"
+              placeholderTextColor={placeholderColor}
+              value={url}
+              onChangeText={setUrl}
+              className="rounded-[14px] border border-input-border bg-input px-4 py-3 text-base text-foreground"
+            />
+          </View>
 
           <View className="flex-row justify-end gap-2">
-            {props.environment.isRelayManaged ? null : (
-              <Pressable
-                className="min-h-[42px] flex-1 flex-row items-center justify-center gap-1.5 rounded-[14px] bg-primary px-3.5 py-2.5 active:opacity-70"
-                onPress={handleSave}
+            <Pressable
+              className="min-h-[42px] flex-1 flex-row items-center justify-center gap-1.5 rounded-[14px] bg-primary px-3.5 py-2.5 active:opacity-70"
+              onPress={handleSave}
+            >
+              <SymbolView name="checkmark" size={13} tintColor={primaryFg} type="monochrome" />
+              <Text
+                className="text-xs font-t3-bold uppercase text-primary-foreground"
+                style={{ letterSpacing: 0.8 }}
               >
-                <SymbolView name="checkmark" size={13} tintColor={primaryFg} type="monochrome" />
-                <Text
-                  className="text-xs font-t3-bold uppercase text-primary-foreground"
-                  style={{ letterSpacing: 0.8 }}
-                >
-                  Save
-                </Text>
-              </Pressable>
-            )}
+                Save
+              </Text>
+            </Pressable>
 
             <Pressable
               className="h-[42px] w-[42px] items-center justify-center rounded-[14px] border border-input-border bg-input active:opacity-70"

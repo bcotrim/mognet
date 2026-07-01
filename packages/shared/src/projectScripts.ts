@@ -20,14 +20,17 @@ export function projectScriptCwd(input: {
 export function projectScriptRuntimeEnv(
   input: ProjectScriptRuntimeEnvInput,
 ): Record<string, string> {
+  const extraEnv = input.extraEnv ?? {};
+  const projectRoot = extraEnv.MOGNET_PROJECT_ROOT ?? input.project.cwd;
+  const worktreePath = extraEnv.MOGNET_WORKTREE_PATH ?? input.worktreePath;
   const env: Record<string, string> = {
-    T3CODE_PROJECT_ROOT: input.project.cwd,
+    ...extraEnv,
+    MOGNET_PROJECT_ROOT: projectRoot,
   };
-  if (input.worktreePath) {
-    env.T3CODE_WORKTREE_PATH = input.worktreePath;
-  }
-  if (input.extraEnv) {
-    return { ...env, ...input.extraEnv };
+  if (worktreePath) {
+    env.MOGNET_WORKTREE_PATH = worktreePath;
+  } else {
+    delete env.MOGNET_WORKTREE_PATH;
   }
   return env;
 }

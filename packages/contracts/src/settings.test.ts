@@ -31,6 +31,25 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
+describe("ClientSettings open-with defaults", () => {
+  it("defaults editor and terminal preferences to automatic", () => {
+    const decoded = decodeClientSettings({});
+
+    expect(decoded.defaultEditor).toBeNull();
+    expect(decoded.defaultTerminal).toBeNull();
+  });
+
+  it("accepts configured editor and terminal preferences", () => {
+    const decoded = decodeClientSettings({
+      defaultEditor: "cursor",
+      defaultTerminal: "ghostty",
+    });
+
+    expect(decoded.defaultEditor).toBe("cursor");
+    expect(decoded.defaultTerminal).toBe("ghostty");
+  });
+});
+
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults to an empty record so legacy configs without the key still decode", () => {
     expect(DEFAULT_SERVER_SETTINGS.providerInstances).toEqual({});

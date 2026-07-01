@@ -40,7 +40,6 @@
   },
   "dependencies": {
     "@callstack/liquid-glass": "^0.7.1",
-    "@clerk/expo": "catalog:",
     "@effect/atom-react": "catalog:",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo/ui": "~56.0.8",
@@ -78,7 +77,6 @@
     "expo-image-picker": "~56.0.14",
     "expo-linking": "~56.0.12",
     "expo-network": "~56.0.5",
-    "expo-notifications": "~56.0.14",
     "expo-paste-input": "^0.1.15",
     "expo-router": "~56.2.7",
     "expo-secure-store": "~56.0.4",
@@ -86,7 +84,6 @@
     "expo-symbols": "~56.0.5",
     "expo-updates": "~56.0.17",
     "expo-web-browser": "~56.0.5",
-    "expo-widgets": "~56.0.15",
     "punycode": "^2.3.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",

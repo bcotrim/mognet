@@ -1,14 +1,6 @@
 import { defineConfig } from "vite-plus";
 
-import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
-
-const repoEnv = loadRepoEnv();
-const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
-const publicConfigDefine = {
-  __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
-    repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
-  ),
-};
+const shouldLaunchElectronAfterPack = process.env.MOGNET_DESKTOP_DEV === "1";
 
 export default defineConfig({
   run: {
@@ -20,7 +12,7 @@ export default defineConfig({
       },
       dev: {
         command:
-          "node scripts/build-preview-annotation-css.mjs && cross-env T3CODE_DESKTOP_DEV=1 vp pack --watch",
+          "node scripts/build-preview-annotation-css.mjs && cross-env MOGNET_DESKTOP_DEV=1 vp pack --watch",
         dependsOn: ["t3#build"],
         cache: false,
       },
@@ -41,7 +33,6 @@ export default defineConfig({
       outDir: "dist-electron",
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
-      define: publicConfigDefine,
       entry: ["src/main.ts"],
       clean: true,
       deps: {
@@ -54,13 +45,9 @@ export default defineConfig({
       outDir: "dist-electron",
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
-      define: publicConfigDefine,
       entry: ["src/preload.ts"],
       deps: {
-        // Sandboxed Electron preloads cannot reliably resolve package imports
-        // from inside the packaged ASAR. Bundle Clerk's preload bridge into the
-        // preload artifact instead of leaving a runtime require() behind.
-        alwaysBundle: (id) => id === "@clerk/electron" || id.startsWith("@clerk/electron/"),
+        alwaysBundle: (id) => id.startsWith("@t3tools/"),
       },
     },
     {

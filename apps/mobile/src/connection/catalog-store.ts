@@ -12,7 +12,8 @@ import * as Semaphore from "effect/Semaphore";
 
 import { migrateLegacyConnectionCatalog } from "./migration";
 
-export const CONNECTION_CATALOG_KEY = "t3code.connection-catalog.v1";
+export const CONNECTION_CATALOG_KEY = "mognet.connection-catalog.v1";
+export const LEGACY_CONNECTION_CATALOG_KEY = "t3code.connection-catalog.v1";
 export const LEGACY_CONNECTIONS_KEY = "t3code.connections";
 
 function catalogError(operation: string, cause: unknown) {
@@ -60,25 +61,51 @@ export const makeCatalogStore = Effect.fn("mobile.connectionStorage.makeCatalogS
   const state = yield* Ref.make<Option.Option<ConnectionCatalogDocumentType>>(Option.none());
   const lock = yield* Semaphore.make(1);
 
-  const loadLegacyCatalog = Effect.fn("mobile.connectionStorage.loadLegacyCatalog")(function* () {
-    const legacyRaw = yield* storage.getItem(LEGACY_CONNECTIONS_KEY);
-    const catalog =
-      legacyRaw === null || legacyRaw.trim() === ""
-        ? EMPTY_CONNECTION_CATALOG_DOCUMENT
-        : yield* migrateLegacyConnectionCatalog(legacyRaw).pipe(
-            Effect.mapError((cause) => catalogError("migrate", cause)),
-            Effect.catch((error) =>
-              Effect.logWarning("Discarding corrupt legacy mobile connections", error).pipe(
-                Effect.as(EMPTY_CONNECTION_CATALOG_DOCUMENT),
+  const loadLegacyConnections = Effect.fn("mobile.connectionStorage.loadLegacyConnections")(
+    function* () {
+      const legacyRaw = yield* storage.getItem(LEGACY_CONNECTIONS_KEY);
+      const catalog =
+        legacyRaw === null || legacyRaw.trim() === ""
+          ? EMPTY_CONNECTION_CATALOG_DOCUMENT
+          : yield* migrateLegacyConnectionCatalog(legacyRaw).pipe(
+              Effect.mapError((cause) => catalogError("migrate", cause)),
+              Effect.catch((error) =>
+                Effect.logWarning("Discarding corrupt legacy mobile connections", error).pipe(
+                  Effect.as(EMPTY_CONNECTION_CATALOG_DOCUMENT),
+                ),
               ),
-            ),
-          );
-    if (legacyRaw !== null && legacyRaw.trim() !== "") {
-      const encoded = yield* encodeCatalog(catalog);
-      yield* storage.setItem(CONNECTION_CATALOG_KEY, encoded);
-      yield* storage.deleteItem(LEGACY_CONNECTIONS_KEY);
+            );
+      if (legacyRaw !== null && legacyRaw.trim() !== "") {
+        const encoded = yield* encodeCatalog(catalog);
+        yield* storage.setItem(CONNECTION_CATALOG_KEY, encoded);
+        yield* storage.deleteItem(LEGACY_CONNECTIONS_KEY);
+      }
+      return catalog;
+    },
+  );
+
+  const loadLegacyCatalog = Effect.fn("mobile.connectionStorage.loadLegacyCatalog")(function* () {
+    const legacyCatalogRaw = yield* storage.getItem(LEGACY_CONNECTION_CATALOG_KEY);
+    if (legacyCatalogRaw !== null && legacyCatalogRaw.trim() !== "") {
+      return yield* decodeCatalog(legacyCatalogRaw).pipe(
+        Effect.flatMap((catalog) =>
+          Effect.gen(function* () {
+            const encoded = yield* encodeCatalog(catalog);
+            yield* storage.setItem(CONNECTION_CATALOG_KEY, encoded);
+            yield* storage.deleteItem(LEGACY_CONNECTION_CATALOG_KEY);
+            return catalog;
+          }),
+        ),
+        Effect.catch((error) =>
+          Effect.logWarning("Discarding corrupt legacy mobile connection catalog", error).pipe(
+            Effect.andThen(storage.deleteItem(LEGACY_CONNECTION_CATALOG_KEY)),
+            Effect.andThen(loadLegacyConnections()),
+          ),
+        ),
+      );
     }
-    return catalog;
+
+    return yield* loadLegacyConnections();
   });
 
   const loadUnlocked = Effect.fn("mobile.connectionStorage.loadCatalog")(function* () {

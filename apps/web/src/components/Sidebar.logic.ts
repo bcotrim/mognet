@@ -69,7 +69,8 @@ export function resolveSidebarStageBadgeLabel(input: {
   primaryServerVersion: string | null | undefined;
   fallbackStageLabel: string;
 }): string {
-  return resolveServerBackedAppStageLabel(input);
+  const stageLabel = resolveServerBackedAppStageLabel(input);
+  return stageLabel === "Stable" || stageLabel === "Alpha" ? "" : stageLabel;
 }
 
 export function createThreadJumpHintVisibilityController(input: {

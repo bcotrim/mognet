@@ -1,6 +1,6 @@
 # Remote Architecture
 
-This document describes the target architecture for first-class remote environments in T3 Code.
+This document describes the target architecture for first-class remote environments in Mognet.
 
 It is intentionally architecture-first. It does not define a complete implementation plan or user-facing rollout checklist. The goal is to establish the core model so remote support can be added without another broad rewrite.
 
@@ -8,7 +8,7 @@ It is intentionally architecture-first. It does not define a complete implementa
 
 - Treat remote environments as first-class product primitives, not special cases.
 - Support multiple ways to reach the same environment.
-- Keep the T3 server as the execution boundary.
+- Keep the Mognet server as the execution boundary.
 - Let desktop, mobile, and web all share the same conceptual model.
 - Avoid introducing a local control plane unless product pressure proves it is necessary.
 
@@ -21,7 +21,7 @@ It is intentionally architecture-first. It does not define a complete implementa
 
 ## High-level architecture
 
-T3 already has a clean runtime boundary: the client talks to a T3 server over HTTP/WebSocket, and the server owns orchestration, providers, terminals, git, and filesystem operations.
+Mognet already has a clean runtime boundary: the client talks to a Mognet server over HTTP/WebSocket, and the server owns orchestration, providers, terminals, git, and filesystem operations.
 
 Remote support should preserve that boundary.
 
@@ -44,10 +44,10 @@ Remote support should preserve that boundary.
 │ - desktop-managed ssh bootstrap + forward   │
 └───────────────┬──────────────────────────────┘
                 │
-                │ connects to one T3 server
+                │ connects to one Mognet server
                 │
 ┌───────────────▼──────────────────────────────┐
-│ Execution environment = one T3 server       │
+│ Execution environment = one Mognet server       │
 │                                              │
 │ - environment identity                       │
 │ - provider state                             │
@@ -56,13 +56,13 @@ Remote support should preserve that boundary.
 └──────────────────────────────────────────────┘
 ```
 
-The important decision is that remoteness is expressed at the environment connection layer, not by splitting the T3 runtime itself.
+The important decision is that remoteness is expressed at the environment connection layer, not by splitting the Mognet runtime itself.
 
 ## Domain model
 
 ### ExecutionEnvironment
 
-An `ExecutionEnvironment` is one running T3 server instance.
+An `ExecutionEnvironment` is one running Mognet server instance.
 
 It is the unit that owns:
 
@@ -93,8 +93,6 @@ Examples:
 
 A known environment may or may not know the target `environmentId` before first successful connect.
 
-In the hosted web app, known environments are browser-local. A hosted pairing URL can create the saved entry, but it does not give the hosted app a server-side control plane or a copy of the session state.
-
 ### AccessEndpoint
 
 An `AccessEndpoint` is one concrete way to reach a known environment.
@@ -103,9 +101,9 @@ This is the key abstraction that keeps SSH from taking over the model.
 
 A single environment may have many endpoints:
 
-- `wss://t3.example.com`
+- `wss://mognet.example.com`
 - `ws://10.0.0.25:3773`
-- a tunneled relay URL
+- a tunneled URL
 - a desktop-managed SSH tunnel that resolves to a local forwarded WebSocket URL
 
 The environment stays the same. Only the access path changes.
@@ -129,10 +127,9 @@ Persist the override by stable endpoint kind rather than raw URL whenever possib
 
 When no user default is saved, endpoint selection should prefer:
 
-1. endpoints compatible with the hosted HTTPS app
-2. explicitly default endpoints
-3. non-loopback endpoints
-4. loopback endpoints only for same-machine clients
+1. explicitly default endpoints
+2. non-loopback endpoints
+3. loopback endpoints only for same-machine clients
 
 This keeps endpoint discovery centralized without making any one provider, such as Tailscale or a future tunnel service, part of the core environment model.
 
@@ -150,26 +147,6 @@ The provider boundary is intentionally outside the core environment model:
 The first provider is Tailscale. It can discover Tailnet IP and MagicDNS addresses from the local machine and publish them as additional endpoint candidates. Future providers, such as a hosted tunnel service, should plug into the same shape rather than adding a separate remote environment path.
 
 Provider-specific confidence should remain a hint. A Tailscale endpoint still needs a successful browser or desktop connection before the client treats it as connected.
-
-### Hosted pairing request
-
-A hosted pairing request is a bootstrap URL for the static web app, not a transport.
-
-Example:
-
-```text
-https://app.t3.codes/pair?host=https://backend.example.com:3773#token=PAIRCODE
-```
-
-The hosted app reads the `host` parameter and pairing token, exchanges the token directly with that backend, then saves the resulting environment record in browser local storage.
-
-Important constraints:
-
-- the hosted app does not proxy HTTP or WebSocket traffic
-- the backend must still be reachable directly from the browser
-- HTTPS pages can only connect to HTTPS/WSS backends
-- HTTP LAN endpoints should keep using direct desktop or CLI pairing URLs
-- the token belongs in the URL hash so it is not sent to the hosted app origin
 
 ### RepositoryIdentity
 
@@ -191,7 +168,7 @@ That means:
 
 Access methods answer one question:
 
-How does the client speak WebSocket to a T3 server?
+How does the client speak WebSocket to a Mognet server?
 
 They do not answer:
 
@@ -204,7 +181,7 @@ They do not answer:
 Examples:
 
 - `ws://10.0.0.15:3773`
-- `wss://t3.example.com`
+- `wss://mognet.example.com`
 
 This is the base model and should be the first-class default.
 
@@ -212,7 +189,7 @@ Benefits:
 
 - works for desktop, mobile, and web
 - no client-specific process management required
-- best fit for hosted or self-managed remote T3 deployments
+- best fit for hosted or self-managed remote Mognet deployments
 
 Browser security rules are part of this access method. A hosted HTTPS web client can connect to `wss://` backends, but it cannot connect to plain `ws://` or `http://` LAN backends because that would be mixed content.
 
@@ -226,7 +203,7 @@ Examples:
 
 This is still direct WebSocket access from the client's perspective. The difference is that the route is mediated by a tunnel or relay.
 
-For T3, tunnels are best modeled as another `AccessEndpoint`, not as a different kind of environment.
+For Mognet, tunnels are best modeled as another `AccessEndpoint`, not as a different kind of environment.
 
 This is especially useful when:
 
@@ -235,7 +212,7 @@ This is especially useful when:
 - mobile must reach a desktop-hosted environment
 - a machine should be reachable without exposing raw LAN or public ports
 
-Tailscale-backed access sits here architecturally even though the current implementation is endpoint discovery rather than a T3-managed tunnel. It contributes private-network endpoints and lets the existing HTTP/WebSocket client path do the actual connection.
+Tailscale-backed access sits here architecturally even though the current implementation is endpoint discovery rather than a Mognet-managed tunnel. It contributes private-network endpoints and lets the existing HTTP/WebSocket client path do the actual connection.
 
 ### 3. Desktop-managed SSH access
 
@@ -245,7 +222,7 @@ The desktop main process can use SSH to:
 
 - reach a machine
 - probe it
-- launch or reuse a remote T3 server
+- launch or reuse a remote Mognet server
 - establish a local port forward
 
 After that, the renderer should still connect using an ordinary WebSocket URL against the forwarded local port.
@@ -258,7 +235,7 @@ The desktop main process owns the SSH bridge because it can spawn local SSH proc
 
 Launch methods answer a different question:
 
-How does a T3 server come to exist on the target machine?
+How does a Mognet server come to exist on the target machine?
 
 Launch and access should stay separate in the design.
 
@@ -266,7 +243,7 @@ Launch and access should stay separate in the design.
 
 The simplest launch method is no launch at all.
 
-The user or operator already runs T3 on the target machine, and the client connects through a direct or tunneled WebSocket endpoint.
+The user or operator already runs Mognet on the target machine, and the client connects through a direct or tunneled WebSocket endpoint.
 
 This should be the first remote mode shipped because it validates the environment model with minimal extra machinery.
 
@@ -282,17 +259,17 @@ Useful ideas to borrow from Zed:
 - reconnect-friendly launcher behavior
 - desktop-owned connection UX
 
-What should be different in T3:
+What should be different in Mognet:
 
 - no custom stdio/socket proxy protocol between renderer and remote runtime
 - no attempt to make the remote runtime look like an editor transport
 - keep the final client-to-server connection as WebSocket
 
-The recommended T3 flow is:
+The recommended Mognet flow is:
 
 1. Desktop connects over SSH.
-2. Desktop probes the remote machine and verifies T3 availability.
-3. Desktop launches or reuses a remote T3 server.
+2. Desktop probes the remote machine and verifies Mognet availability.
+3. Desktop launches or reuses a remote Mognet server.
 4. Desktop establishes local port forwarding.
 5. Renderer connects to the forwarded WebSocket endpoint as a normal environment.
 
@@ -307,7 +284,7 @@ Failure handling should be explicit:
 
 ### 3. Client-managed local publish
 
-This is the inverse of remote launch: a local T3 server is already running, and the client publishes it through a tunnel.
+This is the inverse of remote launch: a local Mognet server is already running, and the client publishes it through a tunnel.
 
 This is useful for:
 
@@ -322,7 +299,7 @@ These concerns are easy to conflate, but separating them prevents architectural 
 
 Examples:
 
-- A manually hosted T3 server might be reached through direct `wss`.
+- A manually hosted Mognet server might be reached through direct `wss`.
 - The same server might also be reachable through a tunnel.
 - An SSH-managed server might be launched over SSH but then reached through forwarded WebSocket.
 - A local desktop server might be published through a tunnel for mobile.
@@ -341,7 +318,7 @@ That means:
 - tunnel exposure should not rely on obscurity
 - client-saved endpoints should carry enough auth metadata to reconnect safely
 
-T3 already supports a WebSocket auth token on the server. That should become a first-class part of environment access rather than remaining an incidental query parameter convention.
+Mognet already supports a WebSocket auth token on the server. That should become a first-class part of environment access rather than remaining an incidental query parameter convention.
 
 For publicly reachable environments, authenticated access should be treated as required.
 
@@ -362,14 +339,14 @@ The important mismatch is transport shape.
 
 Zed needs a custom proxy/server protocol because its remote boundary sits below the editor and project runtime.
 
-T3 should not copy that part.
+Mognet should not copy that part.
 
-T3 already has the right runtime boundary:
+Mognet already has the right runtime boundary:
 
-- one T3 server per environment
+- one Mognet server per environment
 - ordinary HTTP/WebSocket between client and environment
 
-So T3 should borrow Zed's launch discipline, not its transport protocol.
+So Mognet should borrow Zed's launch discipline, not its transport protocol.
 
 ## Recommended rollout
 

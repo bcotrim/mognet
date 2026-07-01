@@ -185,6 +185,7 @@ import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
 import {
   primaryServerAvailableEditorsAtom,
+  primaryServerAvailableTerminalsAtom,
   primaryServerKeybindingsAtom,
   serverEnvironment,
 } from "../state/server";
@@ -2122,6 +2123,7 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
+  const availableTerminals = useAtomValue(primaryServerAvailableTerminalsAtom);
   // Prefer an instance-id match so a custom Codex instance (e.g.
   // `codex_personal`) surfaces its own status/message in the banner rather
   // than the default Codex's. Falls back to first-match-by-kind when no
@@ -5047,6 +5049,7 @@ function ChatViewContent(props: ChatViewProps) {
             }
             keybindings={keybindings}
             availableEditors={availableEditors}
+            availableTerminals={availableTerminals}
             rightPanelOpen={rightPanelOpen}
             gitCwd={gitCwd}
             onRunProjectScript={runProjectScript}

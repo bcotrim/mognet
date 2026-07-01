@@ -5,8 +5,6 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
-import { stableStringify } from "./relaySigning.ts";
-
 const DPOP_TYP = "dpop+jwt";
 const DPOP_ALG = "ES256";
 const DEFAULT_MAX_AGE_SECONDS = 300;
@@ -66,6 +64,19 @@ function decodeBase64UrlDpopJwtHeader(value: string) {
 
 function decodeBase64UrlDpopJwtPayload(value: string) {
   return decodeDpopJwtPayloadJson(Result.getOrThrow(Encoding.decodeBase64UrlString(value)));
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function dpopThumbprintInput(jwk: DpopPublicJwk): string {

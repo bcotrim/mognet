@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
-import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
+import { ExternalLauncherError, LaunchEditorInput, LaunchTerminalInput } from "./editor.ts";
 import {
   AuthAccessStreamError,
   AuthAccessStreamEvent,
@@ -59,11 +59,6 @@ import {
   OrchestrationRpcSchemas,
 } from "./orchestration.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
-import {
-  RelayClientInstallFailedError,
-  RelayClientInstallProgressEventSchema,
-  RelayClientStatusSchema,
-} from "./relayClient.ts";
 import {
   ProjectListEntriesError,
   ProjectListEntriesInput,
@@ -156,6 +151,7 @@ export const WS_METHODS = {
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
+  shellOpenInTerminal: "shell.openInTerminal",
 
   // Filesystem methods
   filesystemBrowse: "filesystem.browse",
@@ -213,10 +209,6 @@ export const WS_METHODS = {
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
   serverSignalProcess: "server.signalProcess",
-
-  // Cloud environment methods
-  cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
-  cloudInstallRelayClient: "cloud.installRelayClient",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -317,19 +309,6 @@ export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess,
   error: EnvironmentAuthorizationError,
 });
 
-export const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
-  payload: Schema.Struct({}),
-  success: RelayClientStatusSchema,
-  error: EnvironmentAuthorizationError,
-});
-
-export const WsCloudInstallRelayClientRpc = Rpc.make(WS_METHODS.cloudInstallRelayClient, {
-  payload: Schema.Struct({}),
-  success: RelayClientInstallProgressEventSchema,
-  error: Schema.Union([RelayClientInstallFailedError, EnvironmentAuthorizationError]),
-  stream: true,
-});
-
 export const WsSourceControlLookupRepositoryRpc = Rpc.make(
   WS_METHODS.sourceControlLookupRepository,
   {
@@ -380,6 +359,11 @@ export const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
 
 export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
+  error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
+});
+
+export const WsShellOpenInTerminalRpc = Rpc.make(WS_METHODS.shellOpenInTerminal, {
+  payload: LaunchTerminalInput,
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
 });
 
@@ -694,8 +678,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetProcessResourceHistoryRpc,
   WsServerSignalProcessRpc,
-  WsCloudGetRelayClientStatusRpc,
-  WsCloudInstallRelayClientRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
@@ -704,6 +686,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,
+  WsShellOpenInTerminalRpc,
   WsFilesystemBrowseRpc,
   WsAssetsCreateUrlRpc,
   WsSubscribeVcsStatusRpc,

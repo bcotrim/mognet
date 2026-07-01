@@ -4,26 +4,24 @@ import * as Schema from "effect/Schema";
 import * as SecureStore from "expo-secure-store";
 import { EnvironmentId } from "@t3tools/contracts";
 
-import {
-  isRelayManagedConnection,
-  type SavedRemoteConnection,
-  toStableSavedRemoteConnection,
-} from "./connection";
+import { type SavedRemoteConnection, toStableSavedRemoteConnection } from "./connection";
 
-const CONNECTIONS_KEY = "t3code.connections";
-const PREFERENCES_KEY = "t3code.preferences";
-const AGENT_AWARENESS_DEVICE_ID_KEY = "t3code.agent-awareness.device-id";
+const CONNECTIONS_KEY = "mognet.connections";
+const PREFERENCES_KEY = "mognet.preferences";
+const LEGACY_CONNECTIONS_KEY = "t3code.connections";
+const LEGACY_PREFERENCES_KEY = "t3code.preferences";
 const MobileStorageKey = Schema.Literals([
   CONNECTIONS_KEY,
   PREFERENCES_KEY,
-  AGENT_AWARENESS_DEVICE_ID_KEY,
+  LEGACY_CONNECTIONS_KEY,
+  LEGACY_PREFERENCES_KEY,
 ]);
 type MobileStorageKeyValue = typeof MobileStorageKey.Type;
 
 export class MobileSecureStorageError extends Schema.TaggedErrorClass<MobileSecureStorageError>()(
   "MobileSecureStorageError",
   {
-    operation: Schema.Literals(["read", "write", "generate-device-id"]),
+    operation: Schema.Literals(["read", "write", "delete"]),
     key: MobileStorageKey,
     cause: Schema.Defect(),
   },
@@ -58,7 +56,6 @@ export class MobileStorageEncodeError extends Schema.TaggedErrorClass<MobileStor
 }
 
 export interface Preferences {
-  readonly liveActivitiesEnabled?: boolean;
   readonly terminalFontSize?: number;
 }
 
@@ -75,6 +72,14 @@ async function writeStorageItem(key: MobileStorageKeyValue, value: string): Prom
     await SecureStore.setItemAsync(key, value);
   } catch (cause) {
     throw new MobileSecureStorageError({ operation: "write", key, cause });
+  }
+}
+
+async function deleteStorageItem(key: MobileStorageKeyValue): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch (cause) {
+    throw new MobileSecureStorageError({ operation: "delete", key, cause });
   }
 }
 
@@ -105,19 +110,40 @@ async function writeJsonStorageItem(key: MobileStorageKeyValue, value: unknown) 
   await writeStorageItem(key, encoded);
 }
 
+async function readJsonStorageItemWithLegacy<T>(
+  key: MobileStorageKeyValue,
+  legacyKey: MobileStorageKeyValue,
+): Promise<T | null> {
+  const current = await readJsonStorageItem<T>(key);
+  if (current !== null) {
+    return current;
+  }
+
+  const legacy = await readJsonStorageItem<T>(legacyKey);
+  if (legacy === null) {
+    return null;
+  }
+
+  try {
+    await writeJsonStorageItem(key, legacy);
+    await deleteStorageItem(legacyKey);
+  } catch {
+    // Best-effort migration: keep using the legacy value if secure-store cleanup fails.
+  }
+  return legacy;
+}
+
 export async function loadSavedConnections(): Promise<ReadonlyArray<SavedRemoteConnection>> {
-  const parsed = await readJsonStorageItem<{
+  const parsed = await readJsonStorageItemWithLegacy<{
     readonly connections?: ReadonlyArray<SavedRemoteConnection>;
-  }>(CONNECTIONS_KEY);
+  }>(CONNECTIONS_KEY, LEGACY_CONNECTIONS_KEY);
   if (!parsed) {
     return [];
   }
 
   return pipe(
     parsed.connections ?? [],
-    Arr.filter(
-      (c) => !!c.environmentId && (!!c.bearerToken?.trim() || isRelayManagedConnection(c)),
-    ),
+    Arr.filter((c) => !!c.environmentId && !!c.bearerToken?.trim()),
   );
 }
 
@@ -146,19 +172,18 @@ export async function clearSavedConnection(environmentId: EnvironmentId): Promis
 }
 
 export async function loadPreferences(): Promise<Preferences> {
-  const parsed = await readJsonStorageItem<Preferences>(PREFERENCES_KEY);
+  const parsed = await readJsonStorageItemWithLegacy<Preferences>(
+    PREFERENCES_KEY,
+    LEGACY_PREFERENCES_KEY,
+  );
   if (!parsed || typeof parsed !== "object") {
     return {};
   }
 
   const preferences: {
-    liveActivitiesEnabled?: boolean;
     terminalFontSize?: number;
   } = {};
 
-  if (typeof parsed.liveActivitiesEnabled === "boolean") {
-    preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
-  }
   if (typeof parsed.terminalFontSize === "number") {
     preferences.terminalFontSize = parsed.terminalFontSize;
   }
@@ -174,28 +199,4 @@ export async function savePreferencesPatch(patch: Partial<Preferences>): Promise
   };
   await writeJsonStorageItem(PREFERENCES_KEY, next);
   return next;
-}
-
-export async function loadOrCreateAgentAwarenessDeviceId(): Promise<string> {
-  const existing = await readStorageItem(AGENT_AWARENESS_DEVICE_ID_KEY);
-  if (existing?.trim()) {
-    return existing;
-  }
-
-  const deviceId = await import("./uuid")
-    .then(({ uuidv4 }) => uuidv4())
-    .catch((cause) => {
-      throw new MobileSecureStorageError({
-        operation: "generate-device-id",
-        key: AGENT_AWARENESS_DEVICE_ID_KEY,
-        cause,
-      });
-    });
-  await writeStorageItem(AGENT_AWARENESS_DEVICE_ID_KEY, deviceId);
-  return deviceId;
-}
-
-export async function loadAgentAwarenessDeviceId(): Promise<string | null> {
-  const existing = await readStorageItem(AGENT_AWARENESS_DEVICE_ID_KEY);
-  return existing?.trim() ? existing : null;
 }

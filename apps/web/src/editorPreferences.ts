@@ -9,10 +9,11 @@ import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { getLocalStorageItem, setLocalStorageItem, useLocalStorage } from "./hooks/useLocalStorage";
 import { useCallback, useMemo } from "react";
+import { getClientSettings, useClientSettings, useUpdateClientSettings } from "./hooks/useSettings";
 import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
 
-const LAST_EDITOR_KEY = "t3code:last-editor";
+const LAST_EDITOR_KEY = "mognet:last-editor";
 
 export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedErrorClass<PreferredEditorEnvironmentRequiredError>()(
   "PreferredEditorEnvironmentRequiredError",
@@ -40,19 +41,32 @@ export class PreferredEditorUnavailableError extends Schema.TaggedErrorClass<Pre
 
 export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
   const [lastEditor, setLastEditor] = useLocalStorage(LAST_EDITOR_KEY, null, EditorId);
+  const defaultEditor = useClientSettings((settings) => settings.defaultEditor);
+  const updateClientSettings = useUpdateClientSettings();
 
   const effectiveEditor = useMemo(() => {
+    if (defaultEditor && availableEditors.includes(defaultEditor)) return defaultEditor;
     if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
     return EDITORS.find((editor) => availableEditors.includes(editor.id))?.id ?? null;
-  }, [lastEditor, availableEditors]);
+  }, [availableEditors, defaultEditor, lastEditor]);
 
-  return [effectiveEditor, setLastEditor] as const;
+  const setPreferredEditor = useCallback(
+    (editor: EditorId | null) => {
+      updateClientSettings({ defaultEditor: editor });
+      setLastEditor(editor);
+    },
+    [setLastEditor, updateClientSettings],
+  );
+
+  return [effectiveEditor, setPreferredEditor] as const;
 }
 
 export function resolveAndPersistPreferredEditor(
   availableEditors: readonly EditorId[],
 ): EditorId | null {
   const availableEditorIds = new Set(availableEditors);
+  const defaultEditor = getClientSettings().defaultEditor;
+  if (defaultEditor && availableEditorIds.has(defaultEditor)) return defaultEditor;
   const stored = getLocalStorageItem(LAST_EDITOR_KEY, EditorId);
   if (stored && availableEditorIds.has(stored)) return stored;
   const editor = EDITORS.find((editor) => availableEditorIds.has(editor.id))?.id ?? null;

@@ -93,7 +93,7 @@ function ChatRouteGlobalShortcuts() {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open T3 Code in the desktop app to use the in-app preview.",
+              description: "Open Mognet in the desktop app to use the in-app preview.",
             }),
           );
           return;
@@ -159,10 +159,7 @@ function ChatRouteLayout() {
 
 export const Route = createFileRoute("/_chat")({
   beforeLoad: async ({ context }) => {
-    if (
-      context.authGateState.status !== "authenticated" &&
-      context.authGateState.status !== "hosted-static"
-    ) {
+    if (context.authGateState.status !== "authenticated") {
       throw redirect({ to: "/pair", replace: true });
     }
   },

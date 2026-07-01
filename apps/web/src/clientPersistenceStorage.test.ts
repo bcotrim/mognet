@@ -54,7 +54,7 @@ describe("clientPersistenceStorage", () => {
 
   it("reports structured decode failures while preserving the fallback", async () => {
     const testWindow = getTestWindow();
-    testWindow.localStorage.setItem("t3code:client-settings:v1", "not-json");
+    testWindow.localStorage.setItem("mognet:client-settings:v1", "not-json");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { readBrowserClientSettings } = await import("./clientPersistenceStorage");
 
@@ -64,7 +64,7 @@ describe("clientPersistenceStorage", () => {
       expect.objectContaining({
         _tag: "LocalStorageOperationError",
         operation: "decode",
-        storageKey: "t3code:client-settings:v1",
+        storageKey: "mognet:client-settings:v1",
         cause: expect.anything(),
       }),
     );

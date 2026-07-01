@@ -1,6 +1,7 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   type EditorId,
+  type ExternalTerminalId,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
@@ -33,6 +34,7 @@ interface PrimaryServerState {
 }
 
 const EMPTY_AVAILABLE_EDITORS: ReadonlyArray<EditorId> = [];
+const EMPTY_AVAILABLE_TERMINALS: ReadonlyArray<ExternalTerminalId> = [];
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const EMPTY_PRIMARY_SERVER_STATE: PrimaryServerState = {
   config: null,
@@ -89,6 +91,11 @@ export const primaryServerAvailableEditorsAtom = Atom.make(
   (get): ReadonlyArray<EditorId> =>
     get(primaryServerConfigAtom)?.availableEditors ?? EMPTY_AVAILABLE_EDITORS,
 ).pipe(Atom.withLabel("web-primary-server-available-editors"));
+
+export const primaryServerAvailableTerminalsAtom = Atom.make(
+  (get): ReadonlyArray<ExternalTerminalId> =>
+    get(primaryServerConfigAtom)?.availableTerminals ?? EMPTY_AVAILABLE_TERMINALS,
+).pipe(Atom.withLabel("web-primary-server-available-terminals"));
 
 export const primaryServerKeybindingsConfigPathAtom = Atom.make(
   (get): string | null => get(primaryServerConfigAtom)?.keybindingsConfigPath ?? null,

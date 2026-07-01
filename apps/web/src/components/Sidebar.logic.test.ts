@@ -42,18 +42,18 @@ describe("resolveSidebarStageBadgeLabel", () => {
     expect(
       resolveSidebarStageBadgeLabel({
         primaryServerVersion: "0.0.28-nightly.20260616.12",
-        fallbackStageLabel: "Alpha",
+        fallbackStageLabel: "Stable",
       }),
     ).toBe("Nightly");
   });
 
-  it("returns the fallback label for stable primary server versions", () => {
+  it("hides the stable fallback label for stable primary server versions", () => {
     expect(
       resolveSidebarStageBadgeLabel({
         primaryServerVersion: "0.0.27",
-        fallbackStageLabel: "Alpha",
+        fallbackStageLabel: "Stable",
       }),
-    ).toBe("Alpha");
+    ).toBe("");
   });
 
   it("returns the fallback label when the primary server version is missing", () => {
@@ -65,13 +65,13 @@ describe("resolveSidebarStageBadgeLabel", () => {
     ).toBe("Dev");
   });
 
-  it("returns the fallback label for malformed nightly prerelease versions", () => {
+  it("hides the stable fallback label for malformed nightly prerelease versions", () => {
     expect(
       resolveSidebarStageBadgeLabel({
         primaryServerVersion: "0.0.28-nightly.20260616",
-        fallbackStageLabel: "Alpha",
+        fallbackStageLabel: "Stable",
       }),
-    ).toBe("Alpha");
+    ).toBe("");
   });
 });
 

@@ -12,7 +12,8 @@ type ThemeSnapshot = {
 
 type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 
-const STORAGE_KEY = "t3code:theme";
+const STORAGE_KEY = "mognet:theme";
+const LEGACY_STORAGE_KEY = "t3code:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: "system",
@@ -74,6 +75,16 @@ export function readThemePreference(): Theme {
   let raw: string | null;
   try {
     raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === null) {
+      raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw !== null) {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, raw);
+        } catch {
+          // Best-effort migration: use the legacy value even if copying fails.
+        }
+      }
+    }
   } catch (cause) {
     throw new ThemeStorageError({
       operation: "read",
@@ -89,6 +100,7 @@ export function writeThemePreference(theme: Theme): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, theme);
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
     themeStorageReadFailure = null;
   } catch (cause) {
     throw new ThemeStorageError({

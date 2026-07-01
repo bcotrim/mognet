@@ -34,11 +34,41 @@ const isomorphicLocalStorage: Storage =
 
 const read = (key: string) => {
   try {
-    return isomorphicLocalStorage.getItem(key);
+    const value = isomorphicLocalStorage.getItem(key);
+    if (value !== null) {
+      return value;
+    }
+
+    const legacyKey = legacyLocalStorageKey(key);
+    if (legacyKey === null) {
+      return null;
+    }
+
+    const legacyValue = isomorphicLocalStorage.getItem(legacyKey);
+    if (legacyValue === null) {
+      return null;
+    }
+
+    try {
+      isomorphicLocalStorage.setItem(key, legacyValue);
+    } catch {
+      // Best-effort migration: still return the legacy value if writing the new key fails.
+    }
+    return legacyValue;
   } catch (cause) {
     throw new LocalStorageOperationError({ operation: "read", storageKey: key, cause });
   }
 };
+
+function legacyLocalStorageKey(key: string): string | null {
+  if (key.startsWith("mognet:")) {
+    return `t3code:${key.slice("mognet:".length)}`;
+  }
+  if (key.startsWith("mognet.")) {
+    return `t3code.${key.slice("mognet.".length)}`;
+  }
+  return null;
+}
 
 const decode = <T, E>(key: string, schema: Schema.Codec<T, E>, value: string) => {
   try {
@@ -78,7 +108,7 @@ export const removeLocalStorageItem = (key: string) => {
   }
 };
 
-const LOCAL_STORAGE_CHANGE_EVENT = "t3code:local_storage_change";
+const LOCAL_STORAGE_CHANGE_EVENT = "mognet:local_storage_change";
 
 interface LocalStorageChangeDetail {
   key: string;

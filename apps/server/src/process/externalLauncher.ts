@@ -8,14 +8,21 @@
  */
 import {
   EDITORS,
+  EXTERNAL_TERMINALS,
   ExternalLauncherError,
   ExternalLauncherBrowserSpawnError,
   ExternalLauncherCommandNotFoundError,
   ExternalLauncherEditorSpawnError,
+  ExternalLauncherTerminalCommandNotFoundError,
+  ExternalLauncherTerminalSpawnError,
   ExternalLauncherUnknownEditorError,
+  ExternalLauncherUnknownTerminalError,
   ExternalLauncherUnsupportedEditorError,
+  ExternalLauncherUnsupportedTerminalError,
   type EditorId,
+  type ExternalTerminalId,
   type LaunchEditorInput,
+  type LaunchTerminalInput,
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { isCommandAvailable, resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -39,13 +46,24 @@ export {
   ExternalLauncherBrowserSpawnError,
   ExternalLauncherCommandNotFoundError,
   ExternalLauncherEditorSpawnError,
+  ExternalLauncherTerminalCommandNotFoundError,
+  ExternalLauncherTerminalSpawnError,
   ExternalLauncherUnknownEditorError,
+  ExternalLauncherUnknownTerminalError,
   ExternalLauncherUnsupportedEditorError,
+  ExternalLauncherUnsupportedTerminalError,
   isExternalLauncherError,
 } from "@t3tools/contracts";
-export type { LaunchEditorInput };
+export type { LaunchEditorInput, LaunchTerminalInput };
 interface EditorLaunch {
   readonly editor: EditorId;
+  readonly target: string;
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
+}
+
+interface TerminalLaunch {
+  readonly terminal: ExternalTerminalId;
   readonly target: string;
   readonly command: string;
   readonly args: ReadonlyArray<string>;
@@ -55,6 +73,14 @@ interface ProcessLaunch {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
   readonly options: ChildProcess.CommandOptions;
+}
+
+interface TerminalLaunchDefinition {
+  readonly id: ExternalTerminalId;
+  readonly platforms: ReadonlyArray<NodeJS.Platform>;
+  readonly commands: readonly [string, ...string[]];
+  readonly macAppBundleNames?: ReadonlyArray<string>;
+  readonly resolveArgs: (cwd: string) => ReadonlyArray<string>;
 }
 
 interface TargetPathAndPosition {
@@ -104,6 +130,7 @@ const CommandLookupEnvConfig = Config.all({
   Path: Config.string("Path").pipe(Config.option),
   path: Config.string("path").pipe(Config.option),
   PATHEXT: Config.string("PATHEXT").pipe(Config.option),
+  HOME: Config.string("HOME").pipe(Config.option),
 }).pipe(Config.map(compactEnv));
 
 const readBrowserLaunchEnv = BrowserLaunchEnvConfig.pipe(Effect.orElseSucceed(() => ({})));
@@ -232,6 +259,95 @@ function fileManagerCommandForPlatform(platform: NodeJS.Platform): string {
   }
 }
 
+function macApplicationPaths(bundleName: string, env: NodeJS.ProcessEnv): ReadonlyArray<string> {
+  return [
+    ...(env.HOME ? [`${env.HOME}/Applications/${bundleName}`] : []),
+    `/Applications/${bundleName}`,
+    `/Applications/Utilities/${bundleName}`,
+    `/System/Applications/${bundleName}`,
+    `/System/Applications/Utilities/${bundleName}`,
+  ];
+}
+
+const isMacAppBundleAvailable = Effect.fn("externalLauncher.isMacAppBundleAvailable")(function* (
+  bundleName: string,
+  env: NodeJS.ProcessEnv,
+): Effect.fn.Return<boolean, never, FileSystem.FileSystem> {
+  const fileSystem = yield* FileSystem.FileSystem;
+  for (const appPath of macApplicationPaths(bundleName, env)) {
+    if (yield* fileSystem.exists(appPath).pipe(Effect.orElseSucceed(() => false))) {
+      return true;
+    }
+  }
+  return false;
+});
+
+const TERMINAL_LAUNCHERS: ReadonlyArray<TerminalLaunchDefinition> = [
+  {
+    id: "terminal-app",
+    platforms: ["darwin"],
+    commands: ["open"],
+    macAppBundleNames: ["Terminal.app"],
+    resolveArgs: (cwd) => ["-a", "Terminal", cwd],
+  },
+  {
+    id: "iterm",
+    platforms: ["darwin"],
+    commands: ["open"],
+    macAppBundleNames: ["iTerm.app", "iTerm2.app"],
+    resolveArgs: (cwd) => ["-a", "iTerm", cwd],
+  },
+  {
+    id: "ghostty",
+    platforms: ["darwin", "linux"],
+    commands: ["ghostty"],
+    resolveArgs: (cwd) => [`--working-directory=${cwd}`],
+  },
+  {
+    id: "warp",
+    platforms: ["darwin"],
+    commands: ["open"],
+    macAppBundleNames: ["Warp.app"],
+    resolveArgs: (cwd) => ["-a", "Warp", cwd],
+  },
+  {
+    id: "wezterm",
+    platforms: ["darwin", "linux", "win32"],
+    commands: ["wezterm"],
+    resolveArgs: (cwd) => ["start", "--cwd", cwd],
+  },
+  {
+    id: "alacritty",
+    platforms: ["darwin", "linux", "win32"],
+    commands: ["alacritty"],
+    resolveArgs: (cwd) => ["--working-directory", cwd],
+  },
+  {
+    id: "kitty",
+    platforms: ["darwin", "linux"],
+    commands: ["kitty"],
+    resolveArgs: (cwd) => ["--directory", cwd],
+  },
+  {
+    id: "windows-terminal",
+    platforms: ["win32"],
+    commands: ["wt"],
+    resolveArgs: (cwd) => ["-d", cwd],
+  },
+  {
+    id: "gnome-terminal",
+    platforms: ["linux"],
+    commands: ["gnome-terminal"],
+    resolveArgs: (cwd) => ["--working-directory", cwd],
+  },
+  {
+    id: "konsole",
+    platforms: ["linux"],
+    commands: ["konsole"],
+    resolveArgs: (cwd) => ["--workdir", cwd],
+  },
+];
+
 function buildBrowserLaunch(
   target: string,
   platform: NodeJS.Platform,
@@ -284,6 +400,50 @@ const buildAvailableEditors = Effect.fn("externalLauncher.buildAvailableEditors"
   return available;
 });
 
+const isTerminalDefinitionAvailable = Effect.fn("externalLauncher.isTerminalDefinitionAvailable")(
+  function* (
+    definition: TerminalLaunchDefinition,
+    platform: NodeJS.Platform,
+    env: NodeJS.ProcessEnv,
+  ): Effect.fn.Return<boolean, never, FileSystem.FileSystem | Path.Path> {
+    if (!definition.platforms.includes(platform)) {
+      return false;
+    }
+
+    if (Option.isNone(yield* resolveAvailableCommand(definition.commands, env))) {
+      return false;
+    }
+
+    if (platform !== "darwin" || !definition.macAppBundleNames) {
+      return true;
+    }
+
+    for (const bundleName of definition.macAppBundleNames) {
+      if (yield* isMacAppBundleAvailable(bundleName, env)) {
+        return true;
+      }
+    }
+    return false;
+  },
+);
+
+const buildAvailableTerminals = Effect.fn("externalLauncher.buildAvailableTerminals")(function* (
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+): Effect.fn.Return<ReadonlyArray<ExternalTerminalId>, never, FileSystem.FileSystem | Path.Path> {
+  const available: ExternalTerminalId[] = [];
+
+  for (const terminal of EXTERNAL_TERMINALS) {
+    const definition = TERMINAL_LAUNCHERS.find((candidate) => candidate.id === terminal.id);
+    if (!definition) continue;
+    if (yield* isTerminalDefinitionAvailable(definition, platform, env)) {
+      available.push(definition.id);
+    }
+  }
+
+  return available;
+});
+
 const resolveBrowserLaunch = Effect.fn("externalLauncher.resolveBrowserLaunch")(function* (
   target: string,
 ) {
@@ -298,6 +458,14 @@ const resolveAvailableEditors = Effect.fn("externalLauncher.resolveAvailableEdit
   return yield* buildAvailableEditors(platform, env);
 });
 
+const resolveAvailableTerminals = Effect.fn("externalLauncher.resolveAvailableTerminals")(
+  function* () {
+    const platform = yield* HostProcessPlatform;
+    const env = yield* readCommandLookupEnv;
+    return yield* buildAvailableTerminals(platform, env);
+  },
+);
+
 /**
  * ExternalLauncher - Service tag for browser/editor launch operations.
  */
@@ -305,6 +473,7 @@ export class ExternalLauncher extends Context.Service<
   ExternalLauncher,
   {
     readonly resolveAvailableEditors: () => Effect.Effect<ReadonlyArray<EditorId>>;
+    readonly resolveAvailableTerminals: () => Effect.Effect<ReadonlyArray<ExternalTerminalId>>;
     /** Launch a URL target in the default browser. */
     readonly launchBrowser: (target: string) => Effect.Effect<void, ExternalLauncherError>;
     /**
@@ -313,6 +482,9 @@ export class ExternalLauncher extends Context.Service<
      * Launches the editor as a detached process so server startup is not blocked.
      */
     readonly launchEditor: (input: LaunchEditorInput) => Effect.Effect<void, ExternalLauncherError>;
+    readonly launchTerminal: (
+      input: LaunchTerminalInput,
+    ) => Effect.Effect<void, ExternalLauncherError>;
   }
 >()("t3/process/externalLauncher") {}
 
@@ -357,6 +529,45 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
     target: input.cwd,
     command: fileManagerCommandForPlatform(platform),
     args: [input.cwd],
+  };
+});
+
+const resolveTerminalLaunch = Effect.fn("resolveTerminalLaunch")(function* (
+  input: LaunchTerminalInput,
+): Effect.fn.Return<TerminalLaunch, ExternalLauncherError, FileSystem.FileSystem | Path.Path> {
+  const platform = yield* HostProcessPlatform;
+  const env = yield* readCommandLookupEnv;
+  yield* Effect.annotateCurrentSpan({
+    "externalLauncher.terminal": input.terminal,
+    "externalLauncher.cwd": input.cwd,
+    "externalLauncher.platform": platform,
+  });
+
+  const definition = TERMINAL_LAUNCHERS.find((terminal) => terminal.id === input.terminal);
+  if (!definition) {
+    return yield* new ExternalLauncherUnknownTerminalError({ terminal: input.terminal });
+  }
+
+  if (!definition.platforms.includes(platform)) {
+    return yield* new ExternalLauncherUnsupportedTerminalError({ terminal: input.terminal });
+  }
+
+  if (!(yield* isTerminalDefinitionAvailable(definition, platform, env))) {
+    return yield* new ExternalLauncherTerminalCommandNotFoundError({
+      terminal: input.terminal,
+      command: definition.commands[0],
+    });
+  }
+
+  const command = Option.getOrElse(
+    yield* resolveAvailableCommand(definition.commands, env),
+    () => definition.commands[0],
+  );
+  return {
+    terminal: definition.id,
+    target: input.cwd,
+    command,
+    args: definition.resolveArgs(input.cwd),
   };
 });
 
@@ -430,6 +641,45 @@ const launchEditorProcess = Effect.fn("externalLauncher.launchEditorProcess")(fu
   );
 });
 
+const launchTerminalProcess = Effect.fn("externalLauncher.launchTerminalProcess")(function* (
+  launch: TerminalLaunch,
+): Effect.fn.Return<
+  void,
+  ExternalLauncherError,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+> {
+  const env = yield* readCommandLookupEnv;
+  if (!(yield* isCommandAvailable(launch.command, { env }))) {
+    return yield* new ExternalLauncherTerminalCommandNotFoundError({
+      terminal: launch.terminal,
+      command: launch.command,
+    });
+  }
+
+  const spawnCommand = yield* resolveSpawnCommand(launch.command, launch.args, { env });
+  yield* launchAndUnref(
+    {
+      command: spawnCommand.command,
+      args: spawnCommand.args,
+      options: {
+        detached: true,
+        shell: spawnCommand.shell,
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+      },
+    },
+    (cause) =>
+      new ExternalLauncherTerminalSpawnError({
+        terminal: launch.terminal,
+        target: launch.target,
+        command: spawnCommand.command,
+        args: spawnCommand.args,
+        cause,
+      }),
+  );
+});
+
 export const make = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -445,6 +695,7 @@ export const make = Effect.gen(function* () {
 
   return ExternalLauncher.of({
     resolveAvailableEditors: () => provideCommandResolutionServices(resolveAvailableEditors()),
+    resolveAvailableTerminals: () => provideCommandResolutionServices(resolveAvailableTerminals()),
     launchBrowser: (target) =>
       launchBrowser(target).pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
@@ -453,6 +704,14 @@ export const make = Effect.gen(function* () {
       provideCommandResolutionServices(
         Effect.flatMap(resolveEditorLaunch(input), (launch) =>
           launchEditorProcess(launch).pipe(
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          ),
+        ),
+      ),
+    launchTerminal: (input) =>
+      provideCommandResolutionServices(
+        Effect.flatMap(resolveTerminalLaunch(input), (launch) =>
+          launchTerminalProcess(launch).pipe(
             Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
           ),
         ),

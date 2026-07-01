@@ -123,6 +123,7 @@ const SERVER_CONFIG: ServerConfigType = {
   issues: [],
   providers: [],
   availableEditors: [],
+  availableTerminals: [],
   observability: {
     logsDirectoryPath: "/tmp/logs",
     localTracingEnabled: false,

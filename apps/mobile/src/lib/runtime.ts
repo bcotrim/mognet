@@ -1,33 +1,61 @@
+import * as ExpoCrypto from "expo-crypto";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
+import * as PlatformError from "effect/PlatformError";
 import * as Socket from "effect/unstable/socket/Socket";
 
 import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
 
-import { cryptoLayer } from "../features/cloud/dpop";
-import { managedRelayClientLayer } from "../features/cloud/managedRelayLayer";
-import { resolveCloudPublicConfig } from "../features/cloud/publicConfig";
 import { tracingLayer } from "../features/observability/tracing";
 
-function configuredRelayUrl(): string {
-  return resolveCloudPublicConfig().relay.url ?? "http://relay.invalid";
-}
-
 const httpClientLayer = remoteHttpClientLayer(fetch);
+const toExpoDigestAlgorithm = (
+  algorithm: Crypto.DigestAlgorithm,
+): ExpoCrypto.CryptoDigestAlgorithm => {
+  switch (algorithm) {
+    case "SHA-1":
+      return ExpoCrypto.CryptoDigestAlgorithm.SHA1;
+    case "SHA-256":
+      return ExpoCrypto.CryptoDigestAlgorithm.SHA256;
+    case "SHA-384":
+      return ExpoCrypto.CryptoDigestAlgorithm.SHA384;
+    case "SHA-512":
+      return ExpoCrypto.CryptoDigestAlgorithm.SHA512;
+  }
+};
+const cryptoLayer = Layer.succeed(
+  Crypto.Crypto,
+  Crypto.make({
+    randomBytes: ExpoCrypto.getRandomBytes,
+    digest: (algorithm, data) =>
+      Effect.tryPromise({
+        try: async () => {
+          const input = new ArrayBuffer(data.byteLength);
+          new Uint8Array(input).set(data);
+          return new Uint8Array(await ExpoCrypto.digest(toExpoDigestAlgorithm(algorithm), input));
+        },
+        catch: (cause) =>
+          PlatformError.systemError({
+            _tag: "Unknown",
+            module: "MobileCrypto",
+            method: "digest",
+            cause,
+          }),
+      }),
+  }),
+);
 
 type RuntimeLayerSource =
-  | ReturnType<typeof managedRelayClientLayer>
   | typeof Socket.layerWebSocketConstructorGlobal
-  | typeof cryptoLayer
   | typeof httpClientLayer
+  | typeof cryptoLayer
   | typeof tracingLayer;
 
-const runtimeLayer = Layer.merge(
-  managedRelayClientLayer(configuredRelayUrl()),
-  Socket.layerWebSocketConstructorGlobal,
-).pipe(
-  Layer.provideMerge(cryptoLayer),
+const runtimeLayer = Socket.layerWebSocketConstructorGlobal.pipe(
   Layer.provideMerge(httpClientLayer),
+  Layer.provideMerge(cryptoLayer),
   Layer.provideMerge(tracingLayer.pipe(Layer.provide(httpClientLayer))),
 );
 

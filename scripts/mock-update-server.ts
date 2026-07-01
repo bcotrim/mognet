@@ -6,6 +6,7 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
@@ -14,13 +15,18 @@ interface MockUpdateServerConfig {
   readonly rootRealPath: string;
 }
 
+const optionalEnv = <Value>(name: string, readConfig: (name: string) => Config.Config<Value>) =>
+  readConfig(name).pipe(Config.option);
+
 const resolveMockUpdateServerConfig = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const config = yield* Config.all({
-    port: Config.port("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(Config.withDefault(3000)),
-    root: Config.string("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_ROOT").pipe(
-      Config.withDefault("../release-mock"),
+    port: optionalEnv("MOGNET_DESKTOP_MOCK_UPDATE_SERVER_PORT", Config.port).pipe(
+      Config.map(Option.getOrElse(() => 3000)),
+    ),
+    root: optionalEnv("MOGNET_DESKTOP_MOCK_UPDATE_SERVER_ROOT", Config.string).pipe(
+      Config.map(Option.getOrElse(() => "../release-mock")),
     ),
   });
 

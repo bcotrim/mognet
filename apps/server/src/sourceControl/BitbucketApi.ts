@@ -28,13 +28,15 @@ import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.bitbucket.org/2.0";
 
+const optionalStringEnv = (name: string) => Config.string(name).pipe(Config.option);
+
 const BitbucketApiEnvConfig = Config.all({
-  baseUrl: Config.string("T3CODE_BITBUCKET_API_BASE_URL").pipe(
-    Config.withDefault(DEFAULT_API_BASE_URL),
+  baseUrl: optionalStringEnv("MOGNET_BITBUCKET_API_BASE_URL").pipe(
+    Config.map(Option.getOrElse(() => DEFAULT_API_BASE_URL)),
   ),
-  accessToken: Config.string("T3CODE_BITBUCKET_ACCESS_TOKEN").pipe(Config.option),
-  email: Config.string("T3CODE_BITBUCKET_EMAIL").pipe(Config.option),
-  apiToken: Config.string("T3CODE_BITBUCKET_API_TOKEN").pipe(Config.option),
+  accessToken: optionalStringEnv("MOGNET_BITBUCKET_ACCESS_TOKEN"),
+  email: optionalStringEnv("MOGNET_BITBUCKET_EMAIL"),
+  apiToken: optionalStringEnv("MOGNET_BITBUCKET_API_TOKEN"),
 });
 
 const BitbucketApiOperation = Schema.Literals([
@@ -468,7 +470,7 @@ function authFromConfig(
     account: Option.none(),
     host: Option.some("bitbucket.org"),
     detail: Option.some(
-      "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN, or T3CODE_BITBUCKET_ACCESS_TOKEN.",
+      "Set MOGNET_BITBUCKET_EMAIL and MOGNET_BITBUCKET_API_TOKEN, or MOGNET_BITBUCKET_ACCESS_TOKEN.",
     ),
   };
 }

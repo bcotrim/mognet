@@ -155,6 +155,71 @@ it.effect("discovers editors through the service API", () =>
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
+it.effect("launches an installed terminal with cwd arguments", () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-terminals-" });
+    const ghosttyPath = path.join(binDir, "ghostty");
+    yield* fileSystem.writeFileString(ghosttyPath, "#!/bin/sh\n");
+    yield* fileSystem.chmod(ghosttyPath, 0o755);
+
+    let spawned: ChildProcess.StandardCommand | undefined;
+    yield* Effect.gen(function* () {
+      const launcher = yield* ExternalLauncher.ExternalLauncher;
+      yield* launcher.launchTerminal({
+        terminal: "ghostty",
+        cwd: "/tmp/workspace with spaces",
+      });
+    }).pipe(
+      Effect.provide(
+        testLayer({
+          platform: "linux",
+          env: { PATH: binDir },
+          resolveExecutable: (command) => (command === "ghostty" ? ghosttyPath : command),
+          onSpawn: (command) => {
+            spawned = command;
+          },
+        }),
+      ),
+    );
+
+    assert.ok(spawned);
+    assert.equal(spawned.command, "ghostty");
+    assert.deepEqual(spawned.args, ["--working-directory=/tmp/workspace with spaces"]);
+    assert.equal(spawned.options.detached, true);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("discovers terminals through the service API", () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-terminals-" });
+    const ghosttyPath = path.join(binDir, "ghostty");
+    const gnomeTerminalPath = path.join(binDir, "gnome-terminal");
+    yield* fileSystem.writeFileString(ghosttyPath, "#!/bin/sh\n");
+    yield* fileSystem.writeFileString(gnomeTerminalPath, "#!/bin/sh\n");
+    yield* fileSystem.chmod(ghosttyPath, 0o755);
+    yield* fileSystem.chmod(gnomeTerminalPath, 0o755);
+
+    const terminals = yield* Effect.gen(function* () {
+      const launcher = yield* ExternalLauncher.ExternalLauncher;
+      return yield* launcher.resolveAvailableTerminals();
+    }).pipe(
+      Effect.provide(
+        testLayer({
+          platform: "linux",
+          env: { PATH: binDir },
+        }),
+      ),
+    );
+
+    assert.equal(terminals.includes("ghostty"), true);
+    assert.equal(terminals.includes("gnome-terminal"), true);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
 it.effect("rejects unknown editors through the service API", () =>
   Effect.gen(function* () {
     const launcher = yield* ExternalLauncher.ExternalLauncher;
@@ -164,5 +229,17 @@ it.effect("rejects unknown editors through the service API", () =>
     assert.instanceOf(error, ExternalLauncher.ExternalLauncherUnknownEditorError);
     assert.equal(error.editor, "missing-editor");
     assert.equal(error.message, "Unknown editor: missing-editor");
+  }).pipe(Effect.provide(testLayer({ platform: "linux", env: { PATH: "" } }))),
+);
+
+it.effect("rejects unknown terminals through the service API", () =>
+  Effect.gen(function* () {
+    const launcher = yield* ExternalLauncher.ExternalLauncher;
+    const error = yield* launcher
+      .launchTerminal({ terminal: "missing-terminal" as never, cwd: "/tmp/workspace" })
+      .pipe(Effect.flip);
+    assert.instanceOf(error, ExternalLauncher.ExternalLauncherUnknownTerminalError);
+    assert.equal(error.terminal, "missing-terminal");
+    assert.equal(error.message, "Unknown terminal: missing-terminal");
   }).pipe(Effect.provide(testLayer({ platform: "linux", env: { PATH: "" } }))),
 );
