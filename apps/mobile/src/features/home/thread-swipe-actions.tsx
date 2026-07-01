@@ -13,6 +13,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { AppText as Text } from "../../components/AppText";
+import { useThemeColor } from "../../lib/useThemeColor";
 
 const ACTION_ITEM_WIDTH = 50;
 const ACTION_CIRCLE_SIZE = 36;
@@ -32,6 +33,7 @@ function SwipeActionButton(props: {
   readonly entryRange: readonly [number, number];
   readonly fullSwipeThreshold: number;
   readonly icon: ComponentProps<typeof SymbolView>["name"];
+  readonly iconTintColor: string;
   readonly label: string;
   readonly onPress: () => void;
   readonly stretchesOnFullSwipe: boolean;
@@ -161,7 +163,7 @@ function SwipeActionButton(props: {
             <SymbolView
               name={props.icon}
               size={ACTION_ICON_SIZE}
-              tintColor="#ffffff"
+              tintColor={props.iconTintColor}
               type="monochrome"
             />
           </Animated.View>
@@ -189,6 +191,9 @@ export function ThreadSwipeActions(props: {
   readonly threadTitle: string;
   readonly translation: SharedValue<number>;
 }) {
+  const primary = String(useThemeColor("--color-primary"));
+  const primaryForeground = String(useThemeColor("--color-primary-foreground"));
+
   useAnimatedReaction(
     () => -props.translation.value >= props.fullSwipeThreshold,
     (armed, previous) => {
@@ -210,10 +215,11 @@ export function ThreadSwipeActions(props: {
     >
       <SwipeActionButton
         accessibilityLabel={props.primaryAction.accessibilityLabel}
-        backgroundColor="#007aff"
+        backgroundColor={primary}
         entryRange={[ACTION_ITEM_WIDTH * 0.55, THREAD_SWIPE_ACTIONS_WIDTH * 0.85]}
         fullSwipeThreshold={props.fullSwipeThreshold}
         icon={props.primaryAction.icon}
+        iconTintColor={primaryForeground}
         label={props.primaryAction.label}
         onPress={props.primaryAction.onPress}
         stretchesOnFullSwipe={false}
@@ -225,6 +231,7 @@ export function ThreadSwipeActions(props: {
         entryRange={[8, ACTION_ITEM_WIDTH * 0.72]}
         fullSwipeThreshold={props.fullSwipeThreshold}
         icon="trash"
+        iconTintColor="#ffffff"
         label="Delete"
         onPress={() => {
           props.swipeableMethods.close();
