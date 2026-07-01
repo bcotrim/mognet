@@ -20,7 +20,7 @@ const {
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -34,7 +34,8 @@ const {
       <nav class="nav">
         <div class="nav-inner">
           <a href="/" class="nav-brand" aria-label="Mognet home">
-            <span class="nav-brand-name">Mognet</span>
+            <span class="nav-prompt" aria-hidden="true">~ $</span>
+            <span class="nav-brand-name">mognet</span>
           </a>
           <div class="nav-right">
             <a
@@ -60,7 +61,7 @@ const {
       <footer class="footer">
         <div class="footer-inner">
           <div class="footer-brand">
-            <img src="/icon.png" alt="" />
+            <span class="footer-prompt" aria-hidden="true">~ $</span>
             <span>&copy; {new Date().getFullYear()} Mognet · MIT licensed</span>
           </div>
           <div class="footer-links">
@@ -87,25 +88,27 @@ const {
 
 <style is:global>
   :root {
-    --bg: #09090b;
-    --bg-elev: #0c0c0e;
-    --bg-card: #111113;
-    --fg: #fafafa;
-    --fg-muted: #a1a1aa;
-    --fg-dim: #71717a;
-    --fg-faint: #52525b;
-    --border: rgba(255, 255, 255, 0.08);
+    --bg: #0d0d0d;
+    --bg-elev: #121212;
+    --bg-card: #181818;
+    --fg: #ededed;
+    --fg-muted: #acacac;
+    --fg-dim: #838383;
+    --fg-faint: #5a5a5a;
+    --border: rgba(255, 255, 255, 0.09);
     --border-strong: rgba(255, 255, 255, 0.14);
-    --accent-h: 250;
-    --accent: oklch(0.68 0.17 var(--accent-h));
-    --accent-dim: oklch(0.68 0.17 var(--accent-h) / 0.15);
-    --ok: oklch(0.72 0.16 150);
-    --warn: oklch(0.76 0.15 75);
-    --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --accent: #3fe07b;
+    --accent-hover: #5ceb92;
+    --accent-press: #2fbf66;
+    --accent-dim: rgba(63, 224, 123, 0.1);
+    --accent-glow: rgba(63, 224, 123, 0.22);
+    --ok: #3fe07b;
+    --warn: #f5b23d;
+    --font-sans: "Geist", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-    --radius: 12px;
-    --radius-sm: 8px;
-    --radius-lg: 16px;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --radius-lg: 14px;
   }
 
   * {
@@ -193,24 +196,27 @@ const {
     font-size: 14px;
     padding: 10px 18px;
     border-radius: 8px;
-    transition: transform 0.18s ease, background 0.18s ease,
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease,
       border-color 0.18s ease, color 0.18s ease;
     white-space: nowrap;
   }
 
   .btn-primary {
-    background: var(--fg);
-    color: #09090b;
+    background: var(--accent);
+    color: #062012;
     font-weight: 600;
+    box-shadow: 0 0 18px rgba(63, 224, 123, 0.16);
   }
 
   .btn-primary:hover {
-    transform: translateY(-1px);
-    background: #fff;
+    background: var(--accent-hover);
+    box-shadow: 0 0 24px var(--accent-glow);
   }
 
   .btn-primary:active {
-    transform: translateY(0);
+    transform: translateY(0.5px);
+    background: var(--accent-press);
+    box-shadow: none;
   }
 
   .btn-ghost {
@@ -222,7 +228,7 @@ const {
   .btn-ghost:hover {
     color: var(--fg);
     border-color: var(--border-strong);
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.04);
   }
 
   .btn-lg {
@@ -310,19 +316,28 @@ const {
   .nav-brand {
     display: inline-flex;
     align-items: center;
+    gap: 8px;
     color: var(--fg);
     transition: color 0.2s ease;
   }
 
   .nav-brand:hover {
-    color: #fff;
+    color: var(--fg);
   }
 
   .nav-brand-name {
     font-size: 16px;
-    font-weight: 650;
-    letter-spacing: -0.025em;
+    font-weight: 500;
+    letter-spacing: 0;
     line-height: 1;
+  }
+
+  .nav-prompt,
+  .footer-prompt {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-weight: 500;
+    letter-spacing: 0;
   }
 
   .nav-right {
@@ -338,7 +353,7 @@ const {
     height: 36px;
     padding: 0 14px;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.02);
     color: var(--fg-muted);
     font-size: 13px;
@@ -392,12 +407,6 @@ const {
     gap: 10px;
     font-size: 13px;
     color: var(--fg-dim);
-  }
-
-  .footer-brand img {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
   }
 
   .footer-links {

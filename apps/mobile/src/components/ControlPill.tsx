@@ -35,10 +35,10 @@ export function ControlPill(props: {
     variant === "circle" || variant === "danger" || (variant === "primary" && !props.label);
   const containerClassName = cn(
     isCircle
-      ? "h-11 w-11 items-center justify-center rounded-full"
+      ? "h-11 w-11 items-center justify-center rounded-[7px]"
       : variant === "primary"
-        ? "h-11 flex-row items-center justify-center gap-2 rounded-full px-5"
-        : "h-11 flex-row items-center justify-center gap-2 rounded-full px-3.5",
+        ? "h-11 flex-row items-center justify-center gap-2 rounded-[7px] px-5"
+        : "h-11 flex-row items-center justify-center gap-2 rounded-[7px] px-3.5",
     variant === "primary"
       ? props.disabled
         ? "bg-subtle-strong"

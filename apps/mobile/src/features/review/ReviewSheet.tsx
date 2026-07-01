@@ -58,6 +58,8 @@ function ReviewSelectionActionBar(props: {
   readonly onOpenComment: (() => void) | null;
   readonly onClear: () => void;
 }) {
+  const primaryForeground = String(useThemeColor("--color-primary-foreground"));
+
   if (!props.title) {
     return null;
   }
@@ -67,10 +69,10 @@ function ReviewSelectionActionBar(props: {
       <SymbolView
         name={props.onOpenComment ? "text.bubble" : "line.3.horizontal.decrease.circle"}
         size={16}
-        tintColor="#ffffff"
+        tintColor={primaryForeground}
         type="monochrome"
       />
-      <Text className="text-base font-t3-bold text-white">{props.title}</Text>
+      <Text className="text-base font-t3-bold text-primary-foreground">{props.title}</Text>
     </>
   );
 
@@ -89,22 +91,22 @@ function ReviewSelectionActionBar(props: {
     >
       {props.onOpenComment ? (
         <Pressable
-          className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-blue-600 px-5"
+          className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-[7px] bg-primary px-5"
           onPress={props.onOpenComment}
         >
           {content}
         </Pressable>
       ) : (
-        <View className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-blue-600 px-5">
+        <View className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-[7px] bg-primary px-5">
           {content}
         </View>
       )}
 
       <Pressable
-        className="h-12 w-12 items-center justify-center rounded-full bg-blue-600"
+        className="h-12 w-12 items-center justify-center rounded-[7px] bg-primary"
         onPress={props.onClear}
       >
-        <SymbolView name="xmark" size={16} tintColor="#ffffff" type="monochrome" />
+        <SymbolView name="xmark" size={16} tintColor={primaryForeground} type="monochrome" />
       </Pressable>
     </View>
   );

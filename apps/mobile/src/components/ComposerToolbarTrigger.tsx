@@ -183,7 +183,7 @@ export function ComposerToolbarButton(props: {
       disabled={props.disabled}
       onPress={props.onPress}
       className={cn(
-        "h-11 flex-row items-center justify-center rounded-full active:opacity-70",
+        "h-11 flex-row items-center justify-center rounded-[7px] active:opacity-70",
         isCircle ? "w-11" : "gap-2 px-3.5",
         variant === "primary"
           ? props.disabled

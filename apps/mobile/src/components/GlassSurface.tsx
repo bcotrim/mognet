@@ -31,14 +31,14 @@ export function GlassSurface({
   const glassTint = useThemeColor("--color-glass-tint");
   const supportsGlass = Platform.OS === "ios" && isGlassEffectAPIAvailable();
   const surfaceStyle: ViewStyle = {
-    borderRadius: 32,
+    borderRadius: 14,
     overflow: "hidden",
     borderWidth: chrome === "none" ? 0 : 1,
     borderColor: chrome === "none" ? "transparent" : borderColor,
     backgroundColor: chrome === "none" ? "transparent" : glassSurface,
     shadowColor: chrome === "none" ? "transparent" : "#000000",
     shadowOpacity: chrome === "none" ? 0 : isDarkMode ? 0.22 : 0.08,
-    shadowRadius: chrome === "none" ? 0 : 28,
+    shadowRadius: chrome === "none" ? 0 : 18,
     shadowOffset:
       chrome === "none"
         ? {
@@ -47,7 +47,7 @@ export function GlassSurface({
           }
         : {
             width: 0,
-            height: 14,
+            height: 10,
           },
     elevation: chrome === "none" ? 0 : 12,
   };
