@@ -64,6 +64,7 @@ it.effect("decodes scheduled task definitions and snapshots", () =>
 
     const snapshot = yield* decodeSnapshot({
       ...task,
+      runThreadIds: ["thread-1", "thread-2"],
       runState: "scheduled",
       nextRunAt: "2026-07-02T12:05:00.000Z",
     });
@@ -71,6 +72,7 @@ it.effect("decodes scheduled task definitions and snapshots", () =>
     assert.strictEqual(snapshot.nextRunAt, "2026-07-02T12:05:00.000Z");
     assert.deepStrictEqual(yield* encodeSnapshot(snapshot), {
       ...task,
+      runThreadIds: ["thread-1", "thread-2"],
       runState: "scheduled",
       nextRunAt: "2026-07-02T12:05:00.000Z",
     });
@@ -156,6 +158,7 @@ it.effect("decodes scheduled task config stream events", () =>
         scheduledTasks: [
           {
             ...task,
+            runThreadIds: ["thread-1"],
             runState: "scheduled",
             nextRunAt: "2026-07-02T12:05:00.000Z",
           },

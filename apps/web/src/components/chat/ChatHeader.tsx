@@ -110,7 +110,7 @@ export const ChatHeader = memo(function ChatHeader({
               render={
                 <span
                   aria-label={`Scheduled task: ${scheduledOrigin.scheduledTaskTitle}`}
-                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
+                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-md border border-border/60 bg-muted/25 px-1.5 text-[11px] font-medium text-muted-foreground/75"
                 />
               }
             >

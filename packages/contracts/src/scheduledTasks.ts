@@ -85,6 +85,7 @@ export type ScheduledAgentTask = typeof ScheduledAgentTask.Type;
 
 export const ScheduledTaskSnapshot = Schema.Struct({
   ...ScheduledAgentTask.fields,
+  runThreadIds: Schema.Array(ThreadId),
   runState: ScheduledTaskRunState,
   nextRunAt: Schema.NullOr(IsoDateTime),
 });

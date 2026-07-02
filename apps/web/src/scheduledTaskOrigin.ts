@@ -18,7 +18,11 @@ export function resolveScheduledThreadOrigin(input: {
   if (!thread) return null;
   if (thread.origin?.type === "scheduled-task") return thread.origin;
 
-  const task = input.scheduledTasks.find((candidate) => candidate.lastThreadId === thread.id);
+  const task = input.scheduledTasks.find(
+    (candidate) =>
+      candidate.lastThreadId === thread.id ||
+      candidate.runThreadIds.some((threadId) => threadId === thread.id),
+  );
   if (!task) return null;
 
   return {

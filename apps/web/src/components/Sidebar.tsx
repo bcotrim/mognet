@@ -3,6 +3,7 @@ import {
   ArrowUpDownIcon,
   CalendarClockIcon,
   ChevronRightIcon,
+  ClockIcon,
   CloudIcon,
   ContainerIcon,
   FolderPlusIcon,
@@ -46,6 +47,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   type ContextMenuItem,
   DEFAULT_SERVER_SETTINGS,
+  type OrchestrationThreadOrigin,
   ProjectId,
   STANDALONE_CHAT_PROJECT_ID,
   type ScopedThreadRef,
@@ -80,7 +82,7 @@ import { isElectron } from "../env";
 import { APP_STAGE_LABEL } from "../branding";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { isTerminalFocused } from "../lib/terminalFocus";
-import { isMacPlatform } from "../lib/utils";
+import { cn, isMacPlatform } from "../lib/utils";
 import {
   readThreadShell,
   useProject,
@@ -127,7 +129,7 @@ import {
   resolveThreadRouteTarget,
 } from "../threadRoutes";
 import { stackedThreadToast, toastManager } from "./ui/toast";
-import { formatRelativeTimeLabel } from "../timestampFormat";
+import { formatCompactRelativeTimeLabel } from "../timestampFormat";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { Kbd } from "./ui/kbd";
 import {
@@ -250,10 +252,42 @@ const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> =
 };
 const SIDEBAR_ICON_ACTION_BUTTON_CLASS =
   "inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-[calc(--spacing(1)-1px)] text-muted-foreground/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring";
+const SIDEBAR_SECTION_ACTIONS_CLASS =
+  "pointer-events-none opacity-0 transition-opacity duration-150 group-hover/sidebar-section:pointer-events-auto group-hover/sidebar-section:opacity-100 group-focus-within/sidebar-section:pointer-events-auto group-focus-within/sidebar-section:opacity-100";
 
-function ThreadScheduledOriginIndicator({ thread }: { readonly thread: SidebarThreadSummary }) {
+function useScheduledThreadOrigin(thread: SidebarThreadSummary): OrchestrationThreadOrigin | null {
   const scheduledTasks = useAtomValue(primaryServerScheduledTasksAtom);
-  const origin = resolveScheduledThreadOrigin({ thread, scheduledTasks });
+  return resolveScheduledThreadOrigin({ thread, scheduledTasks });
+}
+
+function ThreadRunMeta({
+  className,
+  isHighlighted,
+  isoDate,
+  origin,
+}: {
+  readonly className?: string;
+  readonly isHighlighted: boolean;
+  readonly isoDate: string;
+  readonly origin: OrchestrationThreadOrigin | null;
+}) {
+  const label = formatCompactRelativeTimeLabel(isoDate);
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 text-[10px] tabular-nums",
+        isHighlighted ? "text-foreground/72 dark:text-foreground/82" : "text-muted-foreground/40",
+        className,
+      )}
+    >
+      <ScheduledRunClock origin={origin} />
+      {label}
+    </span>
+  );
+}
+
+function ScheduledRunClock({ origin }: { readonly origin: OrchestrationThreadOrigin | null }) {
   if (!origin) return null;
 
   return (
@@ -262,11 +296,11 @@ function ThreadScheduledOriginIndicator({ thread }: { readonly thread: SidebarTh
         render={
           <span
             aria-label={`Scheduled task: ${origin.scheduledTaskTitle}`}
-            className="inline-flex h-4 shrink-0 items-center justify-center rounded-sm border border-emerald-500/25 bg-emerald-500/10 px-0.5 text-emerald-700 dark:text-emerald-300"
+            className="inline-flex h-4 shrink-0 items-center justify-center text-emerald-500/55 dark:text-emerald-400/55"
           />
         }
       >
-        <CalendarClockIcon className="size-3" />
+        <ClockIcon className="size-3" />
       </TooltipTrigger>
       <TooltipPopup side="top">Scheduled task: {origin.scheduledTaskTitle}</TooltipPopup>
     </Tooltip>
@@ -474,6 +508,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   );
   const threadProjectCwd = threadProject?.workspaceRoot ?? null;
   const gitCwd = thread.worktreePath ?? threadProjectCwd ?? props.projectCwd;
+  const scheduledOrigin = useScheduledThreadOrigin(thread);
   const gitStatus = useEnvironmentQuery(
     thread.branch != null && gitCwd !== null
       ? vcsEnvironment.status({
@@ -760,7 +795,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
             </Tooltip>
           )}
           {threadStatus && <ThreadStatusLabel status={threadStatus} />}
-          <ThreadScheduledOriginIndicator thread={thread} />
           {renamingThreadKey === threadKey ? (
             <input
               ref={handleRenameInputRef}
@@ -916,17 +950,11 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                     <TooltipPopup side="top">{jumpLabel}</TooltipPopup>
                   </Tooltip>
                 ) : (
-                  <span
-                    className={`text-[10px] tabular-nums ${
-                      isHighlighted
-                        ? "text-foreground/72 dark:text-foreground/82"
-                        : "text-muted-foreground/40"
-                    }`}
-                  >
-                    {formatRelativeTimeLabel(
-                      thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt,
-                    )}
-                  </span>
+                  <ThreadRunMeta
+                    isHighlighted={isHighlighted}
+                    isoDate={thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt}
+                    origin={scheduledOrigin}
+                  />
                 )}
               </span>
             </span>
@@ -2928,9 +2956,11 @@ const SidebarChatThreadRow = memo(function SidebarChatThreadRow({
 }: SidebarChatThreadRowProps) {
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
+  const scheduledOrigin = useScheduledThreadOrigin(thread);
   const isThreadRunning =
     thread.session?.status === "running" && thread.session.activeTurnId != null;
   const isConfirmingArchive = confirmingArchiveThreadKey === threadKey && !isThreadRunning;
+  const isHighlighted = isActive;
   const threadMetaClassName = isConfirmingArchive
     ? "pointer-events-none opacity-0"
     : !isThreadRunning
@@ -3023,18 +3053,27 @@ const SidebarChatThreadRow = memo(function SidebarChatThreadRow({
         size="sm"
         isActive={isActive}
         data-testid={`chat-thread-row-${thread.id}`}
-        className="relative isolate gap-2 px-2 py-1.5 pr-8 text-xs"
+        className="relative isolate gap-2 px-2 py-1.5 text-xs"
       >
-        <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
-        <ThreadScheduledOriginIndicator thread={thread} />
-        <span className="min-w-0 flex-1 truncate text-left">{thread.title}</span>
+        {scheduledOrigin ? null : (
+          <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+        )}
         <span
-          className={`shrink-0 text-[10px] tabular-nums text-muted-foreground/40 ${threadMetaClassName}`}
-        >
-          {formatRelativeTimeLabel(
-            thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt,
+          className={cn(
+            "min-w-0 flex-1 truncate text-left",
+            isHighlighted
+              ? "text-sidebar-accent-foreground"
+              : "text-muted-foreground group-hover/chat-thread:text-sidebar-accent-foreground group-focus-within/chat-thread:text-sidebar-accent-foreground",
           )}
+        >
+          {thread.title}
         </span>
+        <ThreadRunMeta
+          className={threadMetaClassName}
+          isHighlighted={isHighlighted}
+          isoDate={thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt}
+          origin={scheduledOrigin}
+        />
       </SidebarMenuButton>
       {isConfirmingArchive ? (
         <button
@@ -3217,7 +3256,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               render={
                 <SidebarMenuButton
                   size="sm"
-                  className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground focus-visible:ring-0"
+                  className="group/search-trigger gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground focus-visible:ring-0"
                   data-testid="command-palette-trigger"
                 />
               }
@@ -3225,7 +3264,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               <SearchIcon className="size-3.5 text-muted-foreground/70" />
               <span className="flex-1 truncate text-left text-xs">Search</span>
               {commandPaletteShortcutLabel ? (
-                <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-[10px]">
+                <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-[10px] opacity-0 transition-opacity duration-150 group-hover/search-trigger:opacity-100 group-focus-within/search-trigger:opacity-100">
                   {commandPaletteShortcutLabel}
                 </Kbd>
               ) : null}
@@ -3265,15 +3304,15 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               isActive={isScheduledTasksActive}
               className={
                 isScheduledTasksActive
-                  ? "gap-2 px-2 py-1.5 text-foreground"
-                  : "gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                  ? "group/scheduled-tasks-trigger gap-2 px-2 py-1.5 text-foreground"
+                  : "group/scheduled-tasks-trigger gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
               }
               onClick={handleScheduledTasksClick}
             >
               <CalendarClockIcon className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate text-left text-xs">Scheduled Tasks</span>
               {scheduledTasks.length > 0 ? (
-                <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/scheduled-tasks-trigger:opacity-100 group-focus-within/scheduled-tasks-trigger:opacity-100">
                   {scheduledTasks.length}
                 </span>
               ) : null}
@@ -3282,26 +3321,28 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         </SidebarMenu>
       </SidebarGroup>
       <SidebarGroup className="px-2 py-2">
-        <div className="mb-1 flex items-center justify-between pl-2 pr-1.5">
+        <div className="group/sidebar-section mb-1 flex items-center justify-between pl-2 pr-1.5">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
             Chat
           </span>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label="New chat"
-                  className="inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-[calc(--spacing(1)-1px)] text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                  disabled={chatEnvironmentId === null}
-                  onClick={handleCreateChat}
-                />
-              }
-            >
-              <SquarePenIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="right">New chat</TooltipPopup>
-          </Tooltip>
+          <div className={SIDEBAR_SECTION_ACTIONS_CLASS}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="New chat"
+                    className="inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-[calc(--spacing(1)-1px)] text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                    disabled={chatEnvironmentId === null}
+                    onClick={handleCreateChat}
+                  />
+                }
+              >
+                <SquarePenIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="right">New chat</TooltipPopup>
+            </Tooltip>
+          </div>
         </div>
         <SidebarMenu>
           {previewChatThreads.map((thread) => {
@@ -3325,11 +3366,11 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         </SidebarMenu>
       </SidebarGroup>
       <SidebarGroup className="px-2 py-2">
-        <div className="mb-1 flex items-center justify-between pl-2 pr-1.5">
+        <div className="group/sidebar-section mb-1 flex items-center justify-between pl-2 pr-1.5">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
             Projects
           </span>
-          <div className="flex items-center gap-1">
+          <div className={cn("flex items-center gap-1", SIDEBAR_SECTION_ACTIONS_CLASS)}>
             <ProjectSortMenu
               projectSortOrder={projectSortOrder}
               threadSortOrder={threadSortOrder}

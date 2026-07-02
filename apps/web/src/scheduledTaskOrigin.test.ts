@@ -33,6 +33,7 @@ const task = {
   lastStatus: "succeeded",
   lastError: null,
   lastThreadId: ThreadId.make("thread-1"),
+  runThreadIds: [ThreadId.make("thread-1"), ThreadId.make("thread-2")],
   runState: "scheduled",
   nextRunAt: "2026-07-03T10:06:00.000Z",
 } satisfies ScheduledTaskSnapshot;
@@ -62,6 +63,19 @@ describe("resolveScheduledThreadOrigin", () => {
     expect(
       resolveScheduledThreadOrigin({
         thread: { id: ThreadId.make("thread-1") },
+        scheduledTasks: [task],
+      }),
+    ).toEqual({
+      type: "scheduled-task",
+      scheduledTaskId: ScheduledTaskId.make("task-1"),
+      scheduledTaskTitle: "Morning triage",
+    });
+  });
+
+  it("falls back to the scheduled task whose previous run created the thread", () => {
+    expect(
+      resolveScheduledThreadOrigin({
+        thread: { id: ThreadId.make("thread-2") },
         scheduledTasks: [task],
       }),
     ).toEqual({

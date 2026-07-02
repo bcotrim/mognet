@@ -121,6 +121,7 @@ function nextRunAt(task: ScheduledAgentTask): string | null {
 function toSnapshot(
   task: ScheduledAgentTask,
   runningTaskIds: ReadonlySet<ScheduledTaskId>,
+  runThreadIds: ReadonlyArray<ThreadId>,
 ): ScheduledTaskSnapshot {
   const runState: ScheduledTaskSnapshot["runState"] = runningTaskIds.has(task.id)
     ? "running"
@@ -132,9 +133,27 @@ function toSnapshot(
 
   return {
     ...task,
+    runThreadIds: scheduledRunThreadIds(task, runThreadIds),
     runState,
     nextRunAt: nextRunAt(task),
   };
+}
+
+function scheduledRunThreadIds(
+  task: ScheduledAgentTask,
+  runThreadIds: ReadonlyArray<ThreadId>,
+): ReadonlyArray<ThreadId> {
+  const ids: Array<ThreadId> = [];
+  const seen = new Set<string>();
+  const append = (id: ThreadId) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    ids.push(id);
+  };
+
+  if (task.lastThreadId !== null) append(task.lastThreadId);
+  for (const id of runThreadIds) append(id);
+  return ids;
 }
 
 function taskDue(task: ScheduledAgentTask, nowMs: number): boolean {
@@ -211,14 +230,43 @@ export const make = Effect.fn("ScheduledTasks.make")(function* (
       ),
     );
 
+  const scheduledRunThreadIdsByTask: Effect.Effect<
+    ReadonlyMap<ScheduledTaskId, ReadonlyArray<ThreadId>>,
+    never
+  > = projectionSnapshotQuery.getShellSnapshot().pipe(
+    Effect.map((snapshot) => {
+      const byTask = new Map<ScheduledTaskId, Array<ThreadId>>();
+      for (const thread of snapshot.threads) {
+        const origin = thread.origin;
+        if (origin?.type !== "scheduled-task") continue;
+
+        const taskId = ScheduledTaskId.make(origin.scheduledTaskId);
+        const threadIds = byTask.get(taskId);
+        if (threadIds) {
+          threadIds.push(thread.id);
+        } else {
+          byTask.set(taskId, [thread.id]);
+        }
+      }
+      return byTask;
+    }),
+    Effect.catchCause((cause) =>
+      Effect.logWarning("failed to resolve scheduled task run threads", {
+        cause: Cause.pretty(cause),
+      }).pipe(Effect.as(new Map<ScheduledTaskId, ReadonlyArray<ThreadId>>())),
+    ),
+  );
+
   const snapshotsFor = (
     tasks: ReadonlyArray<ScheduledAgentTask>,
   ): Effect.Effect<ReadonlyArray<ScheduledTaskSnapshot>> =>
-    Ref.get(runningTaskIdsRef).pipe(
-      Effect.map((runningTaskIds) =>
-        tasks.map((task) => toSnapshot(task, runningTaskIds)).toSorted(taskOrder),
-      ),
-    );
+    Effect.gen(function* () {
+      const runningTaskIds = yield* Ref.get(runningTaskIdsRef);
+      const runThreadIdsByTask = yield* scheduledRunThreadIdsByTask;
+      return tasks
+        .map((task) => toSnapshot(task, runningTaskIds, runThreadIdsByTask.get(task.id) ?? []))
+        .toSorted(taskOrder);
+    });
 
   const emitChange = (tasks: ReadonlyArray<ScheduledAgentTask>) =>
     snapshotsFor(tasks).pipe(
