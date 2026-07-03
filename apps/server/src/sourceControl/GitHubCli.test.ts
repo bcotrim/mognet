@@ -67,6 +67,17 @@ describe("GitHubCli.layer", () => {
               state: "OPEN",
               mergedAt: null,
               isCrossRepository: true,
+              isDraft: false,
+              mergeStateStatus: "DIRTY",
+              mergeable: "CONFLICTING",
+              reviewDecision: "CHANGES_REQUESTED",
+              statusCheckRollup: [
+                {
+                  __typename: "CheckRun",
+                  status: "COMPLETED",
+                  conclusion: "FAILURE",
+                },
+              ],
               headRepository: {
                 nameWithOwner: "octocat/codething-mvp",
               },
@@ -94,6 +105,15 @@ describe("GitHubCli.layer", () => {
         isCrossRepository: true,
         headRepositoryNameWithOwner: "octocat/codething-mvp",
         headRepositoryOwnerLogin: "octocat",
+        isDraft: false,
+        mergeStatus: "conflicting",
+        reviewDecision: "changes_requested",
+        checks: {
+          status: "failing",
+          totalCount: 1,
+          failedCount: 1,
+          pendingCount: 0,
+        },
       });
       expect(mockRun).toHaveBeenCalledWith({
         operation: "GitHubCli.execute",
@@ -103,7 +123,7 @@ describe("GitHubCli.layer", () => {
           "view",
           "#42",
           "--json",
-          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
+          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
         ],
         cwd: "/repo",
         timeoutMs: 30_000,

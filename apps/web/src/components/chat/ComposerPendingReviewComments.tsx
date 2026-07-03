@@ -16,6 +16,34 @@ interface ComposerPendingReviewCommentsProps {
   className?: string;
 }
 
+const QUOTE_LABEL_MAX_LENGTH = 48;
+
+function isQuotedReplyComment(comment: ReviewCommentContext): boolean {
+  return comment.sectionId.startsWith("assistant:") || comment.sectionId.startsWith("plan:");
+}
+
+function formatQuoteExcerpt(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (normalized.length <= QUOTE_LABEL_MAX_LENGTH) return normalized;
+  return `${normalized.slice(0, QUOTE_LABEL_MAX_LENGTH - 1).trimEnd()}...`;
+}
+
+function formatCommentLabel(comment: ReviewCommentContext): string {
+  if (isQuotedReplyComment(comment)) {
+    const excerpt = formatQuoteExcerpt(comment.diff);
+    return excerpt.length > 0 ? `${comment.sectionTitle}: ${excerpt}` : comment.sectionTitle;
+  }
+  return `${comment.filePath} ${comment.rangeLabel}`;
+}
+
+function formatCommentTooltip(comment: ReviewCommentContext): string {
+  if (!isQuotedReplyComment(comment)) return comment.text;
+
+  const quote = comment.diff.trim();
+  if (quote.length === 0) return comment.text;
+  return comment.text.trim().length > 0 ? `${comment.text.trim()}\n\n${quote}` : quote;
+}
+
 export function ComposerPendingReviewComments({
   comments,
   onRemove,
@@ -26,7 +54,8 @@ export function ComposerPendingReviewComments({
   return (
     <div className={cn("flex flex-wrap gap-1.5", className)}>
       {comments.map((comment) => {
-        const label = `${comment.filePath} ${comment.rangeLabel}`;
+        const label = formatCommentLabel(comment);
+        const tooltip = formatCommentTooltip(comment);
         return (
           <Tooltip key={comment.id}>
             <TooltipTrigger
@@ -50,7 +79,7 @@ export function ComposerPendingReviewComments({
               }
             />
             <TooltipPopup side="top" className="max-w-96 whitespace-pre-wrap leading-tight">
-              {comment.text}
+              {tooltip}
             </TooltipPopup>
           </Tooltip>
         );

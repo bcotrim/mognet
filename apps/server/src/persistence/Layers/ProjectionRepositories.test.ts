@@ -1,4 +1,11 @@
-import { ProjectId, ThreadId, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
+  ProjectId,
+  ThreadId,
+  ProviderInstanceId,
+} from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -34,6 +41,9 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
           instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5.4",
         },
+        defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+        newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+        textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
         scripts: [],
         createdAt: "2026-03-24T00:00:00.000Z",
         updatedAt: "2026-03-24T00:00:00.000Z",

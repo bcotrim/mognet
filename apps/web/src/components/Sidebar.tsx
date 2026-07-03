@@ -1928,6 +1928,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const draftStore = useComposerDraftStore.getState();
       const environmentSettings =
         serverConfigs.get(member.environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS;
+      const defaultThreadEnvMode =
+        member.defaultThreadEnvMode ?? environmentSettings.defaultThreadEnvMode;
+      const newWorktreesStartFromOrigin =
+        member.newWorktreesStartFromOrigin ?? environmentSettings.newWorktreesStartFromOrigin;
       const currentActiveDraftThread =
         currentRouteTarget?.kind === "server"
           ? (draftStore.getDraftThread(currentRouteTarget.threadRef) ?? null)
@@ -1937,11 +1941,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const seedContext = resolveSidebarNewThreadSeedContext({
         projectId: member.id,
         defaultEnvMode: resolveSidebarNewThreadEnvMode({
-          defaultEnvMode: environmentSettings.defaultThreadEnvMode,
+          defaultEnvMode: defaultThreadEnvMode,
         }),
         defaultStartFromOrigin: resolveNewDraftStartFromOrigin({
-          envMode: environmentSettings.defaultThreadEnvMode,
-          newWorktreesStartFromOrigin: environmentSettings.newWorktreesStartFromOrigin,
+          envMode: defaultThreadEnvMode,
+          newWorktreesStartFromOrigin,
         }),
         activeThread:
           currentActiveThread && currentActiveThread.projectId === member.id

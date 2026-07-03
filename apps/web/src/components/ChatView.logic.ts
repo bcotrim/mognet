@@ -54,6 +54,19 @@ export function buildLocalDraftThread(
   };
 }
 
+export function modelSelectionsEqual(
+  left: ModelSelection | null | undefined,
+  right: ModelSelection | null | undefined,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  return (
+    left.instanceId === right.instanceId &&
+    left.model === right.model &&
+    JSON.stringify(left.options ?? null) === JSON.stringify(right.options ?? null)
+  );
+}
+
 export function shouldWriteThreadErrorToCurrentServerThread(input: {
   serverThread:
     | {

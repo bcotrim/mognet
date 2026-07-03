@@ -65,11 +65,20 @@ describe("GitResolvePullRequestResult", () => {
         baseBranch: "main",
         headBranch: "feature/pr-threads",
         state: "open",
+        mergeStatus: "conflicting",
+        checks: {
+          status: "failing",
+          totalCount: 2,
+          failedCount: 1,
+          pendingCount: 0,
+        },
       },
     });
 
     expect(parsed.pullRequest.number).toBe(42);
     expect(parsed.pullRequest.headBranch).toBe("feature/pr-threads");
+    expect(parsed.pullRequest.mergeStatus).toBe("conflicting");
+    expect(parsed.pullRequest.checks?.status).toBe("failing");
   });
 });
 

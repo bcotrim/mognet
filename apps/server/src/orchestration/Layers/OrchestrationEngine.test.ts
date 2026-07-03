@@ -1,6 +1,9 @@
 import {
   CheckpointRef,
   CommandId,
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   MessageId,
   ProjectId,
@@ -43,6 +46,11 @@ const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asMessageId = (value: string): MessageId => MessageId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
 const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.make(value);
+const PROJECT_DEFAULTS = {
+  defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+  newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+} as const;
 
 async function createOrchestrationSystem() {
   const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
@@ -124,6 +132,7 @@ describe("OrchestrationEngine", () => {
             instanceId: ProviderInstanceId.make("codex"),
             model: "gpt-5-codex",
           },
+          ...PROJECT_DEFAULTS,
           scripts: [],
           createdAt: "2026-03-03T00:00:00.000Z",
           updatedAt: "2026-03-03T00:00:01.000Z",

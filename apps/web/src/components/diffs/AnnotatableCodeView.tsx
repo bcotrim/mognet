@@ -8,7 +8,7 @@ import type {
 } from "@pierre/diffs";
 import { CodeView, type CodeViewHandle, type CodeViewProps } from "@pierre/diffs/react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { fnv1a32 } from "~/lib/diffRendering";
@@ -94,6 +94,11 @@ interface DiffSelectionContext {
   item: CodeViewItem<DiffCommentAnnotationGroup>;
 }
 
+interface DiffCodeViewSelection {
+  id: string;
+  range: SelectedLineRange;
+}
+
 export function AnnotatableCodeView({
   files,
   sectionId,
@@ -109,10 +114,8 @@ export function AnnotatableCodeView({
   const reviewComments = useComposerDraftStore(
     (store) => store.getComposerDraft(composerDraftTarget)?.reviewComments ?? EMPTY_REVIEW_COMMENTS,
   );
-  const [selectedLines, setSelectedLines] = useState<{
-    id: string;
-    range: SelectedLineRange;
-  } | null>(null);
+  const [selectedLines, setSelectedLinesState] = useState<DiffCodeViewSelection | null>(null);
+  const selectedLinesRef = useRef<DiffCodeViewSelection | null>(null);
   const [draft, setDraft] = useState<{
     fileKey: string;
     annotation: DiffCommentLineAnnotation;
@@ -162,6 +165,11 @@ export function AnnotatableCodeView({
     [draft, files, reviewComments, sectionId],
   );
 
+  const setSelectedLines = useCallback((selection: DiffCodeViewSelection | null) => {
+    selectedLinesRef.current = selection;
+    setSelectedLinesState(selection);
+  }, []);
+
   const removeEntry = useCallback(
     (entryId: string) => {
       setSelectedLines(null);
@@ -171,7 +179,7 @@ export function AnnotatableCodeView({
         removeReviewComment(composerDraftTarget, entryId);
       }
     },
-    [composerDraftTarget, draft, removeReviewComment],
+    [composerDraftTarget, draft, removeReviewComment, setSelectedLines],
   );
 
   const submitEntry = useCallback(
@@ -194,15 +202,24 @@ export function AnnotatableCodeView({
       setSelectedLines(null);
       setDraft(null);
     },
-    [addReviewComment, composerDraftTarget, draft, filesByKey, sectionId, sectionTitle],
+    [
+      addReviewComment,
+      composerDraftTarget,
+      draft,
+      filesByKey,
+      sectionId,
+      sectionTitle,
+      setSelectedLines,
+    ],
   );
 
   const beginComment = useCallback(
-    (range: SelectedLineRange | null, context: DiffSelectionContext) => {
+    (range: SelectedLineRange | null, context?: DiffSelectionContext) => {
       if (!range) return;
-      const item = context.item;
-      if (item.type !== "diff") return;
-      const file = filesByKey.get(item.id);
+      const fileKey =
+        context?.item.type === "diff" ? context.item.id : selectedLinesRef.current?.id;
+      if (!fileKey) return;
+      const file = filesByKey.get(fileKey);
       if (!file) return;
       const id = nextFileCommentId();
       const comment = buildDiffReviewComment({
@@ -216,7 +233,7 @@ export function AnnotatableCodeView({
       });
       if (!comment) return;
       setDraft({
-        fileKey: item.id,
+        fileKey,
         annotation: {
           side: annotationSide(range),
           lineNumber: range.end,
@@ -241,6 +258,7 @@ export function AnnotatableCodeView({
         ...options,
         enableGutterUtility: !hasOpenComment,
         enableLineSelection: !hasOpenComment,
+        onGutterUtilityClick: beginComment,
         onLineSelectionEnd: beginComment,
       }}
       renderHeaderPrefix={(item) =>

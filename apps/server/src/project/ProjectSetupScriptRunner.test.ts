@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "@effect/vitest";
-import { type OrchestrationProject, ProjectId } from "@t3tools/contracts";
+import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
+  type OrchestrationProject,
+  ProjectId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -19,6 +25,9 @@ const makeProject = (scripts: OrchestrationProject["scripts"]): OrchestrationPro
   title: "Project",
   workspaceRoot: "/repo/project",
   defaultModelSelection: null,
+  defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+  newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
   scripts,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",

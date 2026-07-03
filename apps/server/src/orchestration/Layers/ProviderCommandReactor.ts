@@ -317,6 +317,16 @@ const make = Effect.gen(function* () {
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
+  const resolveTextGenerationModelSelection = Effect.fnUntraced(function* (threadId: ThreadId) {
+    const settings = yield* serverSettingsService.getSettings;
+    const thread = yield* resolveThread(threadId);
+    if (!thread) {
+      return settings.textGenerationModelSelection;
+    }
+    const project = yield* resolveProject(thread.projectId);
+    return project?.textGenerationModelSelection ?? settings.textGenerationModelSelection;
+  });
+
   const rejectStartedThreadModelChangeIfRequired = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
     readonly currentModelSelection: ModelSelection;
@@ -664,8 +674,7 @@ const make = Effect.gen(function* () {
     const cwd = input.worktreePath;
     const attachments = input.attachments ?? [];
     yield* Effect.gen(function* () {
-      const { textGenerationModelSelection: modelSelection } =
-        yield* serverSettingsService.getSettings;
+      const modelSelection = yield* resolveTextGenerationModelSelection(input.threadId);
 
       const generated = yield* textGeneration.generateBranchName({
         cwd,
@@ -709,8 +718,7 @@ const make = Effect.gen(function* () {
     }) {
       const attachments = input.attachments ?? [];
       yield* Effect.gen(function* () {
-        const { textGenerationModelSelection: modelSelection } =
-          yield* serverSettingsService.getSettings;
+        const modelSelection = yield* resolveTextGenerationModelSelection(input.threadId);
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: input.cwd,

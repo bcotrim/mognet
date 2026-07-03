@@ -9,6 +9,9 @@ import {
   AuthEnvironmentBootstrapTokenType,
   AuthTokenExchangeGrantType,
   CommandId,
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
   EventId,
@@ -122,6 +125,11 @@ const defaultModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: "gpt-5-codex",
 } as const;
+const PROJECT_DEFAULTS = {
+  defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+  newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+} as const;
 const testEnvironmentDescriptor = {
   environmentId: EnvironmentId.make("environment-test"),
   label: "Test environment",
@@ -146,6 +154,7 @@ const makeDefaultOrchestrationReadModel = () => {
         title: "Default Project",
         workspaceRoot: "/tmp/default-project",
         defaultModelSelection,
+        ...PROJECT_DEFAULTS,
         scripts: [],
         createdAt: now,
         updatedAt: now,
@@ -4007,6 +4016,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             title: "Project A",
             workspaceRoot: "/tmp/project-a",
             defaultModelSelection,
+            ...PROJECT_DEFAULTS,
             scripts: [],
             createdAt: now,
             updatedAt: now,
@@ -4174,6 +4184,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   title: "Default Project",
                   workspaceRoot: "/tmp/default-project",
                   defaultModelSelection,
+                  ...PROJECT_DEFAULTS,
                   scripts: [],
                   createdAt: "2026-04-05T00:00:00.000Z",
                   updatedAt: "2026-04-05T00:00:00.000Z",
@@ -4952,6 +4963,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   title: "Chat",
                   workspaceRoot: "/tmp/chat-workspace",
                   defaultModelSelection,
+                  ...PROJECT_DEFAULTS,
                   scripts: [],
                   createdAt: "2026-01-01T00:00:00.000Z",
                   updatedAt: "2026-01-01T00:00:00.000Z",

@@ -1,4 +1,7 @@
 import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
@@ -33,6 +36,11 @@ const OTHER_PROJECT_ID = ProjectId.make("project-2");
 const CHAT_PROJECT_ID = ProjectId.make("mognet-chat");
 const THREAD_ID = ThreadId.make("thread-1");
 const OTHER_THREAD_ID = ThreadId.make("thread-2");
+const PROJECT_DEFAULTS = {
+  defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+  newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+} as const;
 
 describe("scoped entity keys", () => {
   it("preserves an invalid project key as structured error data", () => {
@@ -115,6 +123,7 @@ const SNAPSHOT: OrchestrationShellSnapshot = {
       workspaceRoot: "/repo",
       repositoryIdentity: null,
       defaultModelSelection: null,
+      ...PROJECT_DEFAULTS,
       scripts: [],
       createdAt: "2026-06-01T00:00:00.000Z",
       updatedAt: "2026-06-01T00:00:00.000Z",
@@ -126,6 +135,7 @@ const SNAPSHOT: OrchestrationShellSnapshot = {
       workspaceRoot: "/other-repo",
       repositoryIdentity: null,
       defaultModelSelection: null,
+      ...PROJECT_DEFAULTS,
       scripts: [],
       createdAt: "2026-06-01T00:00:00.000Z",
       updatedAt: "2026-06-01T00:00:00.000Z",
@@ -248,6 +258,7 @@ describe("environment entity projections", () => {
       workspaceRoot: "/tmp/chat",
       repositoryIdentity: null,
       defaultModelSelection: null,
+      ...PROJECT_DEFAULTS,
       scripts: [],
       createdAt: "2026-06-01T00:00:00.000Z",
       updatedAt: "2026-06-01T00:00:00.000Z",

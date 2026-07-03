@@ -3,6 +3,9 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   ModelSelection,
@@ -234,7 +237,25 @@ it.effect("decodes legacy project snapshots with workspace kind defaults", () =>
     });
 
     assert.strictEqual(project.kind, "workspace");
+    assert.strictEqual(project.defaultThreadEnvMode, DEFAULT_PROJECT_THREAD_ENV_MODE);
+    assert.strictEqual(
+      project.newWorktreesStartFromOrigin,
+      DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+    );
+    assert.deepStrictEqual(
+      project.textGenerationModelSelection,
+      DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+    );
     assert.strictEqual(projectShell.kind, "workspace");
+    assert.strictEqual(projectShell.defaultThreadEnvMode, DEFAULT_PROJECT_THREAD_ENV_MODE);
+    assert.strictEqual(
+      projectShell.newWorktreesStartFromOrigin,
+      DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+    );
+    assert.deepStrictEqual(
+      projectShell.textGenerationModelSelection,
+      DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+    );
   }),
 );
 

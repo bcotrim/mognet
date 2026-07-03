@@ -8,6 +8,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Scope from "effect/Scope";
 import { ChildProcessSpawner } from "effect/unstable/process";
@@ -19,7 +20,14 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 
-import { GitCommandError, TextGenerationError } from "@t3tools/contracts";
+import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
+  GitCommandError,
+  ProjectId,
+  ProviderInstanceId,
+  TextGenerationError,
+} from "@t3tools/contracts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
@@ -29,6 +37,7 @@ import * as SourceControlProviderRegistry from "../sourceControl/SourceControlPr
 import * as ServerConfig from "../config.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as GitManager from "./GitManager.ts";
 
 interface FakeGhScenario {
@@ -96,6 +105,10 @@ interface FakeGitTextGeneration {
 }
 
 type FakePullRequest = NonNullable<FakeGhScenario["pullRequest"]>;
+type FakePullRequestMergeStatus = NonNullable<GitHubCli.GitHubPullRequestSummary["mergeStatus"]>;
+type FakePullRequestReviewDecision = NonNullable<
+  GitHubCli.GitHubPullRequestSummary["reviewDecision"]
+>;
 
 function normalizeFakePullRequestSummary(raw: unknown): GitHubCli.GitHubPullRequestSummary | null {
   if (!raw || typeof raw !== "object") {
@@ -149,6 +162,14 @@ function normalizeFakePullRequestSummary(raw: unknown): GitHubCli.GitHubPullRequ
       : typeof headRepositoryOwner?.login === "string"
         ? headRepositoryOwner.login
         : undefined;
+  const isDraft = typeof record.isDraft === "boolean" ? record.isDraft : undefined;
+  const mergeStatus = typeof record.mergeStatus === "string" ? record.mergeStatus : undefined;
+  const reviewDecision =
+    typeof record.reviewDecision === "string" ? record.reviewDecision : undefined;
+  const checks =
+    typeof record.checks === "object" && record.checks !== null
+      ? (record.checks as GitHubCli.GitHubPullRequestSummary["checks"])
+      : undefined;
 
   return {
     number,
@@ -160,6 +181,10 @@ function normalizeFakePullRequestSummary(raw: unknown): GitHubCli.GitHubPullRequ
     ...(isCrossRepository !== undefined ? { isCrossRepository } : {}),
     ...(headRepositoryNameWithOwner ? { headRepositoryNameWithOwner } : {}),
     ...(headRepositoryOwnerLogin ? { headRepositoryOwnerLogin } : {}),
+    ...(isDraft !== undefined ? { isDraft } : {}),
+    ...(mergeStatus ? { mergeStatus: mergeStatus as FakePullRequestMergeStatus } : {}),
+    ...(reviewDecision ? { reviewDecision: reviewDecision as FakePullRequestReviewDecision } : {}),
+    ...(checks ? { checks } : {}),
   };
 }
 
@@ -527,7 +552,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "--limit",
             String(input.limit ?? 1),
             "--json",
-            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
+            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
           ],
         }).pipe(
           Effect.map((result) => JSON.parse(result.stdout) as unknown[]),
@@ -571,7 +596,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "view",
             input.reference,
             "--json",
-            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
+            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
           ],
         }).pipe(
           Effect.map((result) => JSON.parse(result.stdout) as GitHubCli.GitHubPullRequestSummary),
@@ -638,6 +663,7 @@ function makeManager(input?: {
   ghScenario?: FakeGhScenario;
   textGeneration?: Partial<FakeGitTextGeneration>;
   setupScriptRunner?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"];
+  projectTextGenerationModelSelection?: ModelSelection;
 }) {
   const { service: gitHubCli, ghCalls } = createGitHubCliWithFakeGh(input?.ghScenario);
   const textGeneration = createTextGeneration(input?.textGeneration);
@@ -646,6 +672,43 @@ function makeManager(input?: {
   });
 
   const serverSettingsLayer = ServerSettings.ServerSettingsService.layerTest();
+  const projectionSnapshotQueryLayer = Layer.succeed(
+    ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+    {
+      getCommandReadModel: () => Effect.die("unused"),
+      getSnapshot: () => Effect.die("unused"),
+      getShellSnapshot: () => Effect.die("unused"),
+      getArchivedShellSnapshot: () => Effect.die("unused"),
+      getSnapshotSequence: () => Effect.die("unused"),
+      getCounts: () => Effect.die("unused"),
+      getActiveProjectByWorkspaceRoot: (workspaceRoot) =>
+        input?.projectTextGenerationModelSelection
+          ? Effect.succeed(
+              Option.some({
+                id: ProjectId.make("project-git-manager"),
+                kind: "workspace" as const,
+                title: "Git Manager",
+                workspaceRoot,
+                repositoryIdentity: null,
+                defaultModelSelection: null,
+                defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+                newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+                textGenerationModelSelection: input.projectTextGenerationModelSelection,
+                scripts: [],
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+                deletedAt: null,
+              }),
+            )
+          : Effect.succeed(Option.none()),
+      getProjectShellById: () => Effect.die("unused"),
+      getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
+      getThreadCheckpointContext: () => Effect.die("unused"),
+      getFullThreadDiffContext: () => Effect.die("unused"),
+      getThreadShellById: () => Effect.die("unused"),
+      getThreadDetailById: () => Effect.die("unused"),
+    },
+  );
 
   const vcsDriverLayer = GitVcsDriver.layer.pipe(
     Layer.provideMerge(VcsProcess.layer),
@@ -677,6 +740,7 @@ function makeManager(input?: {
     ),
     vcsDriverLayer,
     serverSettingsLayer,
+    projectionSnapshotQueryLayer,
   ).pipe(Layer.provideMerge(sourceControlRegistryLayer), Layer.provideMerge(NodeServices.layer));
 
   return GitManager.make.pipe(
@@ -1071,7 +1135,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           state: "open",
         });
         expect(ghCalls).toContain(
-          "pr list --head jasonLaster:statemachine --state all --limit 20 --json number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner",
+          "pr list --head jasonLaster:statemachine --state all --limit 20 --json number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
         );
       }),
     20_000,
@@ -1368,6 +1432,40 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           Effect.map((result) => result.stdout.trim()),
         ),
       ).toBe("Implement stacked git actions");
+    }),
+  );
+
+  it.effect("uses the project text generation model for generated commit messages", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      NodeFS.writeFileSync(NodePath.join(repoDir, "README.md"), "hello\nproject model\n");
+      const projectModelSelection: ModelSelection = {
+        instanceId: ProviderInstanceId.make("project-codex"),
+        model: "gpt-project-text",
+      };
+      let observedModelSelection: ModelSelection | null = null;
+
+      const { manager } = yield* makeManager({
+        projectTextGenerationModelSelection: projectModelSelection,
+        textGeneration: {
+          generateCommitMessage: (input) =>
+            Effect.sync(() => {
+              observedModelSelection = input.modelSelection;
+              return {
+                subject: "Use project model",
+                body: "",
+              };
+            }),
+        },
+      });
+      const result = yield* runStackedAction(manager, {
+        cwd: repoDir,
+        action: "commit",
+      });
+
+      expect(result.commit.status).toBe("created");
+      expect(observedModelSelection).toEqual(projectModelSelection);
     }),
   );
 

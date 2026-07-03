@@ -39,6 +39,10 @@ function toChangeRequest(summary: GitHubCli.GitHubPullRequestSummary): ChangeReq
     ...(summary.headRepositoryOwnerLogin !== undefined
       ? { headRepositoryOwnerLogin: summary.headRepositoryOwnerLogin }
       : {}),
+    ...(summary.isDraft !== undefined ? { isDraft: summary.isDraft } : {}),
+    ...(summary.mergeStatus !== undefined ? { mergeStatus: summary.mergeStatus } : {}),
+    ...(summary.reviewDecision !== undefined ? { reviewDecision: summary.reviewDecision } : {}),
+    ...(summary.checks !== undefined ? { checks: summary.checks } : {}),
   };
 }
 
@@ -139,7 +143,7 @@ export const make = Effect.gen(function* () {
             "--limit",
             String(input.limit ?? 20),
             "--json",
-            "number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner",
+            "number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
           ],
         })
         .pipe(

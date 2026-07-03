@@ -1,4 +1,11 @@
-import { EnvironmentId, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -25,7 +32,7 @@ const defaultGroupingSettings = {
 };
 
 function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
+  const base: Project = {
     id: ProjectId.make("project-1"),
     environmentId: primaryEnvironmentId,
     kind: "workspace",
@@ -36,9 +43,15 @@ function makeProject(overrides: Partial<Project> = {}): Project {
       instanceId: ProviderInstanceId.make("codex"),
       model: "gpt-5-codex",
     },
+    defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+    newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+    textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     scripts: [],
+  };
+  return {
+    ...base,
     ...overrides,
   };
 }
