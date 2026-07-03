@@ -4,6 +4,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import { type DraftId } from "~/composerDraftStore";
 import {
   buildCollapsedProposedPlanPreviewMarkdown,
   buildProposedPlanMarkdownFilename,
@@ -32,16 +33,21 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { projectEnvironment } from "~/state/projects";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { QuoteReplySelector } from "./QuoteReplySelector";
 
 export const ProposedPlanCard = memo(function ProposedPlanCard({
+  planId,
   planMarkdown,
   environmentId,
+  composerDraftTarget,
   threadRef,
   cwd,
   workspaceRoot,
 }: {
+  planId: string;
   planMarkdown: string;
   environmentId: EnvironmentId;
+  composerDraftTarget: ScopedThreadRef | DraftId;
   threadRef?: ScopedThreadRef | undefined;
   cwd: string | undefined;
   workspaceRoot: string | undefined;
@@ -170,26 +176,33 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
         </Menu>
       </div>
       <div className="mt-4">
-        <div className={cn("relative", canCollapse && !expanded && "max-h-104 overflow-hidden")}>
-          {canCollapse && !expanded ? (
-            <ChatMarkdown
-              text={collapsedPreview ?? ""}
-              cwd={cwd}
-              threadRef={threadRef}
-              isStreaming={false}
-            />
-          ) : (
-            <ChatMarkdown
-              text={displayedPlanMarkdown}
-              cwd={cwd}
-              threadRef={threadRef}
-              isStreaming={false}
-            />
-          )}
-          {canCollapse && !expanded ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-card/95 via-card/80 to-transparent" />
-          ) : null}
-        </div>
+        <QuoteReplySelector
+          composerDraftTarget={composerDraftTarget}
+          sourceId={`plan:${planId}`}
+          sourceTitle="Plan"
+          sourceLabel={title}
+        >
+          <div className={cn("relative", canCollapse && !expanded && "max-h-104 overflow-hidden")}>
+            {canCollapse && !expanded ? (
+              <ChatMarkdown
+                text={collapsedPreview ?? ""}
+                cwd={cwd}
+                threadRef={threadRef}
+                isStreaming={false}
+              />
+            ) : (
+              <ChatMarkdown
+                text={displayedPlanMarkdown}
+                cwd={cwd}
+                threadRef={threadRef}
+                isStreaming={false}
+              />
+            )}
+            {canCollapse && !expanded ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-card/95 via-card/80 to-transparent" />
+            ) : null}
+          </div>
+        </QuoteReplySelector>
         {canCollapse ? (
           <div className="mt-4 flex justify-center">
             <Button

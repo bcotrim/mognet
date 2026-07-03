@@ -239,6 +239,29 @@ export function buildFileReviewComment(input: {
   };
 }
 
+export function buildQuotedReviewComment(input: {
+  id: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceLabel: string;
+  quote: string;
+  text: string;
+  rangeLabel?: string;
+}): ReviewCommentContext {
+  return {
+    id: input.id,
+    sectionId: input.sourceId,
+    sectionTitle: input.sourceTitle,
+    filePath: input.sourceLabel,
+    startIndex: 0,
+    endIndex: 0,
+    rangeLabel: input.rangeLabel ?? "Quote",
+    text: input.text.trim(),
+    diff: input.quote.trim(),
+    fenceLanguage: "md",
+  };
+}
+
 export function inferReviewCommentFenceLanguage(filePath: string): string {
   const normalizedPath = filePath.replaceAll("\\", "/");
   const fileName = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1).toLowerCase();
