@@ -44,6 +44,15 @@ it.effect("maps GitHub PR summaries into provider-neutral change requests", () =
           isCrossRepository: true,
           headRepositoryNameWithOwner: "fork/t3code",
           headRepositoryOwnerLogin: "fork",
+          isDraft: false,
+          mergeStatus: "blocked",
+          reviewDecision: "review_required",
+          checks: {
+            status: "pending",
+            totalCount: 2,
+            failedCount: 0,
+            pendingCount: 1,
+          },
         }),
     });
 
@@ -64,6 +73,15 @@ it.effect("maps GitHub PR summaries into provider-neutral change requests", () =
       isCrossRepository: true,
       headRepositoryNameWithOwner: "fork/t3code",
       headRepositoryOwnerLogin: "fork",
+      isDraft: false,
+      mergeStatus: "blocked",
+      reviewDecision: "review_required",
+      checks: {
+        status: "pending",
+        totalCount: 2,
+        failedCount: 0,
+        pendingCount: 1,
+      },
     });
   }),
 );
@@ -127,6 +145,25 @@ it.effect("uses gh json listing for non-open change request state queries", () =
                 state: "merged",
                 updatedAt: "2026-01-02T00:00:00.000Z",
               },
+              {
+                number: 8,
+                title: "Open work",
+                url: "https://github.com/pingdotgg/t3code/pull/8",
+                baseRefName: "main",
+                headRefName: "feature/open",
+                state: "open",
+                updatedAt: "2026-01-03T00:00:00.000Z",
+                isDraft: true,
+                mergeStateStatus: "DRAFT",
+                reviewDecision: "REVIEW_REQUIRED",
+                statusCheckRollup: [
+                  {
+                    __typename: "CheckRun",
+                    status: "IN_PROGRESS",
+                    conclusion: null,
+                  },
+                ],
+              },
             ]),
           ),
         );
@@ -150,10 +187,21 @@ it.effect("uses gh json listing for non-open change request state queries", () =
       "--limit",
       "10",
       "--json",
-      "number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner",
+      "number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
     ]);
     assert.strictEqual(changeRequests[0]?.provider, "github");
     assert.strictEqual(changeRequests[0]?.state, "merged");
+    assert.strictEqual(changeRequests[1]?.provider, "github");
+    assert.strictEqual(changeRequests[1]?.state, "open");
+    assert.strictEqual(changeRequests[1]?.isDraft, true);
+    assert.strictEqual(changeRequests[1]?.mergeStatus, "draft");
+    assert.strictEqual(changeRequests[1]?.reviewDecision, "review_required");
+    assert.deepStrictEqual(changeRequests[1]?.checks, {
+      status: "pending",
+      totalCount: 1,
+      failedCount: 0,
+      pendingCount: 1,
+    });
     assert.deepStrictEqual(
       changeRequests[0]?.updatedAt,
       Option.some(DateTime.makeUnsafe("2026-01-02T00:00:00.000Z")),

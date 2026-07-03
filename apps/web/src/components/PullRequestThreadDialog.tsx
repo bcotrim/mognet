@@ -10,7 +10,10 @@ import {
 } from "~/lib/sourceControlActions";
 import { cn } from "~/lib/utils";
 import { parsePullRequestReference } from "~/pullRequestReference";
-import { getSourceControlPresentation } from "~/sourceControlPresentation";
+import {
+  getChangeRequestStatusDisplay,
+  getSourceControlPresentation,
+} from "~/sourceControlPresentation";
 import { useEnvironmentQuery } from "~/state/query";
 import { vcsEnvironment } from "~/state/vcs";
 import { Button } from "./ui/button";
@@ -116,18 +119,11 @@ export function PullRequestThreadDialog({
       parsedReference !== parsedDebouncedReference ||
       pullRequestResolution.isPending ||
       pullRequestResolution.isFetching);
-  const statusTone = useMemo(() => {
-    switch (resolvedPullRequest?.state) {
-      case "merged":
-        return "text-primary";
-      case "closed":
-        return "text-muted-foreground";
-      case "open":
-        return "text-success-foreground";
-      default:
-        return "text-muted-foreground";
-    }
-  }, [resolvedPullRequest?.state]);
+  const statusDisplay = useMemo(() => {
+    return resolvedPullRequest
+      ? getChangeRequestStatusDisplay(resolvedPullRequest)
+      : { label: "unknown", colorClass: "text-muted-foreground" };
+  }, [resolvedPullRequest]);
 
   const handleConfirm = useCallback(
     async (mode: "local" | "worktree") => {
@@ -240,8 +236,8 @@ export function PullRequestThreadDialog({
                     {resolvedPullRequest.baseBranch}
                   </p>
                 </div>
-                <span className={cn("shrink-0 text-xs capitalize", statusTone)}>
-                  {resolvedPullRequest.state}
+                <span className={cn("shrink-0 text-xs capitalize", statusDisplay.colorClass)}>
+                  {statusDisplay.label}
                 </span>
               </div>
             </div>
