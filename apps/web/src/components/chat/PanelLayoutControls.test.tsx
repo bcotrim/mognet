@@ -6,16 +6,12 @@ import { PanelLayoutControls } from "./PanelLayoutControls";
 const noop = vi.fn();
 
 describe("PanelLayoutControls", () => {
-  it("hides the terminal drawer toggle when terminal panels are unavailable", () => {
+  it("renders the right panel toggle without a terminal drawer toggle", () => {
     const markup = renderToStaticMarkup(
       <PanelLayoutControls
-        terminalAvailable={false}
-        terminalOpen={false}
-        terminalShortcutLabel="Mod+J"
         rightPanelAvailable
         rightPanelOpen={false}
         rightPanelShortcutLabel="Mod+Shift+J"
-        onToggleTerminal={noop}
         onToggleRightPanel={noop}
       />,
     );
@@ -27,13 +23,9 @@ describe("PanelLayoutControls", () => {
   it("hides all panel toggles when no panel surfaces are available", () => {
     const markup = renderToStaticMarkup(
       <PanelLayoutControls
-        terminalAvailable={false}
-        terminalOpen={false}
-        terminalShortcutLabel="Mod+J"
         rightPanelAvailable={false}
         rightPanelOpen={false}
         rightPanelShortcutLabel="Mod+Shift+J"
-        onToggleTerminal={noop}
         onToggleRightPanel={noop}
       />,
     );

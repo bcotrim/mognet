@@ -6,6 +6,11 @@ import { MognetToolkit } from "./tools.ts";
 it("exports the Mognet workflow MCP tool catalog", () => {
   expect(Object.keys(MognetToolkit.tools).toSorted()).toEqual([
     "mognet_delegate_task",
+    "mognet_project_actions_create",
+    "mognet_project_actions_delete",
+    "mognet_project_actions_list",
+    "mognet_project_actions_run",
+    "mognet_project_actions_update",
     "mognet_project_context",
     "mognet_scheduled_tasks_create",
     "mognet_scheduled_tasks_delete",
@@ -41,5 +46,11 @@ it("exports the Mognet workflow MCP tool catalog", () => {
   );
   expect(MognetToolkit.tools.mognet_thread_open.description).toContain(
     "Do not call this for general context/status answers",
+  );
+  expect(MognetToolkit.tools.mognet_project_actions_list.description).toContain(
+    "workspace project",
+  );
+  expect(MognetToolkit.tools.mognet_project_actions_run.description).toContain(
+    "fresh action terminal",
   );
 });
