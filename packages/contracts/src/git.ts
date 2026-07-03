@@ -1,6 +1,12 @@
 import * as Schema from "effect/Schema";
 import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { SourceControlProviderError, SourceControlProviderInfo } from "./sourceControl.ts";
+import {
+  ChangeRequestChecksSummary,
+  ChangeRequestMergeStatus,
+  ChangeRequestReviewDecision,
+  SourceControlProviderError,
+  SourceControlProviderInfo,
+} from "./sourceControl.ts";
 import { VcsDriverKind } from "./vcs.ts";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
@@ -94,6 +100,10 @@ const GitResolvedPullRequest = Schema.Struct({
   baseBranch: TrimmedNonEmptyStringSchema,
   headBranch: TrimmedNonEmptyStringSchema,
   state: GitPullRequestState,
+  isDraft: Schema.optional(Schema.Boolean),
+  mergeStatus: Schema.optional(ChangeRequestMergeStatus),
+  reviewDecision: Schema.optional(ChangeRequestReviewDecision),
+  checks: Schema.optional(ChangeRequestChecksSummary),
 });
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 
@@ -196,6 +206,10 @@ const VcsStatusChangeRequest = Schema.Struct({
   baseRef: TrimmedNonEmptyStringSchema,
   headRef: TrimmedNonEmptyStringSchema,
   state: VcsStatusChangeRequestState,
+  isDraft: Schema.optional(Schema.Boolean),
+  mergeStatus: Schema.optional(ChangeRequestMergeStatus),
+  reviewDecision: Schema.optional(ChangeRequestReviewDecision),
+  checks: Schema.optional(ChangeRequestChecksSummary),
 });
 
 const VcsStatusLocalShape = {

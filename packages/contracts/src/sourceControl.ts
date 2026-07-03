@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { VcsDriverKind } from "./vcs.ts";
 
 export const SourceControlProviderKind = Schema.Literals([
@@ -21,6 +21,42 @@ export type SourceControlProviderInfo = typeof SourceControlProviderInfo.Type;
 export const ChangeRequestState = Schema.Literals(["open", "closed", "merged"]);
 export type ChangeRequestState = typeof ChangeRequestState.Type;
 
+export const ChangeRequestMergeStatus = Schema.Literals([
+  "ready",
+  "conflicting",
+  "blocked",
+  "behind",
+  "draft",
+  "unstable",
+  "unknown",
+]);
+export type ChangeRequestMergeStatus = typeof ChangeRequestMergeStatus.Type;
+
+export const ChangeRequestReviewDecision = Schema.Literals([
+  "approved",
+  "changes_requested",
+  "review_required",
+  "unknown",
+]);
+export type ChangeRequestReviewDecision = typeof ChangeRequestReviewDecision.Type;
+
+export const ChangeRequestChecksStatus = Schema.Literals([
+  "passing",
+  "failing",
+  "pending",
+  "none",
+  "unknown",
+]);
+export type ChangeRequestChecksStatus = typeof ChangeRequestChecksStatus.Type;
+
+export const ChangeRequestChecksSummary = Schema.Struct({
+  status: ChangeRequestChecksStatus,
+  totalCount: NonNegativeInt,
+  failedCount: NonNegativeInt,
+  pendingCount: NonNegativeInt,
+});
+export type ChangeRequestChecksSummary = typeof ChangeRequestChecksSummary.Type;
+
 export const ChangeRequest = Schema.Struct({
   provider: SourceControlProviderKind,
   number: PositiveInt,
@@ -33,6 +69,10 @@ export const ChangeRequest = Schema.Struct({
   isCrossRepository: Schema.optional(Schema.Boolean),
   headRepositoryNameWithOwner: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   headRepositoryOwnerLogin: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  isDraft: Schema.optional(Schema.Boolean),
+  mergeStatus: Schema.optional(ChangeRequestMergeStatus),
+  reviewDecision: Schema.optional(ChangeRequestReviewDecision),
+  checks: Schema.optional(ChangeRequestChecksSummary),
 });
 export type ChangeRequest = typeof ChangeRequest.Type;
 

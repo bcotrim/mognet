@@ -12,7 +12,10 @@ import { useEnvironmentQuery } from "../state/query";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { vcsEnvironment } from "../state/vcs";
 import { useUiStateStore } from "../uiStateStore";
-import { resolveChangeRequestPresentation } from "../sourceControlPresentation";
+import {
+  getChangeRequestStatusDisplay,
+  resolveChangeRequestPresentation,
+} from "../sourceControlPresentation";
 import { resolveThreadStatusPill, type ThreadStatusPill } from "./Sidebar.logic";
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
@@ -39,32 +42,14 @@ export function prStatusIndicator(
 ): PrStatusIndicator | null {
   if (!pr) return null;
   const presentation = resolveChangeRequestPresentation(provider);
+  const status = getChangeRequestStatusDisplay(pr);
 
-  if (pr.state === "open") {
-    return {
-      label: `${presentation.shortName} open`,
-      colorClass: "text-success-foreground",
-      tooltip: `#${pr.number} ${presentation.shortName} open: ${pr.title}`,
-      url: pr.url,
-    };
-  }
-  if (pr.state === "closed") {
-    return {
-      label: `${presentation.shortName} closed`,
-      colorClass: "text-muted-foreground",
-      tooltip: `#${pr.number} ${presentation.shortName} closed: ${pr.title}`,
-      url: pr.url,
-    };
-  }
-  if (pr.state === "merged") {
-    return {
-      label: `${presentation.shortName} merged`,
-      colorClass: "text-primary",
-      tooltip: `#${pr.number} ${presentation.shortName} merged: ${pr.title}`,
-      url: pr.url,
-    };
-  }
-  return null;
+  return {
+    label: `${presentation.shortName} ${status.label}`,
+    colorClass: status.colorClass,
+    tooltip: `#${pr.number} ${presentation.shortName} ${status.label}: ${pr.title}`,
+    url: pr.url,
+  };
 }
 
 export function ChangeRequestStatusIcon({ className }: { className?: string }) {

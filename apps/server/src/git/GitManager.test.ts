@@ -105,6 +105,10 @@ interface FakeGitTextGeneration {
 }
 
 type FakePullRequest = NonNullable<FakeGhScenario["pullRequest"]>;
+type FakePullRequestMergeStatus = NonNullable<GitHubCli.GitHubPullRequestSummary["mergeStatus"]>;
+type FakePullRequestReviewDecision = NonNullable<
+  GitHubCli.GitHubPullRequestSummary["reviewDecision"]
+>;
 
 function normalizeFakePullRequestSummary(raw: unknown): GitHubCli.GitHubPullRequestSummary | null {
   if (!raw || typeof raw !== "object") {
@@ -158,6 +162,14 @@ function normalizeFakePullRequestSummary(raw: unknown): GitHubCli.GitHubPullRequ
       : typeof headRepositoryOwner?.login === "string"
         ? headRepositoryOwner.login
         : undefined;
+  const isDraft = typeof record.isDraft === "boolean" ? record.isDraft : undefined;
+  const mergeStatus = typeof record.mergeStatus === "string" ? record.mergeStatus : undefined;
+  const reviewDecision =
+    typeof record.reviewDecision === "string" ? record.reviewDecision : undefined;
+  const checks =
+    typeof record.checks === "object" && record.checks !== null
+      ? (record.checks as GitHubCli.GitHubPullRequestSummary["checks"])
+      : undefined;
 
   return {
     number,
@@ -169,6 +181,10 @@ function normalizeFakePullRequestSummary(raw: unknown): GitHubCli.GitHubPullRequ
     ...(isCrossRepository !== undefined ? { isCrossRepository } : {}),
     ...(headRepositoryNameWithOwner ? { headRepositoryNameWithOwner } : {}),
     ...(headRepositoryOwnerLogin ? { headRepositoryOwnerLogin } : {}),
+    ...(isDraft !== undefined ? { isDraft } : {}),
+    ...(mergeStatus ? { mergeStatus: mergeStatus as FakePullRequestMergeStatus } : {}),
+    ...(reviewDecision ? { reviewDecision: reviewDecision as FakePullRequestReviewDecision } : {}),
+    ...(checks ? { checks } : {}),
   };
 }
 
@@ -536,7 +552,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "--limit",
             String(input.limit ?? 1),
             "--json",
-            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
+            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
           ],
         }).pipe(
           Effect.map((result) => JSON.parse(result.stdout) as unknown[]),
@@ -580,7 +596,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "view",
             input.reference,
             "--json",
-            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
+            "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
           ],
         }).pipe(
           Effect.map((result) => JSON.parse(result.stdout) as GitHubCli.GitHubPullRequestSummary),
@@ -1119,7 +1135,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           state: "open",
         });
         expect(ghCalls).toContain(
-          "pr list --head jasonLaster:statemachine --state all --limit 20 --json number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner",
+          "pr list --head jasonLaster:statemachine --state all --limit 20 --json number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
         );
       }),
     20_000,
