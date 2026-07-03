@@ -7,11 +7,12 @@ import type {
   SelectedLineRange,
 } from "@pierre/diffs";
 import { CodeView, type CodeViewHandle, type CodeViewProps } from "@pierre/diffs/react";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ReviewFileContext, ReviewFinding, ScopedThreadRef } from "@t3tools/contracts";
 import { useCallback, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { fnv1a32 } from "~/lib/diffRendering";
+import { cn } from "~/lib/utils";
 import {
   buildDiffReviewComment,
   restoreDiffReviewCommentRange,
@@ -23,10 +24,13 @@ import { nextFileCommentId } from "../files/fileCommentAnnotations";
 
 interface DiffCommentAnnotationEntry {
   id: string;
-  kind: "draft" | "comment";
+  kind: "draft" | "comment" | "finding" | "context";
+  filePath: string;
   range: SelectedLineRange;
   rangeLabel: string;
   text: string;
+  finding?: ReviewFinding;
+  fileContext?: ReviewFileContext;
 }
 
 interface DiffCommentAnnotationGroup {
@@ -80,6 +84,8 @@ interface AnnotatableCodeViewProps {
   sectionId: string;
   sectionTitle: string;
   composerDraftTarget: ScopedThreadRef | DraftId;
+  reviewFileContextByPath?: ReadonlyMap<string, ReviewFileContext>;
+  reviewFindingsByFilePath?: ReadonlyMap<string, ReadonlyArray<ReviewFinding>>;
   options: NonNullable<CodeViewProps<DiffCommentAnnotationGroup>["options"]>;
   viewerRef?: Ref<AnnotatableCodeViewHandle>;
   className?: string;
@@ -104,6 +110,8 @@ export function AnnotatableCodeView({
   sectionId,
   sectionTitle,
   composerDraftTarget,
+  reviewFileContextByPath,
+  reviewFindingsByFilePath,
   options,
   viewerRef,
   className,
@@ -125,6 +133,58 @@ export function AnnotatableCodeView({
   const items = useMemo<CodeViewDiffItem<DiffCommentAnnotationGroup>[]>(
     () =>
       files.map(({ fileDiff, filePath, fileKey, collapsed }) => {
+        const contextEntry = (() => {
+          const fileContext = reviewFileContextByPath?.get(filePath);
+          if (!fileContext) return [];
+          const range = restoreDiffReviewCommentRange(fileDiff, {
+            id: `${fileKey}:context`,
+            sectionId,
+            sectionTitle,
+            filePath,
+            startIndex: 0,
+            endIndex: 0,
+            rangeLabel: "File context",
+            text: "",
+            diff: "",
+          });
+          if (!range) return [];
+          return appendAnnotationEntry([], range, {
+            id: `${fileKey}:context`,
+            kind: "context",
+            filePath,
+            range,
+            rangeLabel: "File context",
+            text: fileContext.explanation,
+            fileContext,
+          });
+        })();
+        const findings = (reviewFindingsByFilePath?.get(filePath) ?? []).reduce<
+          DiffCommentLineAnnotation[]
+        >((annotations, finding) => {
+          const anchor = finding.anchor;
+          if (!anchor) return annotations;
+          const range = restoreDiffReviewCommentRange(fileDiff, {
+            id: finding.id,
+            sectionId,
+            sectionTitle,
+            filePath,
+            startIndex: anchor.startIndex,
+            endIndex: anchor.endIndex,
+            rangeLabel: anchor.rangeLabel,
+            text: finding.body,
+            diff: "",
+          });
+          if (!range) return annotations;
+          return appendAnnotationEntry(annotations, range, {
+            id: finding.id,
+            kind: "finding",
+            filePath,
+            range,
+            rangeLabel: anchor.rangeLabel,
+            text: finding.body,
+            finding,
+          });
+        }, contextEntry);
         const persisted = reviewComments
           .filter(
             (comment) =>
@@ -138,11 +198,12 @@ export function AnnotatableCodeView({
             return appendAnnotationEntry(annotations, range, {
               id: comment.id,
               kind: "comment",
+              filePath,
               range,
               rangeLabel: comment.rangeLabel,
               text: comment.text,
             });
-          }, []);
+          }, findings);
         const annotations =
           draft?.fileKey === fileKey ? [...persisted, draft.annotation] : persisted;
         return {
@@ -162,7 +223,15 @@ export function AnnotatableCodeView({
           ),
         };
       }),
-    [draft, files, reviewComments, sectionId],
+    [
+      draft,
+      files,
+      reviewComments,
+      reviewFileContextByPath,
+      reviewFindingsByFilePath,
+      sectionId,
+      sectionTitle,
+    ],
   );
 
   const setSelectedLines = useCallback((selection: DiffCodeViewSelection | null) => {
@@ -238,12 +307,80 @@ export function AnnotatableCodeView({
           side: annotationSide(range),
           lineNumber: range.end,
           metadata: {
-            entries: [{ id, kind: "draft", range, rangeLabel: comment.rangeLabel, text: "" }],
+            entries: [
+              {
+                id,
+                kind: "draft",
+                filePath: file.filePath,
+                range,
+                rangeLabel: comment.rangeLabel,
+                text: "",
+              },
+            ],
           },
         },
       });
     },
     [filesByKey, sectionId, sectionTitle],
+  );
+  const adoptFinding = useCallback(
+    (entry: DiffCommentAnnotationEntry) => {
+      const finding = entry.finding;
+      if (!finding) return;
+      const file = files.find((candidate) => candidate.filePath === entry.filePath);
+      if (!file) return;
+      const text = [
+        finding.title,
+        finding.body,
+        finding.suggestedFix ? `Suggested fix:\n${finding.suggestedFix}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const comment = buildDiffReviewComment({
+        id: nextFileCommentId(),
+        sectionId,
+        sectionTitle,
+        filePath: file.filePath,
+        fileDiff: file.fileDiff,
+        range: entry.range,
+        text,
+      });
+      if (comment) addReviewComment(composerDraftTarget, comment);
+    },
+    [addReviewComment, composerDraftTarget, files, sectionId, sectionTitle],
+  );
+  const renderAnnotationEntry = useCallback(
+    (entry: DiffCommentAnnotationEntry) => {
+      switch (entry.kind) {
+        case "finding":
+          return entry.finding ? (
+            <AgentReviewFindingAnnotation
+              key={entry.id}
+              finding={entry.finding}
+              rangeLabel={entry.rangeLabel}
+              onAdopt={() => adoptFinding(entry)}
+            />
+          ) : null;
+        case "context":
+          return entry.fileContext ? (
+            <AgentReviewFileContextAnnotation key={entry.id} fileContext={entry.fileContext} />
+          ) : null;
+        case "draft":
+        case "comment":
+          return (
+            <LocalCommentAnnotation
+              key={entry.id}
+              kind={entry.kind}
+              rangeLabel={entry.rangeLabel}
+              text={entry.text}
+              onCancel={() => removeEntry(entry.id)}
+              onComment={(text) => submitEntry(entry.id, text)}
+              onDelete={() => removeEntry(entry.id)}
+            />
+          );
+      }
+    },
+    [adoptFinding, removeEntry, submitEntry],
   );
 
   const hasOpenComment = draft !== null;
@@ -267,20 +404,81 @@ export function AnnotatableCodeView({
           : null
       }
       renderAnnotation={(annotation) => (
-        <div className="py-1">
-          {annotation.metadata.entries.map((entry) => (
-            <LocalCommentAnnotation
-              key={entry.id}
-              kind={entry.kind}
-              rangeLabel={entry.rangeLabel}
-              text={entry.text}
-              onCancel={() => removeEntry(entry.id)}
-              onComment={(text) => submitEntry(entry.id, text)}
-              onDelete={() => removeEntry(entry.id)}
-            />
-          ))}
-        </div>
+        <div className="py-1">{annotation.metadata.entries.map(renderAnnotationEntry)}</div>
       )}
     />
+  );
+}
+
+function reviewSeverityClassName(severity: ReviewFinding["severity"]): string {
+  switch (severity) {
+    case "critical":
+      return "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300";
+    case "major":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    case "minor":
+      return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+    case "info":
+      return "border-border bg-muted text-muted-foreground";
+  }
+}
+
+function AgentReviewFileContextAnnotation({ fileContext }: { fileContext: ReviewFileContext }) {
+  return (
+    <div className="rounded-md border border-border/70 bg-background px-3 py-2 text-xs text-foreground shadow-sm">
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+        <span>{fileContext.changeKind}</span>
+        <span>
+          {fileContext.additions}+ / {fileContext.deletions}-
+        </span>
+        <span>{fileContext.hunkCount} hunks</span>
+        {fileContext.truncated ? <span>truncated</span> : null}
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">{fileContext.explanation}</p>
+    </div>
+  );
+}
+
+function AgentReviewFindingAnnotation({
+  finding,
+  rangeLabel,
+  onAdopt,
+}: {
+  finding: ReviewFinding;
+  rangeLabel: string;
+  onAdopt: () => void;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-background px-3 py-2 text-xs text-foreground shadow-sm">
+      <div className="mb-1.5 flex min-w-0 items-center gap-2">
+        <span
+          className={cn(
+            "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase",
+            reviewSeverityClassName(finding.severity),
+          )}
+        >
+          {finding.severity}
+        </span>
+        <span className="truncate font-medium">{finding.title}</span>
+        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{rangeLabel}</span>
+      </div>
+      <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+        {finding.body}
+      </p>
+      {finding.suggestedFix ? (
+        <pre className="mt-2 max-h-48 overflow-auto rounded-sm border border-border/70 bg-muted/40 p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+          {finding.suggestedFix}
+        </pre>
+      ) : null}
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          className="rounded-md border border-border bg-background px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted"
+          onClick={onAdopt}
+        >
+          Adopt
+        </button>
+      </div>
+    </div>
   );
 }

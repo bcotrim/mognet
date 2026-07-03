@@ -14,6 +14,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildReviewSnapshotPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
@@ -52,7 +53,8 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateReviewSnapshot";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -253,10 +255,32 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateReviewSnapshot: TextGeneration.TextGeneration["Service"]["generateReviewSnapshot"] =
+    Effect.fn("CursorTextGeneration.generateReviewSnapshot")(function* (input) {
+      const { prompt, outputSchema } = buildReviewSnapshotPrompt({
+        sourceTitle: input.sourceTitle,
+        diff: input.diff,
+        fileContexts: input.fileContexts,
+        ...(input.originThreadId ? { originThreadId: input.originThreadId } : {}),
+        ...(input.originTurnId ? { originTurnId: input.originTurnId } : {}),
+      });
+
+      const generated = yield* runCursorJson({
+        operation: "generateReviewSnapshot",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return generated satisfies TextGeneration.ReviewSnapshotGenerationResult;
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateReviewSnapshot,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

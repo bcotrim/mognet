@@ -15,6 +15,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildReviewSnapshotPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
@@ -50,7 +51,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateReviewSnapshot";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -245,10 +247,32 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateReviewSnapshot: TextGeneration.TextGeneration["Service"]["generateReviewSnapshot"] =
+    Effect.fn("GrokTextGeneration.generateReviewSnapshot")(function* (input) {
+      const { prompt, outputSchema } = buildReviewSnapshotPrompt({
+        sourceTitle: input.sourceTitle,
+        diff: input.diff,
+        fileContexts: input.fileContexts,
+        ...(input.originThreadId ? { originThreadId: input.originThreadId } : {}),
+        ...(input.originTurnId ? { originTurnId: input.originTurnId } : {}),
+      });
+
+      const generated = yield* runGrokJson({
+        operation: "generateReviewSnapshot",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return generated satisfies TextGeneration.ReviewSnapshotGenerationResult;
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateReviewSnapshot,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

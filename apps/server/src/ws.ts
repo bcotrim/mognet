@@ -291,6 +291,10 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.vcsSwitchRef, AuthOrchestrationOperateScope],
   [WS_METHODS.vcsInit, AuthOrchestrationOperateScope],
   [WS_METHODS.reviewGetDiffPreview, AuthReviewWriteScope],
+  [WS_METHODS.reviewOpenSnapshot, AuthReviewWriteScope],
+  [WS_METHODS.reviewGetSnapshot, AuthReviewWriteScope],
+  [WS_METHODS.reviewListSnapshots, AuthReviewWriteScope],
+  [WS_METHODS.reviewRefreshSnapshot, AuthReviewWriteScope],
   [WS_METHODS.terminalOpen, AuthTerminalOperateScope],
   [WS_METHODS.terminalAttach, AuthTerminalOperateScope],
   [WS_METHODS.terminalWrite, AuthTerminalOperateScope],
@@ -1271,6 +1275,22 @@ const makeWsRpcLayer = (
           ),
         [WS_METHODS.reviewGetDiffPreview]: (input) =>
           observeRpcEffect(WS_METHODS.reviewGetDiffPreview, review.getDiffPreview(input), {
+            "rpc.aggregate": "review",
+          }),
+        [WS_METHODS.reviewOpenSnapshot]: (input) =>
+          observeRpcEffect(WS_METHODS.reviewOpenSnapshot, review.openSnapshot(input), {
+            "rpc.aggregate": "review",
+          }),
+        [WS_METHODS.reviewGetSnapshot]: (input) =>
+          observeRpcEffect(WS_METHODS.reviewGetSnapshot, review.getSnapshot(input), {
+            "rpc.aggregate": "review",
+          }),
+        [WS_METHODS.reviewListSnapshots]: (input) =>
+          observeRpcEffect(WS_METHODS.reviewListSnapshots, review.listSnapshots(input), {
+            "rpc.aggregate": "review",
+          }),
+        [WS_METHODS.reviewRefreshSnapshot]: (input) =>
+          observeRpcEffect(WS_METHODS.reviewRefreshSnapshot, review.refreshSnapshot(input), {
             "rpc.aggregate": "review",
           }),
         [WS_METHODS.terminalOpen]: (input) =>

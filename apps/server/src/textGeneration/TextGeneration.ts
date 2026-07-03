@@ -1,7 +1,14 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
+import type {
+  ChatAttachment,
+  ModelSelection,
+  ProviderInstanceId,
+  ReviewFindingSeverity,
+  ThreadId,
+  TurnId,
+} from "@t3tools/contracts";
 import { TextGenerationError } from "@t3tools/contracts";
 
 import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
@@ -67,6 +74,57 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export interface ReviewSnapshotAnchorContext {
+  id: string;
+  filePath: string;
+  startIndex: number;
+  endIndex: number;
+  rangeLabel: string;
+  diff: string;
+}
+
+export interface ReviewSnapshotFileContextInput {
+  filePath: string;
+  changeKind: string;
+  additions: number;
+  deletions: number;
+  hunkCount: number;
+  truncated: boolean;
+  anchors: ReadonlyArray<ReviewSnapshotAnchorContext>;
+}
+
+export interface ReviewSnapshotGenerationInput {
+  cwd: string;
+  sourceTitle: string;
+  diff: string;
+  fileContexts: ReadonlyArray<ReviewSnapshotFileContextInput>;
+  modelSelection: ModelSelection;
+  originThreadId?: ThreadId | undefined;
+  originTurnId?: TurnId | undefined;
+}
+
+export interface ReviewSnapshotGenerationFinding {
+  id: string;
+  filePath: string;
+  severity: ReviewFindingSeverity;
+  title: string;
+  body: string;
+  anchorId?: string | undefined;
+  suggestedFix?: string | undefined;
+  confidence?: number | undefined;
+}
+
+export interface ReviewSnapshotGenerationFile {
+  filePath: string;
+  explanation: string;
+  findings: ReadonlyArray<ReviewSnapshotGenerationFinding>;
+}
+
+export interface ReviewSnapshotGenerationResult {
+  summary: string;
+  files: ReadonlyArray<ReviewSnapshotGenerationFile>;
+}
+
 export interface TextGenerationService {
   generateCommitMessage(
     input: CommitMessageGenerationInput,
@@ -74,6 +132,9 @@ export interface TextGenerationService {
   generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
+  generateReviewSnapshot(
+    input: ReviewSnapshotGenerationInput,
+  ): Promise<ReviewSnapshotGenerationResult>;
 }
 
 /**
@@ -109,6 +170,10 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    readonly generateReviewSnapshot: (
+      input: ReviewSnapshotGenerationInput,
+    ) => Effect.Effect<ReviewSnapshotGenerationResult, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -119,7 +184,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateReviewSnapshot";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -158,6 +224,10 @@ export const makeTextGenerationFromRegistry = (
     generateThreadTitle: (input) =>
       resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+      ),
+    generateReviewSnapshot: (input) =>
+      resolveInstance(registry, "generateReviewSnapshot", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.generateReviewSnapshot(input)),
       ),
   });
 

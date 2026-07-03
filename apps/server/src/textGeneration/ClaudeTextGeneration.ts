@@ -23,6 +23,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildReviewSnapshotPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
@@ -85,7 +86,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateReviewSnapshot",
     value: unknown,
     detail: string,
   ): Effect.Effect<string, TextGenerationError> =>
@@ -115,7 +117,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateReviewSnapshot";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -355,10 +358,32 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       };
     });
 
+  const generateReviewSnapshot: TextGeneration.TextGeneration["Service"]["generateReviewSnapshot"] =
+    Effect.fn("ClaudeTextGeneration.generateReviewSnapshot")(function* (input) {
+      const { prompt, outputSchema } = buildReviewSnapshotPrompt({
+        sourceTitle: input.sourceTitle,
+        diff: input.diff,
+        fileContexts: input.fileContexts,
+        ...(input.originThreadId ? { originThreadId: input.originThreadId } : {}),
+        ...(input.originTurnId ? { originTurnId: input.originTurnId } : {}),
+      });
+
+      const generated = yield* runClaudeJson({
+        operation: "generateReviewSnapshot",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return generated satisfies TextGeneration.ReviewSnapshotGenerationResult;
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateReviewSnapshot,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

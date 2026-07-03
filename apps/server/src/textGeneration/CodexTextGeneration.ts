@@ -20,6 +20,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildReviewSnapshotPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
@@ -97,7 +98,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateReviewSnapshot",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -116,7 +118,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateReviewSnapshot",
     attachments: TextGeneration.BranchNameGenerationInput["attachments"],
   ): Effect.fn.Return<MaterializedImageAttachments, TextGenerationError> {
     if (!attachments || attachments.length === 0) {
@@ -158,7 +161,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateReviewSnapshot";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -395,10 +399,32 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateReviewSnapshot: TextGeneration.TextGeneration["Service"]["generateReviewSnapshot"] =
+    Effect.fn("CodexTextGeneration.generateReviewSnapshot")(function* (input) {
+      const { prompt, outputSchema } = buildReviewSnapshotPrompt({
+        sourceTitle: input.sourceTitle,
+        diff: input.diff,
+        fileContexts: input.fileContexts,
+        ...(input.originThreadId ? { originThreadId: input.originThreadId } : {}),
+        ...(input.originTurnId ? { originTurnId: input.originTurnId } : {}),
+      });
+
+      const generated = yield* runCodexJson({
+        operation: "generateReviewSnapshot",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return generated satisfies TextGeneration.ReviewSnapshotGenerationResult;
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateReviewSnapshot,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
