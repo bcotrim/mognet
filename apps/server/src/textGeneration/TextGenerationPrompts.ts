@@ -216,3 +216,100 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+// ---------------------------------------------------------------------------
+// Review snapshot
+// ---------------------------------------------------------------------------
+
+export interface ReviewSnapshotPromptInput {
+  sourceTitle: string;
+  diff: string;
+  fileContexts: ReadonlyArray<{
+    filePath: string;
+    changeKind: string;
+    additions: number;
+    deletions: number;
+    hunkCount: number;
+    truncated: boolean;
+    anchors: ReadonlyArray<{
+      id: string;
+      rangeLabel: string;
+      diff: string;
+    }>;
+  }>;
+  originThreadId?: string | undefined;
+  originTurnId?: string | undefined;
+}
+
+function formatReviewFileContext(file: ReviewSnapshotPromptInput["fileContexts"][number]): string {
+  const anchors = file.anchors
+    .slice(0, 24)
+    .map((anchor) =>
+      [
+        `Anchor: ${anchor.id}`,
+        `Range: ${anchor.rangeLabel}`,
+        limitSection(anchor.diff, 1_200),
+      ].join("\n"),
+    )
+    .join("\n\n");
+
+  return [
+    `File: ${file.filePath}`,
+    `Change: ${file.changeKind}, +${file.additions}/-${file.deletions}, hunks: ${file.hunkCount}`,
+    `Truncated: ${file.truncated ? "yes" : "no"}`,
+    anchors.length > 0 ? anchors : "Anchors: none",
+  ].join("\n");
+}
+
+export function buildReviewSnapshotPrompt(input: ReviewSnapshotPromptInput) {
+  const fileContext = input.fileContexts.map(formatReviewFileContext).join("\n\n---\n\n");
+  const prompt = [
+    "You are reviewing a code diff.",
+    "Return a JSON object with keys: summary, files.",
+    "Rules:",
+    "- follow all existing repository, provider, and user review instructions available to you",
+    "- focus findings on correctness, regressions, reliability, security, and missing tests",
+    "- avoid style-only comments unless they affect maintainability or behavior",
+    "- every finding must reference an existing filePath from the input",
+    "- use anchorId only when the finding applies to one of the listed anchors",
+    "- if there are no meaningful issues for a file, return an empty findings array for that file",
+    "- explanations should describe what changed and why the file matters in this diff",
+    "- keep the summary concise",
+    "",
+    `Source: ${input.sourceTitle}`,
+    ...(input.originThreadId ? [`Thread: ${input.originThreadId}`] : []),
+    ...(input.originTurnId ? [`Turn: ${input.originTurnId}`] : []),
+    "",
+    "Files and anchors:",
+    limitSection(fileContext, 28_000),
+    "",
+    "Diff:",
+    limitSection(input.diff, 40_000),
+  ].join("\n");
+
+  const outputSchema = Schema.Struct({
+    summary: Schema.String,
+    files: Schema.Array(
+      Schema.Struct({
+        filePath: Schema.String,
+        explanation: Schema.String,
+        findings: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            filePath: Schema.String,
+            severity: Schema.Literals(["critical", "major", "minor", "info"]),
+            title: Schema.String,
+            body: Schema.String,
+            anchorId: Schema.optional(Schema.String),
+            suggestedFix: Schema.optional(Schema.String),
+            confidence: Schema.optional(
+              Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
+            ),
+          }),
+        ),
+      }),
+    ),
+  });
+
+  return { prompt, outputSchema };
+}

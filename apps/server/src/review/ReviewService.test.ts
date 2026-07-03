@@ -3,9 +3,17 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
+import * as Stream from "effect/Stream";
 
+import { DEFAULT_SERVER_SETTINGS, ThreadId } from "@t3tools/contracts";
+import * as CheckpointDiffQuery from "../checkpointing/CheckpointDiffQuery.ts";
 import { ServerConfig } from "../config.ts";
+import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ThreadReviewSnapshots from "../persistence/Services/ThreadReviewSnapshots.ts";
+import * as ServerSettings from "../serverSettings.ts";
+import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as ReviewService from "./ReviewService.ts";
@@ -28,6 +36,67 @@ function makeLayer(input: {
       }),
     ),
     Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+    Layer.provide(
+      Layer.succeed(
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
+          getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+        } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
+      ),
+    ),
+    Layer.provide(
+      Layer.succeed(
+        CheckpointDiffQuery.CheckpointDiffQuery,
+        CheckpointDiffQuery.CheckpointDiffQuery.of({
+          getTurnDiff: () =>
+            Effect.succeed({
+              threadId: ThreadId.make("thread-test"),
+              fromTurnCount: 0,
+              toTurnCount: 0,
+              diff: "",
+            }),
+          getFullThreadDiff: () =>
+            Effect.succeed({
+              threadId: ThreadId.make("thread-test"),
+              fromTurnCount: 0,
+              toTurnCount: 0,
+              diff: "",
+            }),
+        }),
+      ),
+    ),
+    Layer.provide(
+      Layer.succeed(
+        ThreadReviewSnapshots.ThreadReviewSnapshotRepository,
+        ThreadReviewSnapshots.ThreadReviewSnapshotRepository.of({
+          upsert: () => Effect.void,
+          getByReviewId: () => Effect.succeed(Option.none()),
+          listByThreadId: () => Effect.succeed([]),
+          findReusable: () => Effect.succeed(Option.none()),
+        }),
+      ),
+    ),
+    Layer.provide(
+      Layer.succeed(
+        TextGeneration.TextGeneration,
+        TextGeneration.TextGeneration.of({
+          generateCommitMessage: () => Effect.die("not stubbed"),
+          generatePrContent: () => Effect.die("not stubbed"),
+          generateBranchName: () => Effect.die("not stubbed"),
+          generateThreadTitle: () => Effect.die("not stubbed"),
+          generateReviewSnapshot: () => Effect.succeed({ summary: "", files: [] }),
+        }),
+      ),
+    ),
+    Layer.provide(
+      Layer.mock(ServerSettings.ServerSettingsService)({
+        start: Effect.void,
+        ready: Effect.void,
+        getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+        updateSettings: () => Effect.succeed(DEFAULT_SERVER_SETTINGS),
+        streamChanges: Stream.empty,
+      }),
+    ),
     Layer.provide(ServerConfig.layerTest(input.workspaceRoot, input.baseDir)),
     Layer.provideMerge(NodeServices.layer),
   );

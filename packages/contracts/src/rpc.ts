@@ -43,6 +43,13 @@ import {
   ReviewDiffPreviewError,
   ReviewDiffPreviewInput,
   ReviewDiffPreviewResult,
+  ReviewGetSnapshotInput,
+  ReviewListSnapshotsInput,
+  ReviewListSnapshotsResult,
+  ReviewOpenSnapshotInput,
+  ReviewRefreshSnapshotInput,
+  ReviewSnapshot,
+  ReviewSnapshotRpcError,
 } from "./review.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
@@ -184,6 +191,10 @@ export const WS_METHODS = {
 
   // Review methods
   reviewGetDiffPreview: "review.getDiffPreview",
+  reviewOpenSnapshot: "review.openSnapshot",
+  reviewGetSnapshot: "review.getSnapshot",
+  reviewListSnapshots: "review.listSnapshots",
+  reviewRefreshSnapshot: "review.refreshSnapshot",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -514,6 +525,30 @@ export const WsReviewGetDiffPreviewRpc = Rpc.make(WS_METHODS.reviewGetDiffPrevie
   error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
 });
 
+export const WsReviewOpenSnapshotRpc = Rpc.make(WS_METHODS.reviewOpenSnapshot, {
+  payload: ReviewOpenSnapshotInput,
+  success: ReviewSnapshot,
+  error: Schema.Union([ReviewSnapshotRpcError, EnvironmentAuthorizationError]),
+});
+
+export const WsReviewGetSnapshotRpc = Rpc.make(WS_METHODS.reviewGetSnapshot, {
+  payload: ReviewGetSnapshotInput,
+  success: ReviewSnapshot,
+  error: Schema.Union([ReviewSnapshotRpcError, EnvironmentAuthorizationError]),
+});
+
+export const WsReviewListSnapshotsRpc = Rpc.make(WS_METHODS.reviewListSnapshots, {
+  payload: ReviewListSnapshotsInput,
+  success: ReviewListSnapshotsResult,
+  error: Schema.Union([ReviewSnapshotRpcError, EnvironmentAuthorizationError]),
+});
+
+export const WsReviewRefreshSnapshotRpc = Rpc.make(WS_METHODS.reviewRefreshSnapshot, {
+  payload: ReviewRefreshSnapshotInput,
+  success: ReviewSnapshot,
+  error: Schema.Union([ReviewSnapshotRpcError, EnvironmentAuthorizationError]),
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
@@ -764,6 +799,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsVcsSwitchRefRpc,
   WsVcsInitRpc,
   WsReviewGetDiffPreviewRpc,
+  WsReviewOpenSnapshotRpc,
+  WsReviewGetSnapshotRpc,
+  WsReviewListSnapshotsRpc,
+  WsReviewRefreshSnapshotRpc,
   WsTerminalOpenRpc,
   WsTerminalAttachRpc,
   WsTerminalWriteRpc,

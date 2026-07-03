@@ -4405,7 +4405,13 @@ function ChatViewContent(props: ChatViewProps) {
       />
     ) : hasWorkspaceProject && activeRightPanelSurface?.kind === "diff" ? (
       <Suspense fallback={null}>
-        <DiffPanel mode="embedded" composerDraftTarget={composerDraftTarget} />
+        <DiffPanel
+          mode="embedded"
+          composerDraftTarget={composerDraftTarget}
+          reviewId={
+            activeRightPanelSurface.mode === "review" ? activeRightPanelSurface.reviewId : undefined
+          }
+        />
       </Suspense>
     ) : activeRightPanelSurface?.kind === "plan" ? (
       <PlanSidebar

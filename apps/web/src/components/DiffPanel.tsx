@@ -5,7 +5,13 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
-import type { ScopedThreadRef, TurnId } from "@t3tools/contracts";
+import type {
+  ReviewFileContext,
+  ReviewFinding,
+  ReviewId,
+  ScopedThreadRef,
+  TurnId,
+} from "@t3tools/contracts";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import {
   ArrowRightIcon,
@@ -13,12 +19,15 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
+  FileSearchIcon,
   FolderClosedIcon,
   FolderIcon,
   PilcrowIcon,
+  RefreshCwIcon,
   Rows3Icon,
   SearchIcon,
   TextWrapIcon,
+  XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenInPreferredEditor } from "../editorPreferences";
@@ -68,10 +77,12 @@ import {
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { useEnvironmentQuery } from "../state/query";
+import { useAtomCommand } from "../state/use-atom-command";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
+import { useRightPanelStore } from "../rightPanelStore";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
@@ -192,11 +203,16 @@ const DIFF_PANEL_UNSAFE_CSS = `
 interface DiffPanelProps {
   mode?: DiffPanelMode;
   composerDraftTarget: ScopedThreadRef | DraftId;
+  reviewId?: ReviewId | undefined;
 }
 
 export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 
-export default function DiffPanel({ mode = "inline", composerDraftTarget }: DiffPanelProps) {
+export default function DiffPanel({
+  mode = "inline",
+  composerDraftTarget,
+  reviewId,
+}: DiffPanelProps) {
   const { resolvedTheme } = useTheme();
   const settings = useClientSettings();
   const [diffRenderMode, setDiffRenderMode] = useState<DiffRenderMode>("stacked");
@@ -208,7 +224,15 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
     fileKeys: EMPTY_COLLAPSED_DIFF_FILE_KEYS,
   }));
   const [navigatedFileKey, setNavigatedFileKey] = useState<string | null>(null);
+  const [reviewActionError, setReviewActionError] = useState<string | null>(null);
+  const [reviewActionPending, setReviewActionPending] = useState<"open" | "refresh" | null>(null);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
+  const openReviewSnapshot = useAtomCommand(reviewEnvironment.openSnapshot, {
+    reportFailure: false,
+  });
+  const refreshReviewSnapshot = useAtomCommand(reviewEnvironment.refreshSnapshot, {
+    reportFailure: false,
+  });
 
   const routeThreadRef = useParams({
     strict: false,
@@ -236,6 +260,16 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
     activeThread?.environmentId ?? null,
     serverConfig?.availableEditors ?? [],
   );
+  const reviewSnapshotQuery = useEnvironmentQuery(
+    activeThread && reviewId
+      ? reviewEnvironment.snapshot({
+          environmentId: activeThread.environmentId,
+          input: { reviewId },
+        })
+      : null,
+  );
+  const reviewSnapshot = reviewSnapshotQuery.data;
+  const isReviewMode = reviewId !== undefined;
   const gitStatusQuery = useEnvironmentQuery(
     activeThread !== null && activeThread !== undefined && activeCwd != null
       ? vcsEnvironment.status({
@@ -294,8 +328,11 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
         ? "Latest turn"
         : `Turn ${selectedCheckpointTurnCount ?? "?"}`;
   const reviewSectionId = selectedTurn ? `turn:${selectedTurn.turnId}` : selectedGitScope;
+  const activeReviewSectionId = reviewSnapshot
+    ? `review:${reviewSnapshot.reviewId}`
+    : reviewSectionId;
   const collapseScopeKey = routeThreadRef
-    ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${reviewSectionId}`
+    ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${activeReviewSectionId}`
     : null;
   const collapsedDiffFileKeys =
     collapsedDiffFiles.scopeKey === collapseScopeKey
@@ -306,6 +343,7 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
     : selectedGitScope === "unstaged"
       ? "Working tree"
       : "Branch changes";
+  const activeReviewSectionTitle = reviewSnapshot?.source.title ?? reviewSectionTitle;
   const selectedCheckpointRange = useMemo(
     () =>
       typeof selectedCheckpointTurnCount === "number"
@@ -412,20 +450,32 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
   ];
   const gitDiff = selectedGitSource?.diff;
 
-  const selectedPatch = selectedTurn ? activeCheckpointDiff.data?.diff : gitDiff;
-  const isSelectedPatchTruncated = !selectedTurn && selectedGitSource?.truncated === true;
-  const isLoadingSelectedPatch = selectedTurn
+  const liveSelectedPatch = selectedTurn ? activeCheckpointDiff.data?.diff : gitDiff;
+  const liveSelectedPatchTruncated = !selectedTurn && selectedGitSource?.truncated === true;
+  const liveSelectedPatchLoading = selectedTurn
     ? activeCheckpointDiff.isPending
     : branchDiffPreview.isPending;
-  const selectedPatchError = selectedTurn ? activeCheckpointDiff.error : branchDiffPreview.error;
+  const liveSelectedPatchError = selectedTurn
+    ? activeCheckpointDiff.error
+    : branchDiffPreview.error;
+  const selectedPatch = isReviewMode ? reviewSnapshot?.diff : liveSelectedPatch;
+  const isSelectedPatchTruncated = isReviewMode
+    ? reviewSnapshot?.diffTruncated === true
+    : liveSelectedPatchTruncated;
+  const isLoadingSelectedPatch = isReviewMode
+    ? reviewSnapshotQuery.isPending && !reviewSnapshot
+    : liveSelectedPatchLoading;
+  const selectedPatchError = isReviewMode ? reviewSnapshotQuery.error : liveSelectedPatchError;
   const hasResolvedPatch = typeof selectedPatch === "string";
   const hasNoNetChanges = hasResolvedPatch && selectedPatch.trim().length === 0;
   const renderablePatch = useMemo(
     () =>
       getRenderablePatch(selectedPatch, `diff-panel:${resolvedTheme}`, {
-        compactPartialHunkOffsets: selectedTurnId === null,
+        compactPartialHunkOffsets: isReviewMode
+          ? reviewSnapshot?.source.kind !== "turn"
+          : selectedTurnId === null,
       }),
-    [resolvedTheme, selectedPatch, selectedTurnId],
+    [isReviewMode, resolvedTheme, reviewSnapshot?.source.kind, selectedPatch, selectedTurnId],
   );
   const renderableFiles = useMemo(() => {
     if (!renderablePatch || renderablePatch.kind !== "files") {
@@ -450,6 +500,20 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
         };
       }),
     [collapsedDiffFileKeys, renderableFiles],
+  );
+  const reviewFileContextByPath = useMemo(
+    () => new Map((reviewSnapshot?.files ?? []).map((file) => [file.filePath, file])),
+    [reviewSnapshot?.files],
+  );
+  const reviewFindingsByFilePath = useMemo(
+    () =>
+      new Map(
+        (reviewSnapshot?.files ?? []).map((file) => [
+          file.filePath,
+          file.findings.filter((finding) => finding.anchor !== null),
+        ]),
+      ),
+    [reviewSnapshot?.files],
   );
   const selectedFileKey = selectedFilePath
     ? (codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath)?.fileKey ?? null)
@@ -531,8 +595,160 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectBranchBaseRef(routeThreadRef, baseRef);
   };
+  const handleOpenReview = useCallback(() => {
+    if (!routeThreadRef || !activeThread || !activeCwd) return;
+    const cwd = branchDiffPreview.data?.cwd ?? activeCwd;
+    const source =
+      selectedTurn && selectedCheckpointRange
+        ? {
+            kind: "turn" as const,
+            turnId: selectedTurn.turnId,
+            fromTurnCount: selectedCheckpointRange.fromTurnCount,
+            toTurnCount: selectedCheckpointRange.toTurnCount,
+            title: reviewSectionTitle,
+          }
+        : selectedGitSource?.diff.trim()
+          ? {
+              kind:
+                selectedGitScope === "unstaged"
+                  ? ("working-tree" as const)
+                  : ("branch-range" as const),
+              ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
+              ...(selectedGitSource?.title ? { title: selectedGitSource.title } : {}),
+            }
+          : {
+              kind: "smart" as const,
+              ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
+            };
 
-  const headerRow = (
+    setReviewActionError(null);
+    setReviewActionPending("open");
+    void openReviewSnapshot({
+      environmentId: activeThread.environmentId,
+      input: {
+        cwd,
+        threadId: routeThreadRef.threadId,
+        origin: "manual",
+        source,
+        ignoreWhitespace: diffIgnoreWhitespace,
+      },
+    }).then((result) => {
+      setReviewActionPending(null);
+      if (result._tag === "Success") {
+        useRightPanelStore.getState().openReview(routeThreadRef, result.value.reviewId);
+        return;
+      }
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        setReviewActionError(error instanceof Error ? error.message : "Failed to open review.");
+      }
+    });
+  }, [
+    activeCwd,
+    activeThread,
+    branchDiffPreview.data?.cwd,
+    diffIgnoreWhitespace,
+    openReviewSnapshot,
+    reviewSectionTitle,
+    routeThreadRef,
+    selectedBaseRef,
+    selectedCheckpointRange,
+    selectedGitScope,
+    selectedGitSource?.title,
+    selectedTurn,
+  ]);
+  const handleRefreshReview = useCallback(() => {
+    if (!routeThreadRef || !activeThread || !reviewId) return;
+    setReviewActionError(null);
+    setReviewActionPending("refresh");
+    void refreshReviewSnapshot({
+      environmentId: activeThread.environmentId,
+      input: { reviewId },
+    }).then((result) => {
+      setReviewActionPending(null);
+      if (result._tag === "Success") {
+        useRightPanelStore.getState().openReview(routeThreadRef, result.value.reviewId);
+        reviewSnapshotQuery.refresh();
+        return;
+      }
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        setReviewActionError(error instanceof Error ? error.message : "Failed to refresh review.");
+      }
+    });
+  }, [activeThread, refreshReviewSnapshot, reviewId, reviewSnapshotQuery, routeThreadRef]);
+  const handleExitReview = useCallback(() => {
+    if (!routeThreadRef) return;
+    useRightPanelStore.getState().open(routeThreadRef, "diff");
+  }, [routeThreadRef]);
+
+  const displayControls = (
+    <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+      <ToggleGroup
+        className="shrink-0"
+        variant="outline"
+        size="xs"
+        value={[diffRenderMode]}
+        onValueChange={(value) => {
+          const next = value[0];
+          if (next === "stacked" || next === "split") {
+            setDiffRenderMode(next);
+          }
+        }}
+      >
+        <Toggle aria-label="Stacked diff view" value="stacked">
+          <Rows3Icon className="size-3" />
+        </Toggle>
+        <Toggle aria-label="Split diff view" value="split">
+          <Columns2Icon className="size-3" />
+        </Toggle>
+      </ToggleGroup>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Toggle
+              aria-label={wordWrap ? "Disable diff line wrapping" : "Enable diff line wrapping"}
+              variant="outline"
+              size="xs"
+              pressed={wordWrap}
+              onPressedChange={(pressed) => {
+                setWordWrap(Boolean(pressed));
+              }}
+            />
+          }
+        >
+          <TextWrapIcon className="size-3" />
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
+        </TooltipPopup>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Toggle
+              aria-label={
+                diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
+              }
+              variant="outline"
+              size="xs"
+              pressed={diffIgnoreWhitespace}
+              onPressedChange={(pressed) => {
+                setDiffIgnoreWhitespace(Boolean(pressed));
+              }}
+            />
+          }
+        >
+          <PilcrowIcon className="size-3" />
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          {diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
+        </TooltipPopup>
+      </Tooltip>
+    </div>
+  );
+
+  const normalHeaderRow = (
     <>
       <div className="flex min-w-0 flex-1 items-center gap-3 [-webkit-app-region:no-drag]">
         <DropdownMenu>
@@ -705,71 +921,91 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
           </div>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
-        <ToggleGroup
-          className="shrink-0"
-          variant="outline"
-          size="xs"
-          value={[diffRenderMode]}
-          onValueChange={(value) => {
-            const next = value[0];
-            if (next === "stacked" || next === "split") {
-              setDiffRenderMode(next);
-            }
-          }}
-        >
-          <Toggle aria-label="Stacked diff view" value="stacked">
-            <Rows3Icon className="size-3" />
-          </Toggle>
-          <Toggle aria-label="Split diff view" value="split">
-            <Columns2Icon className="size-3" />
-          </Toggle>
-        </ToggleGroup>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Toggle
-                aria-label={wordWrap ? "Disable diff line wrapping" : "Enable diff line wrapping"}
-                variant="outline"
-                size="xs"
-                pressed={wordWrap}
-                onPressedChange={(pressed) => {
-                  setWordWrap(Boolean(pressed));
-                }}
-              />
-            }
-          >
-            <TextWrapIcon className="size-3" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
-          </TooltipPopup>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Toggle
-                aria-label={
-                  diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
-                }
-                variant="outline"
-                size="xs"
-                pressed={diffIgnoreWhitespace}
-                onPressedChange={(pressed) => {
-                  setDiffIgnoreWhitespace(Boolean(pressed));
-                }}
-              />
-            }
-          >
-            <PilcrowIcon className="size-3" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            {diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
-          </TooltipPopup>
-        </Tooltip>
-      </div>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-55 [-webkit-app-region:no-drag]"
+              disabled={!activeThread || !activeCwd || reviewActionPending !== null}
+              onClick={handleOpenReview}
+            >
+              <FileSearchIcon className="size-3" />
+              <span>Review</span>
+            </button>
+          }
+        />
+        <TooltipPopup side="top">Generate review snapshot</TooltipPopup>
+      </Tooltip>
+      {displayControls}
     </>
   );
+
+  const reviewHeaderRow = (
+    <>
+      <div className="flex min-w-0 flex-1 items-center gap-2 [-webkit-app-region:no-drag]">
+        <span className="inline-flex h-6 shrink-0 items-center rounded-md bg-muted/70 px-2 text-xs font-medium text-foreground">
+          Review
+        </span>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          {reviewSnapshot?.source.title ?? "Loading review..."}
+        </span>
+        {reviewSnapshot ? (
+          <>
+            <span className="rounded-sm border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
+              {reviewSnapshot.status}
+            </span>
+            <span
+              className={cn(
+                "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase",
+                reviewSnapshot.freshness === "stale"
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                  : "border-border/70 text-muted-foreground",
+              )}
+            >
+              {reviewSnapshot.freshness}
+            </span>
+          </>
+        ) : null}
+      </div>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-55 [-webkit-app-region:no-drag]"
+              disabled={!reviewId || reviewActionPending !== null}
+              aria-label="Refresh review"
+              onClick={handleRefreshReview}
+            >
+              <RefreshCwIcon
+                className={cn("size-3", reviewActionPending === "refresh" && "animate-spin")}
+              />
+            </button>
+          }
+        />
+        <TooltipPopup side="top">Refresh review</TooltipPopup>
+      </Tooltip>
+      {displayControls}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [-webkit-app-region:no-drag]"
+              aria-label="Exit review"
+              onClick={handleExitReview}
+            >
+              <XIcon className="size-3" />
+            </button>
+          }
+        />
+        <TooltipPopup side="top">Exit review</TooltipPopup>
+      </Tooltip>
+    </>
+  );
+
+  const headerRow = isReviewMode ? reviewHeaderRow : normalHeaderRow;
 
   return (
     <DiffPanelShell mode={mode} header={headerRow}>
@@ -777,23 +1013,56 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           Select a thread to inspect turn diffs.
         </div>
-      ) : !isGitRepo ? (
+      ) : !isReviewMode && !isGitRepo ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           Turn diffs are unavailable because this project is not a git repository.
         </div>
-      ) : selectedTurnId !== null && orderedTurnDiffSummaries.length === 0 ? (
+      ) : !isReviewMode && selectedTurnId !== null && orderedTurnDiffSummaries.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           No completed turns yet.
         </div>
       ) : (
         <>
           <div className="diff-panel-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {isSelectedPatchTruncated && (
-              <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
-                This diff was truncated because it exceeded the preview limit. The changes shown are
-                incomplete.
+            {reviewActionError && (
+              <p className="shrink-0 border-b border-border/70 bg-red-500/10 px-3 py-1.5 text-[11px] text-red-600 dark:text-red-300">
+                {reviewActionError}
               </p>
             )}
+            {isReviewMode && reviewSnapshot?.freshness === "stale" && (
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+                <span>This review is stale because the selected diff changed.</span>
+                <button
+                  type="button"
+                  className="rounded-sm border border-amber-500/30 px-1.5 py-0.5 font-medium hover:bg-amber-500/10"
+                  onClick={handleRefreshReview}
+                >
+                  Refresh
+                </button>
+              </div>
+            )}
+            {isReviewMode && reviewSnapshot?.status === "pending" && (
+              <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+                Review generation is still running.
+              </p>
+            )}
+            {isReviewMode && reviewSnapshot?.status === "failed" && (
+              <p className="shrink-0 border-b border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[11px] text-red-600 dark:text-red-300">
+                {reviewSnapshot.error?.message ?? "Review generation failed."}
+              </p>
+            )}
+            {isSelectedPatchTruncated && (
+              <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+                {isReviewMode
+                  ? "This review was generated from truncated diff content. Findings may be incomplete."
+                  : "This diff was truncated because it exceeded the preview limit. The changes shown are incomplete."}
+              </p>
+            )}
+            {isReviewMode && reviewSnapshot?.summary.trim() ? (
+              <div className="shrink-0 border-b border-border/70 bg-background px-3 py-2 text-xs text-foreground">
+                {reviewSnapshot.summary}
+              </div>
+            ) : null}
             {selectedPatchError && !renderablePatch && (
               <div className="px-3">
                 <p className="mb-2 text-[11px] text-red-500/80">{selectedPatchError}</p>
@@ -803,11 +1072,13 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
               isLoadingSelectedPatch ? (
                 <DiffPanelLoadingState
                   label={
-                    selectedTurn
-                      ? "Loading checkpoint diff..."
-                      : selectedGitScope === "unstaged"
-                        ? "Loading working tree diff..."
-                        : "Loading branch diff..."
+                    isReviewMode
+                      ? "Loading review snapshot..."
+                      : selectedTurn
+                        ? "Loading checkpoint diff..."
+                        : selectedGitScope === "unstaged"
+                          ? "Loading working tree diff..."
+                          : "Loading branch diff..."
                   }
                 />
               ) : (
@@ -830,6 +1101,7 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
                   <DiffFileNavigator
                     activeFileKey={activeNavigatorFileKey}
                     files={codeViewFiles}
+                    reviewFileContextByPath={reviewFileContextByPath}
                     resolvedTheme={resolvedTheme}
                     onSelectFile={scrollToDiffFile}
                   />
@@ -851,9 +1123,11 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
                     key={collapseScopeKey ?? reviewSectionId}
                     className="diff-render-surface h-full min-h-0 overflow-auto"
                     files={codeViewFiles}
-                    sectionId={reviewSectionId}
-                    sectionTitle={reviewSectionTitle}
+                    sectionId={activeReviewSectionId}
+                    sectionTitle={activeReviewSectionTitle}
                     composerDraftTarget={composerDraftTarget}
+                    reviewFileContextByPath={reviewFileContextByPath}
+                    reviewFindingsByFilePath={reviewFindingsByFilePath}
                     renderHeaderPrefix={(fileDiff, fileKey, collapsed) => {
                       const filePath = resolveFileDiffPath(fileDiff);
                       return (
@@ -929,11 +1203,13 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
 function DiffFileNavigator({
   activeFileKey,
   files,
+  reviewFileContextByPath,
   resolvedTheme,
   onSelectFile,
 }: {
   activeFileKey: string | null;
   files: ReadonlyArray<DiffCodeViewFile>;
+  reviewFileContextByPath: ReadonlyMap<string, ReviewFileContext>;
   resolvedTheme: "light" | "dark";
   onSelectFile: (fileKey: string) => void;
 }) {
@@ -1035,6 +1311,9 @@ function DiffFileNavigator({
     if (!file) return null;
     const isActive = file.fileKey === activeFileKey;
     const stat = node.stat ?? summarizeFileDiffStats(file.fileDiff);
+    const reviewFile = reviewFileContextByPath.get(file.filePath);
+    const findingCount = reviewFile?.findings.length ?? 0;
+    const highestSeverity = getHighestReviewFindingSeverity(reviewFile?.findings ?? []);
 
     return (
       <button
@@ -1060,17 +1339,30 @@ function DiffFileNavigator({
           />
           <span className="truncate font-mono text-[11px] leading-4">{node.name}</span>
         </span>
-        {hasNonZeroStat(stat) ? (
-          <DiffStatLabel
-            additions={stat.additions}
-            deletions={stat.deletions}
-            className="text-[10px] leading-4"
-          />
-        ) : (
-          <span className="font-mono text-[10px] text-muted-foreground/65">
-            {formatDiffChangeType(file.fileDiff.type)}
-          </span>
-        )}
+        <span className="flex min-w-0 items-center gap-1.5">
+          {findingCount > 0 && highestSeverity ? (
+            <span
+              className={cn(
+                "rounded-sm border px-1 py-0.5 text-[10px] leading-none font-medium tabular-nums",
+                reviewSeverityClassName(highestSeverity),
+              )}
+              title={`${findingCount} review finding${findingCount === 1 ? "" : "s"}`}
+            >
+              {findingCount}
+            </span>
+          ) : null}
+          {hasNonZeroStat(stat) ? (
+            <DiffStatLabel
+              additions={stat.additions}
+              deletions={stat.deletions}
+              className="text-[10px] leading-4"
+            />
+          ) : (
+            <span className="font-mono text-[10px] text-muted-foreground/65">
+              {formatDiffChangeType(file.fileDiff.type)}
+            </span>
+          )}
+        </span>
       </button>
     );
   };
@@ -1096,6 +1388,42 @@ function DiffFileNavigator({
       <div className="space-y-0.5 p-1.5">{treeNodes.map((node) => renderNode(node, 0))}</div>
     </nav>
   );
+}
+
+function reviewSeverityRank(severity: ReviewFinding["severity"]): number {
+  switch (severity) {
+    case "critical":
+      return 4;
+    case "major":
+      return 3;
+    case "minor":
+      return 2;
+    case "info":
+      return 1;
+  }
+}
+
+function getHighestReviewFindingSeverity(
+  findings: ReadonlyArray<ReviewFinding>,
+): ReviewFinding["severity"] | null {
+  return (
+    findings.toSorted(
+      (left, right) => reviewSeverityRank(right.severity) - reviewSeverityRank(left.severity),
+    )[0]?.severity ?? null
+  );
+}
+
+function reviewSeverityClassName(severity: ReviewFinding["severity"]): string {
+  switch (severity) {
+    case "critical":
+      return "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300";
+    case "major":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    case "minor":
+      return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+    case "info":
+      return "border-border bg-muted text-muted-foreground";
+  }
 }
 
 function formatDiffChangeType(type: FileDiffMetadata["type"]): string {

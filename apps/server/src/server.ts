@@ -48,6 +48,7 @@ import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRun
 import { ProviderCommandReactorLive } from "./orchestration/Layers/ProviderCommandReactor.ts";
 import { CheckpointReactorLive } from "./orchestration/Layers/CheckpointReactor.ts";
 import { ThreadDeletionReactorLive } from "./orchestration/Layers/ThreadDeletionReactor.ts";
+import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
@@ -63,6 +64,7 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
+import { ThreadReviewSnapshotRepositoryLive } from "./persistence/Layers/ThreadReviewSnapshots.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
@@ -206,9 +208,19 @@ const SourceControlRepositoryServiceLayerLive = SourceControlRepositoryService.l
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
 );
 
+const ReviewCheckpointingLayerLive = CheckpointDiffQuery.layer.pipe(
+  Layer.provideMerge(CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistryLayerLive))),
+  Layer.provideMerge(OrchestrationProjectionSnapshotQueryLive),
+);
+
 const ReviewLayerLive = ReviewService.layer.pipe(
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(VcsDriverRegistryLayerLive),
+  Layer.provideMerge(ReviewCheckpointingLayerLive),
+  Layer.provideMerge(OrchestrationProjectionSnapshotQueryLive),
+  Layer.provideMerge(ThreadReviewSnapshotRepositoryLive),
+  Layer.provideMerge(TextGeneration.layer),
+  Layer.provideMerge(ServerSettings.layer.pipe(Layer.provide(ServerSecretStore.layer))),
 );
 
 const VcsLayerLive = Layer.empty.pipe(

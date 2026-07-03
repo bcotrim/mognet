@@ -8,7 +8,7 @@
  * workspace paths, and diff/plan/files remain singleton surfaces.
  */
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ReviewId, ScopedThreadRef } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -28,7 +28,7 @@ export type RightPanelSurface =
       activeTerminalId: string;
       splitDirection?: "horizontal" | "vertical";
     }
-  | { id: "diff"; kind: "diff" }
+  | { id: "diff"; kind: "diff"; mode?: "diff" | "review"; reviewId?: ReviewId }
   | { id: "files"; kind: "files" }
   | {
       id: `file:${string}`;
@@ -40,7 +40,7 @@ export type RightPanelSurface =
   | { id: "plan"; kind: "plan" };
 
 const RIGHT_PANEL_STORAGE_KEY = "mognet:right-panel-state:v2";
-const RIGHT_PANEL_STORAGE_VERSION = 7;
+const RIGHT_PANEL_STORAGE_VERSION = 8;
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -51,6 +51,7 @@ export interface ThreadRightPanelState {
 interface RightPanelStoreState {
   byThreadKey: Record<string, ThreadRightPanelState>;
   open: (ref: ScopedThreadRef, kind: Exclude<RightPanelKind, "file" | "terminal">) => void;
+  openReview: (ref: ScopedThreadRef, reviewId: ReviewId) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
   openFile: (ref: ScopedThreadRef, relativePath: string, line?: number) => void;
   openTerminal: (ref: ScopedThreadRef, terminalId: string) => void;
@@ -127,7 +128,7 @@ const upsertSurface = (
 ): ThreadRightPanelState => ({
   isOpen: true,
   surfaces: current.surfaces.some((entry) => entry.id === surface.id)
-    ? current.surfaces
+    ? current.surfaces.map((entry) => (entry.id === surface.id ? surface : entry))
     : [...current.surfaces, surface],
   activeSurfaceId: activate ? surface.id : current.activeSurfaceId,
 });
@@ -170,6 +171,25 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                 threadState && typeof threadState === "object" ? threadState : null;
               const surfaces = Array.isArray(validThreadState?.surfaces)
                 ? validThreadState.surfaces.flatMap<RightPanelSurface>((surface) => {
+                    if (surface.kind === "diff") {
+                      if (
+                        "mode" in surface &&
+                        surface.mode === "review" &&
+                        "reviewId" in surface &&
+                        typeof surface.reviewId === "string" &&
+                        surface.reviewId.trim().length > 0
+                      ) {
+                        return [
+                          {
+                            id: "diff",
+                            kind: "diff",
+                            mode: "review",
+                            reviewId: surface.reviewId as ReviewId,
+                          },
+                        ];
+                      }
+                      return [{ id: "diff", kind: "diff" }];
+                    }
                     if (surface.kind === "file") {
                       const revealLine =
                         typeof surface.revealLine === "number" &&
@@ -248,6 +268,17 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             }
             return upsertSurface(current, singletonSurface(kind));
           }),
+        })),
+      openReview: (ref, reviewId) =>
+        set((state) => ({
+          byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) =>
+            upsertSurface(current, {
+              id: "diff",
+              kind: "diff",
+              mode: "review",
+              reviewId,
+            }),
+          ),
         })),
       openBrowser: (ref, tabId) =>
         set((state) => ({

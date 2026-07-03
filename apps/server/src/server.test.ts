@@ -86,6 +86,7 @@ import { OrchestrationListenerCallbackError } from "./orchestration/Errors.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
+import * as ThreadReviewSnapshots from "./persistence/Services/ThreadReviewSnapshots.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -110,6 +111,7 @@ import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
+import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -520,6 +522,67 @@ const buildAppUnderTest = (options?: {
       : ReviewService.layer.pipe(
           Layer.provideMerge(gitVcsDriverLayer),
           Layer.provide(vcsDriverRegistryLayer),
+          Layer.provide(
+            Layer.succeed(
+              ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+              ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
+                getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+              } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
+            ),
+          ),
+          Layer.provide(
+            Layer.succeed(
+              CheckpointDiffQuery.CheckpointDiffQuery,
+              CheckpointDiffQuery.CheckpointDiffQuery.of({
+                getTurnDiff: () =>
+                  Effect.succeed({
+                    threadId: defaultThreadId,
+                    fromTurnCount: 0,
+                    toTurnCount: 0,
+                    diff: "",
+                  }),
+                getFullThreadDiff: () =>
+                  Effect.succeed({
+                    threadId: defaultThreadId,
+                    fromTurnCount: 0,
+                    toTurnCount: 0,
+                    diff: "",
+                  }),
+              }),
+            ),
+          ),
+          Layer.provide(
+            Layer.succeed(
+              ThreadReviewSnapshots.ThreadReviewSnapshotRepository,
+              ThreadReviewSnapshots.ThreadReviewSnapshotRepository.of({
+                upsert: () => Effect.void,
+                getByReviewId: () => Effect.succeed(Option.none()),
+                listByThreadId: () => Effect.succeed([]),
+                findReusable: () => Effect.succeed(Option.none()),
+              }),
+            ),
+          ),
+          Layer.provide(
+            Layer.succeed(
+              TextGeneration.TextGeneration,
+              TextGeneration.TextGeneration.of({
+                generateCommitMessage: () => Effect.die("not stubbed"),
+                generatePrContent: () => Effect.die("not stubbed"),
+                generateBranchName: () => Effect.die("not stubbed"),
+                generateThreadTitle: () => Effect.die("not stubbed"),
+                generateReviewSnapshot: () => Effect.succeed({ summary: "", files: [] }),
+              }),
+            ),
+          ),
+          Layer.provide(
+            Layer.mock(ServerSettings.ServerSettingsService)({
+              start: Effect.void,
+              ready: Effect.void,
+              getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+              updateSettings: () => Effect.succeed(DEFAULT_SERVER_SETTINGS),
+              streamChanges: Stream.empty,
+            }),
+          ),
         );
     const vcsStatusBroadcasterLayer = options?.layers?.vcsStatusBroadcaster
       ? Layer.mock(VcsStatusBroadcaster.VcsStatusBroadcaster)({
