@@ -65,6 +65,7 @@ import { ProposedPlanCard } from "./ProposedPlanCard";
 import { ChangedFilesTree } from "./ChangedFilesTree";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { MessageCopyButton } from "./MessageCopyButton";
+import { QuoteReplySelector } from "./QuoteReplySelector";
 import {
   computeStableMessagesTimelineRows,
   deriveMessagesTimelineRows,
@@ -112,6 +113,7 @@ import {
   parseReviewCommentMessageSegments,
   type ReviewCommentContext,
 } from "../../reviewCommentContext";
+import { type DraftId } from "../../composerDraftStore";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -127,6 +129,7 @@ interface TimelineRowSharedState {
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
+  composerDraftTarget: ScopedThreadRef | DraftId;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
@@ -172,6 +175,7 @@ interface MessagesTimelineProps {
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
+  composerDraftTarget: ScopedThreadRef | DraftId;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   anchorMessageId: MessageId | null;
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
@@ -205,6 +209,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   resolvedTheme,
   timestampFormat,
   workspaceRoot,
+  composerDraftTarget,
   skills = EMPTY_TIMELINE_SKILLS,
   anchorMessageId,
   onAnchorReady,
@@ -414,6 +419,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
+      composerDraftTarget,
       skills,
       activeThreadEnvironmentId,
       onRevertUserMessage,
@@ -428,6 +434,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
+      composerDraftTarget,
       skills,
       activeThreadEnvironmentId,
       onRevertUserMessage,
@@ -975,13 +982,21 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
-        <ChatMarkdown
-          text={messageText}
-          cwd={ctx.markdownCwd}
-          threadRef={ctx.threadRef ?? undefined}
-          isStreaming={Boolean(row.message.streaming)}
-          skills={ctx.skills}
-        />
+        <QuoteReplySelector
+          composerDraftTarget={ctx.composerDraftTarget}
+          sourceId={`assistant:${row.message.id}`}
+          sourceTitle="AI reply"
+          sourceLabel="AI reply"
+          disabled={Boolean(row.message.streaming)}
+        >
+          <ChatMarkdown
+            text={messageText}
+            cwd={ctx.markdownCwd}
+            threadRef={ctx.threadRef ?? undefined}
+            isStreaming={Boolean(row.message.streaming)}
+            skills={ctx.skills}
+          />
+        </QuoteReplySelector>
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}
@@ -1034,8 +1049,10 @@ function ProposedPlanTimelineRow({
   return (
     <div className="min-w-0 px-1 py-0.5">
       <ProposedPlanCard
+        planId={row.proposedPlan.id}
         planMarkdown={row.proposedPlan.planMarkdown}
         environmentId={ctx.activeThreadEnvironmentId}
+        composerDraftTarget={ctx.composerDraftTarget}
         threadRef={ctx.threadRef ?? undefined}
         cwd={ctx.markdownCwd}
         workspaceRoot={ctx.workspaceRoot}
@@ -1618,6 +1635,8 @@ const UserMessageBody = memo(function UserMessageBody(props: {
 function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentContext }) {
   const ctx = use(TimelineRowCtx);
   const fenceLanguage = comment.fenceLanguage ?? "diff";
+  const isQuotedReply =
+    comment.sectionId.startsWith("assistant:") || comment.sectionId.startsWith("plan:");
   const renderablePatch = getRenderablePatch(
     buildReviewCommentRenderablePatch(comment),
     `review-comment:${comment.id}`,
@@ -1627,7 +1646,9 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
     <div className="space-y-2 rounded-lg border border-border/70 bg-background/70 p-3">
       <div className="space-y-1">
         <div className="text-xs font-medium text-foreground">
-          {formatWorkspaceRelativePath(comment.filePath, ctx.workspaceRoot)}
+          {isQuotedReply
+            ? comment.filePath
+            : formatWorkspaceRelativePath(comment.filePath, ctx.workspaceRoot)}
         </div>
         <div className="text-[11px] text-muted-foreground">
           {comment.sectionTitle} · {comment.rangeLabel}
@@ -1638,7 +1659,12 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
           <SkillInlineText text={comment.text} skills={ctx.skills} />
         </div>
       )}
-      {fenceLanguage !== "diff" && comment.diff.trim().length > 0 && (
+      {isQuotedReply && comment.diff.trim().length > 0 && (
+        <blockquote className="whitespace-pre-wrap wrap-break-word border-l-2 border-border pl-3 text-sm text-muted-foreground">
+          {comment.diff.trim()}
+        </blockquote>
+      )}
+      {!isQuotedReply && fenceLanguage !== "diff" && comment.diff.trim().length > 0 && (
         <ChatMarkdown
           text={formatReviewCommentFence(fenceLanguage, comment.diff)}
           cwd={ctx.markdownCwd}
@@ -1647,7 +1673,8 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
           className="text-foreground"
         />
       )}
-      {renderablePatch?.kind === "files" &&
+      {!isQuotedReply &&
+        renderablePatch?.kind === "files" &&
         renderablePatch.files.map((fileDiff) => (
           <FileDiff
             key={resolveFileDiffPath(fileDiff)}
@@ -1659,7 +1686,7 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
             }}
           />
         ))}
-      {renderablePatch?.kind === "raw" && (
+      {!isQuotedReply && renderablePatch?.kind === "raw" && (
         <pre className="overflow-x-auto rounded-md bg-muted/40 p-2 text-xs">
           {renderablePatch.text}
         </pre>

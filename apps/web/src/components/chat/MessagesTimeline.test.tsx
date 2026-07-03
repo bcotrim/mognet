@@ -3,6 +3,7 @@ import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
+import { DraftId } from "../../composerDraftStore";
 
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
@@ -186,6 +187,7 @@ function buildProps() {
     resolvedTheme: "light" as const,
     timestampFormat: "locale" as const,
     workspaceRoot: undefined,
+    composerDraftTarget: DraftId.make("draft-timeline-test"),
     anchorMessageId: null,
     onAnchorReady: () => {},
     onAnchorSizeChanged: () => {},
@@ -545,6 +547,45 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("plan.md");
     expect(markup).toContain("Clarify this.");
     expect(markup).toContain("# Plan");
+    expect(markup).not.toContain('data-testid="file-diff"');
+  });
+
+  it("renders quoted assistant reply comments as quote cards", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        workspaceRoot="/Users/me/project"
+        timelineEntries={[
+          {
+            id: "entry-1",
+            kind: "message",
+            createdAt: "2026-03-17T19:12:28.000Z",
+            message: {
+              id: MessageId.make("message-quote-comment"),
+              role: "user",
+              text: [
+                '<review_comment sectionId="assistant:message-1" sectionTitle="AI reply" filePath="AI reply" startIndex="0" endIndex="0" rangeLabel="Quote">',
+                "Please tighten this.",
+                "```md",
+                "The current implementation can skip slow paths.",
+                "```",
+                "</review_comment>",
+              ].join("\n"),
+              turnId: null,
+              createdAt: "2026-03-17T19:12:28.000Z",
+              updatedAt: "2026-03-17T19:12:28.000Z",
+              streaming: false,
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("AI reply");
+    expect(markup).toContain("Please tighten this.");
+    expect(markup).toContain("The current implementation can skip slow paths.");
+    expect(markup).not.toContain("project/AI reply");
     expect(markup).not.toContain('data-testid="file-diff"');
   });
 

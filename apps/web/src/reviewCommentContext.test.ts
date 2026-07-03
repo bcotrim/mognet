@@ -5,6 +5,7 @@ import {
   appendReviewCommentsToPrompt,
   buildDiffReviewComment,
   buildFileReviewComment,
+  buildQuotedReviewComment,
   buildReviewCommentRenderablePatch,
   formatReviewCommentContext,
   inferReviewCommentFenceLanguage,
@@ -110,6 +111,36 @@ describe("review comment context parsing", () => {
       }),
     );
     expect(prompt).toContain("```ts\ntwo\nthree\n```");
+  });
+
+  it("formats quoted assistant replies with the review-comment contract", () => {
+    const comment = buildQuotedReviewComment({
+      id: "quote-1",
+      sourceId: "assistant:message-1",
+      sourceTitle: "AI reply",
+      sourceLabel: "AI reply",
+      quote: "We should keep this path reliable.",
+      text: "Can you revisit this assumption?",
+    });
+    const prompt = appendReviewCommentsToPrompt("Follow up.", [comment]);
+    const segments = parseReviewCommentMessageSegments(prompt);
+
+    expect(segments).toHaveLength(2);
+    expect(segments[1]).toEqual(
+      expect.objectContaining({
+        kind: "review-comment",
+        comment: expect.objectContaining({
+          sectionId: "assistant:message-1",
+          sectionTitle: "AI reply",
+          filePath: "AI reply",
+          rangeLabel: "Quote",
+          text: "Can you revisit this assumption?",
+          diff: "We should keep this path reliable.",
+          fenceLanguage: "md",
+        }),
+      }),
+    );
+    expect(prompt).toContain("```md\nWe should keep this path reliable.\n```");
   });
 
   it("formats mixed diff-side selections with the mobile review-comment contract", () => {
