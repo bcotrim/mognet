@@ -12,6 +12,7 @@ import {
   deriveComposerSendState,
   getStartedThreadModelChangeBlockReason,
   hasServerAcknowledgedLocalDispatch,
+  modelSelectionsEqual,
   reconcileMountedTerminalThreadIds,
   reconcileRetainedMountedThreadIds,
   resolveSendEnvMode,
@@ -101,6 +102,31 @@ describe("buildThreadTurnInterruptInput", () => {
     expect(buildThreadTurnInterruptInput(makeThread({ session: readySession }))).toEqual({
       threadId,
     });
+  });
+});
+
+describe("modelSelectionsEqual", () => {
+  it("compares instance, model, and option selections", () => {
+    expect(
+      modelSelectionsEqual(
+        {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5.4",
+          options: [{ id: "reasoningEffort", value: "high" }],
+        },
+        {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5.4",
+          options: [{ id: "reasoningEffort", value: "high" }],
+        },
+      ),
+    ).toBe(true);
+    expect(
+      modelSelectionsEqual(
+        { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        { instanceId: ProviderInstanceId.make("claudeAgent"), model: "claude-opus-4-6" },
+      ),
+    ).toBe(false);
   });
 });
 

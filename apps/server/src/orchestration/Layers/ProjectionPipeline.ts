@@ -1,6 +1,9 @@
 import {
   ApprovalRequestId,
   type ChatAttachment,
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
   ThreadId,
@@ -496,6 +499,14 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             title: event.payload.title,
             workspaceRoot: event.payload.workspaceRoot,
             defaultModelSelection: event.payload.defaultModelSelection,
+            defaultThreadEnvMode:
+              event.payload.defaultThreadEnvMode ?? DEFAULT_PROJECT_THREAD_ENV_MODE,
+            newWorktreesStartFromOrigin:
+              event.payload.newWorktreesStartFromOrigin ??
+              DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+            textGenerationModelSelection:
+              event.payload.textGenerationModelSelection ??
+              DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
             scripts: event.payload.scripts,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -518,6 +529,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               : {}),
             ...(event.payload.defaultModelSelection !== undefined
               ? { defaultModelSelection: event.payload.defaultModelSelection }
+              : {}),
+            ...(event.payload.defaultThreadEnvMode !== undefined
+              ? { defaultThreadEnvMode: event.payload.defaultThreadEnvMode }
+              : {}),
+            ...(event.payload.newWorktreesStartFromOrigin !== undefined
+              ? { newWorktreesStartFromOrigin: event.payload.newWorktreesStartFromOrigin }
+              : {}),
+            ...(event.payload.textGenerationModelSelection !== undefined
+              ? { textGenerationModelSelection: event.payload.textGenerationModelSelection }
               : {}),
             ...(event.payload.scripts !== undefined ? { scripts: event.payload.scripts } : {}),
             updatedAt: event.payload.updatedAt,

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   MessageId,
   CommandId,
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   ProjectId,
   ThreadId,
@@ -20,6 +23,11 @@ import {
 } from "./commandInvariants.ts";
 
 const now = "2026-01-01T00:00:00.000Z";
+const PROJECT_DEFAULTS = {
+  defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+  newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+} as const;
 
 const readModel: OrchestrationReadModel = {
   snapshotSequence: 2,
@@ -34,6 +42,7 @@ const readModel: OrchestrationReadModel = {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5-codex",
       },
+      ...PROJECT_DEFAULTS,
       scripts: [],
       createdAt: now,
       updatedAt: now,
@@ -48,6 +57,7 @@ const readModel: OrchestrationReadModel = {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5-codex",
       },
+      ...PROJECT_DEFAULTS,
       scripts: [],
       createdAt: now,
       updatedAt: now,

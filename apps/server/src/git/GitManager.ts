@@ -44,6 +44,7 @@ import {
 import { GitManagerError, GitPullRequestMaterializationError } from "@t3tools/contracts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
+import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { GitManagerServiceError } from "@t3tools/contracts";
@@ -523,10 +524,29 @@ export const make = Effect.gen(function* () {
   const sourceControlProviders = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
   const textGeneration = yield* TextGeneration.TextGeneration;
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const crypto = yield* Crypto.Crypto;
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
   const serverSettingsService = yield* ServerSettings.ServerSettingsService;
+  const resolveTextGenerationModelSelection = (cwd: string) =>
+    Effect.gen(function* () {
+      const settings = yield* serverSettingsService.getSettings;
+      const project = yield* projectionSnapshotQuery
+        .getActiveProjectByWorkspaceRoot(cwd)
+        .pipe(Effect.map(Option.getOrUndefined));
+      return project?.textGenerationModelSelection ?? settings.textGenerationModelSelection;
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new GitManagerError({
+            operation: "resolveTextGenerationModelSelection",
+            cwd,
+            detail: "Failed to resolve text generation model settings.",
+            cause,
+          }),
+      ),
+    );
   const randomUUIDv4 = (cwd: string) =>
     crypto.randomUUIDv4.pipe(
       Effect.mapError(
@@ -1731,18 +1751,7 @@ export const make = Effect.gen(function* () {
         let commitMessageForStep = input.commitMessage;
         let preResolvedCommitSuggestion: CommitAndBranchSuggestion | undefined = undefined;
 
-        const modelSelection = yield* serverSettingsService.getSettings.pipe(
-          Effect.map((settings) => settings.textGenerationModelSelection),
-          Effect.mapError(
-            (cause) =>
-              new GitManagerError({
-                operation: "runStackedAction",
-                cwd: input.cwd,
-                detail: "Failed to get server settings.",
-                cause,
-              }),
-          ),
-        );
+        const modelSelection = yield* resolveTextGenerationModelSelection(input.cwd);
 
         if (input.featureBranch) {
           yield* Ref.set(currentPhase, Option.some("branch"));

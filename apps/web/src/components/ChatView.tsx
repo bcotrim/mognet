@@ -228,6 +228,7 @@ import {
   getStartedThreadModelChangeBlockReason,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
+  modelSelectionsEqual,
   buildEmptyThreadWelcomeTitle,
   type LocalDispatchSnapshot,
   PullRequestDialogState,
@@ -3139,10 +3140,7 @@ function ChatViewContent(props: ChatViewProps) {
       let result: AtomCommandResult<void, unknown> = AsyncResult.success(undefined);
       if (
         input.modelSelection !== undefined &&
-        (input.modelSelection.model !== serverThread.modelSelection.model ||
-          input.modelSelection.instanceId !== serverThread.modelSelection.instanceId ||
-          JSON.stringify(input.modelSelection.options ?? null) !==
-            JSON.stringify(serverThread.modelSelection.options ?? null))
+        !modelSelectionsEqual(input.modelSelection, serverThread.modelSelection)
       ) {
         result = mapAtomCommandResult(
           await updateThreadMetadata({
@@ -3637,6 +3635,7 @@ function ChatViewContent(props: ChatViewProps) {
     ? (draftThread?.startFromOrigin ?? false)
     : canOverrideServerThreadEnvMode
       ? (pendingServerThreadStartFromOriginByThreadId[activeThread?.id ?? ""] ??
+        activeProject?.newWorktreesStartFromOrigin ??
         settings.newWorktreesStartFromOrigin)
       : false;
   const sendEnvMode = resolveSendEnvMode({
@@ -4908,7 +4907,8 @@ function ChatViewContent(props: ChatViewProps) {
           envMode: mode,
           startFromOrigin: resolveNewDraftStartFromOrigin({
             envMode: mode,
-            newWorktreesStartFromOrigin: settings.newWorktreesStartFromOrigin,
+            newWorktreesStartFromOrigin:
+              activeProject?.newWorktreesStartFromOrigin ?? settings.newWorktreesStartFromOrigin,
           }),
           ...(mode === "worktree" && draftThread?.worktreePath ? { worktreePath: null } : {}),
         });
@@ -4918,6 +4918,7 @@ function ChatViewContent(props: ChatViewProps) {
     [
       canOverrideServerThreadEnvMode,
       composerDraftTarget,
+      activeProject?.newWorktreesStartFromOrigin,
       draftThread?.worktreePath,
       isLocalDraftThread,
       settings.newWorktreesStartFromOrigin,

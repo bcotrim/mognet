@@ -1,5 +1,8 @@
 import type { OrchestrationEvent, OrchestrationReadModel, ThreadId } from "@t3tools/contracts";
 import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
   OrchestrationSession,
@@ -208,6 +211,13 @@ export function projectEvent(
             title: payload.title,
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
+            defaultThreadEnvMode: payload.defaultThreadEnvMode ?? DEFAULT_PROJECT_THREAD_ENV_MODE,
+            newWorktreesStartFromOrigin:
+              payload.newWorktreesStartFromOrigin ??
+              DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+            textGenerationModelSelection:
+              payload.textGenerationModelSelection ??
+              DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
             scripts: payload.scripts,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
@@ -239,6 +249,15 @@ export function projectEvent(
                     : {}),
                   ...(payload.defaultModelSelection !== undefined
                     ? { defaultModelSelection: payload.defaultModelSelection }
+                    : {}),
+                  ...(payload.defaultThreadEnvMode !== undefined
+                    ? { defaultThreadEnvMode: payload.defaultThreadEnvMode }
+                    : {}),
+                  ...(payload.newWorktreesStartFromOrigin !== undefined
+                    ? { newWorktreesStartFromOrigin: payload.newWorktreesStartFromOrigin }
+                    : {}),
+                  ...(payload.textGenerationModelSelection !== undefined
+                    ? { textGenerationModelSelection: payload.textGenerationModelSelection }
                     : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
                   updatedAt: payload.updatedAt,

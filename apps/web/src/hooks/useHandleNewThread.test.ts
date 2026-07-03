@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
-import { resolveNewThreadDefaults } from "./useHandleNewThread";
+import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  resolveNewThreadDefaults,
+  shouldApplyStickyModelStateToNewDraft,
+} from "./useHandleNewThread";
 
 describe("resolveNewThreadDefaults", () => {
   it("applies the origin default only for new worktree mode", () => {
@@ -26,5 +29,17 @@ describe("resolveNewThreadDefaults", () => {
       envMode: "local",
       startFromOrigin: false,
     });
+  });
+});
+
+describe("shouldApplyStickyModelStateToNewDraft", () => {
+  it("skips sticky model state when the project has its own default", () => {
+    expect(
+      shouldApplyStickyModelStateToNewDraft({
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5.4",
+      }),
+    ).toBe(false);
+    expect(shouldApplyStickyModelStateToNewDraft(null)).toBe(true);
   });
 });
