@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   EnvironmentId,
   ProjectId,
   CommandId,
@@ -103,6 +106,9 @@ describe("add project shared logic", () => {
         updatedAt: "2026-01-01T00:00:00.000Z",
         repositoryIdentity: null,
         defaultModelSelection: null,
+        defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+        newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+        textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
         scripts: [],
       },
       {
@@ -115,6 +121,9 @@ describe("add project shared logic", () => {
         updatedAt: "2026-01-01T00:00:00.000Z",
         repositoryIdentity: null,
         defaultModelSelection: null,
+        defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+        newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+        textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
         scripts: [],
       },
     ];

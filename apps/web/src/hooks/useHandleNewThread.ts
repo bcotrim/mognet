@@ -8,6 +8,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   STANDALONE_CHAT_PROJECT_ID,
   type EnvironmentId,
+  type ModelSelection,
   type ScopedProjectRef,
   type ServerSettings,
 } from "@t3tools/contracts";
@@ -43,6 +44,12 @@ export function resolveNewThreadDefaults(
       newWorktreesStartFromOrigin: settings.newWorktreesStartFromOrigin,
     }),
   };
+}
+
+export function shouldApplyStickyModelStateToNewDraft(
+  projectDefaultModelSelection: ModelSelection | null | undefined,
+): boolean {
+  return projectDefaultModelSelection == null;
 }
 
 export function useNewThreadHandler() {
@@ -175,7 +182,11 @@ export function useNewThreadHandler() {
       const draftId = newDraftId();
       const threadId = newThreadId();
       const createdAt = new Date().toISOString();
-      const initialEnvMode = options?.envMode ?? environmentSettings.defaultThreadEnvMode;
+      const defaultThreadEnvMode =
+        project?.defaultThreadEnvMode ?? environmentSettings.defaultThreadEnvMode;
+      const newWorktreesStartFromOrigin =
+        project?.newWorktreesStartFromOrigin ?? environmentSettings.newWorktreesStartFromOrigin;
+      const initialEnvMode = options?.envMode ?? defaultThreadEnvMode;
       return (async () => {
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
           threadId,
@@ -187,11 +198,13 @@ export function useNewThreadHandler() {
             options?.startFromOrigin ??
             resolveNewDraftStartFromOrigin({
               envMode: initialEnvMode,
-              newWorktreesStartFromOrigin: environmentSettings.newWorktreesStartFromOrigin,
+              newWorktreesStartFromOrigin,
             }),
           runtimeMode: DEFAULT_RUNTIME_MODE,
         });
-        applyStickyState(draftId);
+        if (shouldApplyStickyModelStateToNewDraft(project?.defaultModelSelection)) {
+          applyStickyState(draftId);
+        }
 
         await router.navigate({
           to: "/draft/$draftId",

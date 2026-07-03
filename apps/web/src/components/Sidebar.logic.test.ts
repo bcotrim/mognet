@@ -23,6 +23,9 @@ import {
   THREAD_JUMP_HINT_SHOW_DELAY_MS,
 } from "./Sidebar.logic";
 import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   EnvironmentId,
   OrchestrationLatestTurn,
   ProjectId,
@@ -860,7 +863,7 @@ describe("getVisibleThreadsForProject", () => {
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   const { defaultModelSelection, ...rest } = overrides;
-  return {
+  const base: Project = {
     id: ProjectId.make("project-1"),
     environmentId: localEnvironmentId,
     kind: "workspace",
@@ -872,9 +875,15 @@ function makeProject(overrides: Partial<Project> = {}): Project {
       model: "gpt-5.4",
       ...defaultModelSelection,
     },
+    defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+    newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+    textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
     createdAt: "2026-03-09T10:00:00.000Z",
     updatedAt: "2026-03-09T10:00:00.000Z",
     scripts: [],
+  };
+  return {
+    ...base,
     ...rest,
   };
 }

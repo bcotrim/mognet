@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as Struct from "effect/Struct";
-import { ProviderOptionSelections } from "./model.ts";
+import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { RepositoryIdentity } from "./environment.ts";
 import {
   ApprovalRequestId,
@@ -220,6 +220,14 @@ export const ProjectKind = Schema.Literals(["workspace", "standalone"]);
 export type ProjectKind = typeof ProjectKind.Type;
 export const DEFAULT_PROJECT_KIND: ProjectKind = "workspace";
 export const STANDALONE_CHAT_PROJECT_ID = ProjectId.make("mognet-chat");
+export const ProjectDefaultThreadEnvMode = Schema.Literals(["local", "worktree"]);
+export type ProjectDefaultThreadEnvMode = typeof ProjectDefaultThreadEnvMode.Type;
+export const DEFAULT_PROJECT_THREAD_ENV_MODE: ProjectDefaultThreadEnvMode = "local";
+export const DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN = false;
+export const DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION: ModelSelection = {
+  instanceId: ProviderInstanceId.make("codex"),
+  model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
+};
 
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
@@ -228,6 +236,15 @@ export const OrchestrationProject = Schema.Struct({
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
+  defaultThreadEnvMode: ProjectDefaultThreadEnvMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_THREAD_ENV_MODE)),
+  ),
+  newWorktreesStartFromOrigin: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN)),
+  ),
+  textGenerationModelSelection: ModelSelection.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION)),
+  ),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -397,6 +414,15 @@ export const OrchestrationProjectShell = Schema.Struct({
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
+  defaultThreadEnvMode: ProjectDefaultThreadEnvMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_THREAD_ENV_MODE)),
+  ),
+  newWorktreesStartFromOrigin: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN)),
+  ),
+  textGenerationModelSelection: ModelSelection.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION)),
+  ),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -488,6 +514,9 @@ export const ProjectCreateCommand = Schema.Struct({
   workspaceRoot: TrimmedNonEmptyString,
   createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
+  defaultThreadEnvMode: Schema.optional(ProjectDefaultThreadEnvMode),
+  newWorktreesStartFromOrigin: Schema.optional(Schema.Boolean),
+  textGenerationModelSelection: Schema.optional(ModelSelection),
   createdAt: IsoDateTime,
 });
 
@@ -498,6 +527,9 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   title: Schema.optional(TrimmedNonEmptyString),
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
+  defaultThreadEnvMode: Schema.optional(ProjectDefaultThreadEnvMode),
+  newWorktreesStartFromOrigin: Schema.optional(Schema.Boolean),
+  textGenerationModelSelection: Schema.optional(ModelSelection),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
 });
 
@@ -838,6 +870,9 @@ export const ProjectCreatedPayload = Schema.Struct({
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
+  defaultThreadEnvMode: Schema.optionalKey(ProjectDefaultThreadEnvMode),
+  newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
+  textGenerationModelSelection: Schema.optionalKey(ModelSelection),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -849,6 +884,9 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
+  defaultThreadEnvMode: Schema.optional(ProjectDefaultThreadEnvMode),
+  newWorktreesStartFromOrigin: Schema.optional(Schema.Boolean),
+  textGenerationModelSelection: Schema.optional(ModelSelection),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   updatedAt: IsoDateTime,
 });

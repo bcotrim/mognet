@@ -1,4 +1,7 @@
 import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   EventId,
   type OrchestrationCommand,
   type OrchestrationEvent,
@@ -126,6 +129,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           title: command.title,
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
+          defaultThreadEnvMode: command.defaultThreadEnvMode ?? DEFAULT_PROJECT_THREAD_ENV_MODE,
+          newWorktreesStartFromOrigin:
+            command.newWorktreesStartFromOrigin ?? DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+          textGenerationModelSelection:
+            command.textGenerationModelSelection ?? DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
           scripts: [],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -154,6 +162,15 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.workspaceRoot !== undefined ? { workspaceRoot: command.workspaceRoot } : {}),
           ...(command.defaultModelSelection !== undefined
             ? { defaultModelSelection: command.defaultModelSelection }
+            : {}),
+          ...(command.defaultThreadEnvMode !== undefined
+            ? { defaultThreadEnvMode: command.defaultThreadEnvMode }
+            : {}),
+          ...(command.newWorktreesStartFromOrigin !== undefined
+            ? { newWorktreesStartFromOrigin: command.newWorktreesStartFromOrigin }
+            : {}),
+          ...(command.textGenerationModelSelection !== undefined
+            ? { textGenerationModelSelection: command.textGenerationModelSelection }
             : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
           updatedAt: occurredAt,

@@ -733,8 +733,9 @@ export function ScheduledTasksSettingsPanel() {
       projectId: projects[0]?.id ?? "",
       providerInstanceId: defaultProvider?.instanceId ?? "codex",
       model: defaultModelForProvider(defaultProvider),
-      workspaceMode: settings.defaultThreadEnvMode,
-      startFromOrigin: settings.newWorktreesStartFromOrigin,
+      workspaceMode: projects[0]?.defaultThreadEnvMode ?? settings.defaultThreadEnvMode,
+      startFromOrigin:
+        projects[0]?.newWorktreesStartFromOrigin ?? settings.newWorktreesStartFromOrigin,
     }),
     [
       defaultProvider,

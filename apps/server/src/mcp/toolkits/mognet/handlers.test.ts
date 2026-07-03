@@ -1,6 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
@@ -37,6 +40,11 @@ const modelSelection: ModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: "gpt-5",
 };
+const PROJECT_DEFAULTS = {
+  defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+  newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+} as const;
 
 const project: OrchestrationProjectShell = {
   id: projectId,
@@ -45,6 +53,7 @@ const project: OrchestrationProjectShell = {
   workspaceRoot: "/tmp/mognet-tools",
   repositoryIdentity: null,
   defaultModelSelection: modelSelection,
+  ...PROJECT_DEFAULTS,
   scripts: [],
   createdAt: now,
   updatedAt: now,
@@ -99,6 +108,7 @@ const standaloneProject: OrchestrationProjectShell = {
   workspaceRoot: "/tmp/mognet-chat",
   repositoryIdentity: null,
   defaultModelSelection: modelSelection,
+  ...PROJECT_DEFAULTS,
   scripts: [],
   createdAt: now,
   updatedAt: now,
