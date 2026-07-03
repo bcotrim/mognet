@@ -783,7 +783,36 @@ label:has(> select#reasoning-effort) select {
 
 /* Diffs theme bridge (match diff surfaces to app palette) */
 .diff-panel-viewport {
+  container-type: inline-size;
   background: color-mix(in srgb, var(--background) 94%, var(--card));
+}
+
+.diff-panel-file-layout {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.diff-panel-file-navigator {
+  display: none;
+  min-width: 0;
+  overflow: auto;
+  background: color-mix(in srgb, var(--background) 96%, var(--card));
+}
+
+@container (min-width: 64rem) {
+  .diff-panel-file-layout-with-nav {
+    grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .diff-panel-file-navigator {
+    display: block;
+    max-height: none;
+    border-right: 1px solid var(--border);
+  }
 }
 
 .diff-render-file,

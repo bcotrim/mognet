@@ -4330,9 +4330,10 @@ function ChatViewContent(props: ChatViewProps) {
       if (!hasWorkspaceProject || !isServerThread || !activeThreadRef) return;
       useDiffPanelStore.getState().selectTurn(activeThreadRef, turnId, filePath);
       useRightPanelStore.getState().open(activeThreadRef, "diff");
+      setMaximizedRightPanelThreadKey(routeThreadKey);
       onDiffPanelOpen?.();
     },
-    [activeThreadRef, hasWorkspaceProject, isServerThread, onDiffPanelOpen],
+    [activeThreadRef, hasWorkspaceProject, isServerThread, onDiffPanelOpen, routeThreadKey],
   );
   // Both the Map and the revert handler are read from refs at call-time so
   // the callback reference is fully stable and never busts context identity.

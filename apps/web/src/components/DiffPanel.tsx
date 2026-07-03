@@ -6,12 +6,15 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import type { ScopedThreadRef, TurnId } from "@t3tools/contracts";
+import type { FileDiffMetadata } from "@pierre/diffs";
 import {
   ArrowRightIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
+  FolderClosedIcon,
+  FolderIcon,
   PilcrowIcon,
   Rows3Icon,
   SearchIcon,
@@ -31,7 +34,9 @@ import {
   getRenderablePatch,
   resolveDiffThemeName,
   resolveFileDiffPath,
+  summarizeFileDiffStats,
 } from "../lib/diffRendering";
+import { buildTurnDiffTree, type TurnDiffTreeNode } from "../lib/turnDiffTree";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useProject, useThread } from "../state/entities";
 import { resolveThreadRouteRef } from "../threadRoutes";
@@ -39,6 +44,8 @@ import { useClientSettings } from "../hooks/useSettings";
 import { formatShortTimestamp } from "../timestampFormat";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { AnnotatableCodeView, type AnnotatableCodeViewHandle } from "./diffs/AnnotatableCodeView";
+import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
+import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
 import { Switch } from "./ui/switch";
 import {
@@ -73,6 +80,13 @@ const AUTOMATIC_BASE_REF = "__automatic_base_ref__";
 interface CollapsedDiffFilesState {
   readonly scopeKey: string | null;
   readonly fileKeys: ReadonlySet<string>;
+}
+
+interface DiffCodeViewFile {
+  readonly fileDiff: FileDiffMetadata;
+  readonly filePath: string;
+  readonly fileKey: string;
+  readonly collapsed: boolean;
 }
 
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
@@ -193,6 +207,7 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
     scopeKey: null,
     fileKeys: EMPTY_COLLAPSED_DIFF_FILE_KEYS,
   }));
+  const [navigatedFileKey, setNavigatedFileKey] = useState<string | null>(null);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
 
   const routeThreadRef = useParams({
@@ -423,7 +438,7 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
       }),
     );
   }, [renderablePatch]);
-  const codeViewFiles = useMemo(
+  const codeViewFiles = useMemo<DiffCodeViewFile[]>(
     () =>
       renderableFiles.map((fileDiff) => {
         const fileKey = buildFileDiffRenderKey(fileDiff);
@@ -436,13 +451,31 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
       }),
     [collapsedDiffFileKeys, renderableFiles],
   );
+  const selectedFileKey = selectedFilePath
+    ? (codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath)?.fileKey ?? null)
+    : null;
+  const activeNavigatorFileKey = codeViewFiles.some(
+    (candidate) => candidate.fileKey === navigatedFileKey,
+  )
+    ? navigatedFileKey
+    : selectedFileKey;
+
+  useEffect(() => {
+    setNavigatedFileKey(null);
+  }, [collapseScopeKey]);
 
   useEffect(() => {
     if (!selectedFilePath) return;
     const file = codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath);
     if (!file) return;
+    setNavigatedFileKey(file.fileKey);
     codeViewRef.current?.scrollTo({ type: "item", id: file.fileKey, align: "start" });
   }, [codeViewFiles, selectedFilePath, selectedFileRevealRequestId]);
+
+  const scrollToDiffFile = useCallback((fileKey: string) => {
+    setNavigatedFileKey(fileKey);
+    codeViewRef.current?.scrollTo({ type: "item", id: fileKey, align: "start" });
+  }, []);
 
   const openDiffFile = useCallback(
     (filePath: string) => {
@@ -788,69 +821,86 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
               )
             ) : renderablePatch.kind === "files" ? (
               <div
-                className="min-h-0 flex-1"
-                onClickCapture={(event) => {
-                  const composedPath = event.nativeEvent.composedPath?.() ?? [];
-                  const title = composedPath.find(
-                    (node): node is HTMLElement =>
-                      node instanceof HTMLElement && node.hasAttribute("data-title"),
-                  );
-                  const filePath = title?.textContent?.trim();
-                  if (filePath) openDiffFile(filePath);
-                }}
+                className={cn(
+                  "diff-panel-file-layout",
+                  codeViewFiles.length > 1 && "diff-panel-file-layout-with-nav",
+                )}
               >
-                <AnnotatableCodeView
-                  viewerRef={codeViewRef}
-                  key={collapseScopeKey ?? reviewSectionId}
-                  className="diff-render-surface h-full min-h-0 overflow-auto"
-                  files={codeViewFiles}
-                  sectionId={reviewSectionId}
-                  sectionTitle={reviewSectionTitle}
-                  composerDraftTarget={composerDraftTarget}
-                  renderHeaderPrefix={(fileDiff, fileKey, collapsed) => {
-                    const filePath = resolveFileDiffPath(fileDiff);
-                    return (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              className={cn(
-                                "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 transition-colors hover:bg-foreground/10 focus-visible:outline-hidden",
-                                getDiffCollapseIconClassName(fileDiff),
-                              )}
-                              aria-label={collapsed ? `Expand ${filePath}` : `Collapse ${filePath}`}
-                              aria-expanded={!collapsed}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleDiffFileCollapsed(fileKey);
-                              }}
-                            />
-                          }
-                        >
-                          {collapsed ? (
-                            <ChevronRightIcon className="size-4" />
-                          ) : (
-                            <ChevronDownIcon className="size-4" />
-                          )}
-                        </TooltipTrigger>
-                        <TooltipPopup side="top">
-                          {collapsed ? "Expand diff" : "Collapse diff"}
-                        </TooltipPopup>
-                      </Tooltip>
+                {codeViewFiles.length > 1 ? (
+                  <DiffFileNavigator
+                    activeFileKey={activeNavigatorFileKey}
+                    files={codeViewFiles}
+                    resolvedTheme={resolvedTheme}
+                    onSelectFile={scrollToDiffFile}
+                  />
+                ) : null}
+                <div
+                  className="min-h-0 min-w-0"
+                  onClickCapture={(event) => {
+                    const composedPath = event.nativeEvent.composedPath?.() ?? [];
+                    const title = composedPath.find(
+                      (node): node is HTMLElement =>
+                        node instanceof HTMLElement && node.hasAttribute("data-title"),
                     );
+                    const filePath = title?.textContent?.trim();
+                    if (filePath) openDiffFile(filePath);
                   }}
-                  options={{
-                    diffStyle: diffRenderMode === "split" ? "split" : "unified",
-                    lineDiffType: "none",
-                    overflow: wordWrap ? "wrap" : "scroll",
-                    theme: resolveDiffThemeName(resolvedTheme),
-                    themeType: resolvedTheme as DiffThemeType,
-                    unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
-                    stickyHeaders: true,
-                    layout: { paddingTop: 8, paddingBottom: 8, gap: 8 },
-                  }}
-                />
+                >
+                  <AnnotatableCodeView
+                    viewerRef={codeViewRef}
+                    key={collapseScopeKey ?? reviewSectionId}
+                    className="diff-render-surface h-full min-h-0 overflow-auto"
+                    files={codeViewFiles}
+                    sectionId={reviewSectionId}
+                    sectionTitle={reviewSectionTitle}
+                    composerDraftTarget={composerDraftTarget}
+                    renderHeaderPrefix={(fileDiff, fileKey, collapsed) => {
+                      const filePath = resolveFileDiffPath(fileDiff);
+                      return (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                className={cn(
+                                  "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 transition-colors hover:bg-foreground/10 focus-visible:outline-hidden",
+                                  getDiffCollapseIconClassName(fileDiff),
+                                )}
+                                aria-label={
+                                  collapsed ? `Expand ${filePath}` : `Collapse ${filePath}`
+                                }
+                                aria-expanded={!collapsed}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleDiffFileCollapsed(fileKey);
+                                }}
+                              />
+                            }
+                          >
+                            {collapsed ? (
+                              <ChevronRightIcon className="size-4" />
+                            ) : (
+                              <ChevronDownIcon className="size-4" />
+                            )}
+                          </TooltipTrigger>
+                          <TooltipPopup side="top">
+                            {collapsed ? "Expand diff" : "Collapse diff"}
+                          </TooltipPopup>
+                        </Tooltip>
+                      );
+                    }}
+                    options={{
+                      diffStyle: diffRenderMode === "split" ? "split" : "unified",
+                      lineDiffType: "none",
+                      overflow: wordWrap ? "wrap" : "scroll",
+                      theme: resolveDiffThemeName(resolvedTheme),
+                      themeType: resolvedTheme as DiffThemeType,
+                      unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
+                      stickyHeaders: true,
+                      layout: { paddingTop: 8, paddingBottom: 8, gap: 8 },
+                    }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -874,4 +924,201 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
       )}
     </DiffPanelShell>
   );
+}
+
+function DiffFileNavigator({
+  activeFileKey,
+  files,
+  resolvedTheme,
+  onSelectFile,
+}: {
+  activeFileKey: string | null;
+  files: ReadonlyArray<DiffCodeViewFile>;
+  resolvedTheme: "light" | "dark";
+  onSelectFile: (fileKey: string) => void;
+}) {
+  const filesByPath = useMemo(() => new Map(files.map((file) => [file.filePath, file])), [files]);
+  const summaryStat = useMemo(
+    () =>
+      files.reduce(
+        (acc, file) => {
+          const stat = summarizeFileDiffStats(file.fileDiff);
+          return {
+            additions: acc.additions + stat.additions,
+            deletions: acc.deletions + stat.deletions,
+          };
+        },
+        { additions: 0, deletions: 0 },
+      ),
+    [files],
+  );
+  const treeNodes = useMemo(
+    () =>
+      buildTurnDiffTree(
+        files.map((file) => {
+          const stat = summarizeFileDiffStats(file.fileDiff);
+          return {
+            path: file.filePath,
+            kind: file.fileDiff.type,
+            additions: stat.additions,
+            deletions: stat.deletions,
+          };
+        }),
+      ),
+    [files],
+  );
+  const directoryPathsKey = useMemo(
+    () => collectDiffNavigatorDirectoryPaths(treeNodes).join("\u0000"),
+    [treeNodes],
+  );
+  const [collapsedDirectoryPaths, setCollapsedDirectoryPaths] = useState<{
+    key: string;
+    paths: ReadonlySet<string>;
+  }>(() => ({ key: directoryPathsKey, paths: new Set() }));
+  const collapsedPaths =
+    collapsedDirectoryPaths.key === directoryPathsKey
+      ? collapsedDirectoryPaths.paths
+      : new Set<string>();
+  const toggleDirectory = useCallback(
+    (path: string) => {
+      setCollapsedDirectoryPaths((current) => {
+        const next = new Set(current.key === directoryPathsKey ? current.paths : []);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+        return { key: directoryPathsKey, paths: next };
+      });
+    },
+    [directoryPathsKey],
+  );
+
+  const renderNode = (node: TurnDiffTreeNode, depth: number) => {
+    const leftPadding = 8 + depth * 18;
+    if (node.kind === "directory") {
+      const isExpanded = !collapsedPaths.has(node.path);
+      return (
+        <div key={`dir:${node.path}`} className="space-y-0.5">
+          <button
+            type="button"
+            className="grid w-full min-w-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1 pr-2 text-left text-muted-foreground/75 transition-colors hover:bg-accent/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+            style={{ paddingLeft: `${leftPadding}px` }}
+            aria-expanded={isExpanded}
+            onClick={() => toggleDirectory(node.path)}
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              <ChevronRightIcon
+                className={cn("size-3.5 shrink-0 transition-transform", isExpanded && "rotate-90")}
+              />
+              {isExpanded ? (
+                <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/65" />
+              ) : (
+                <FolderClosedIcon className="size-3.5 shrink-0 text-muted-foreground/65" />
+              )}
+              <span className="truncate font-mono text-[11px] leading-4">{node.name}</span>
+            </span>
+            {hasNonZeroStat(node.stat) ? (
+              <DiffStatLabel
+                additions={node.stat.additions}
+                deletions={node.stat.deletions}
+                className="text-[10px] leading-4"
+              />
+            ) : null}
+          </button>
+          {isExpanded ? node.children.map((child) => renderNode(child, depth + 1)) : null}
+        </div>
+      );
+    }
+
+    const file = filesByPath.get(node.path);
+    if (!file) return null;
+    const isActive = file.fileKey === activeFileKey;
+    const stat = node.stat ?? summarizeFileDiffStats(file.fileDiff);
+
+    return (
+      <button
+        key={`file:${node.path}`}
+        type="button"
+        className={cn(
+          "grid w-full min-w-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pr-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+          isActive
+            ? "bg-accent/70 text-foreground"
+            : "text-muted-foreground hover:bg-accent/45 hover:text-foreground",
+        )}
+        style={{ paddingLeft: `${leftPadding}px` }}
+        aria-current={isActive ? "true" : undefined}
+        title={file.filePath}
+        onClick={() => onSelectFile(file.fileKey)}
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <PierreEntryIcon
+            pathValue={file.filePath}
+            kind="file"
+            theme={resolvedTheme}
+            className="size-3.5"
+          />
+          <span className="truncate font-mono text-[11px] leading-4">{node.name}</span>
+        </span>
+        {hasNonZeroStat(stat) ? (
+          <DiffStatLabel
+            additions={stat.additions}
+            deletions={stat.deletions}
+            className="text-[10px] leading-4"
+          />
+        ) : (
+          <span className="font-mono text-[10px] text-muted-foreground/65">
+            {formatDiffChangeType(file.fileDiff.type)}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <nav className="diff-panel-file-navigator" aria-label="Changed files">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/60 bg-background/95 px-2.5 py-2 backdrop-blur">
+        <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium tracking-[0.12em] text-muted-foreground/70 uppercase">
+          <span className="truncate">Changed files ({files.length})</span>
+          {hasNonZeroStat(summaryStat) ? (
+            <>
+              <span>·</span>
+              <DiffStatLabel
+                additions={summaryStat.additions}
+                deletions={summaryStat.deletions}
+                className="text-[10px] tracking-normal"
+                layout="inline"
+              />
+            </>
+          ) : null}
+        </span>
+      </div>
+      <div className="space-y-0.5 p-1.5">{treeNodes.map((node) => renderNode(node, 0))}</div>
+    </nav>
+  );
+}
+
+function formatDiffChangeType(type: FileDiffMetadata["type"]): string {
+  switch (type) {
+    case "new":
+      return "new";
+    case "deleted":
+      return "deleted";
+    case "rename-pure":
+      return "renamed";
+    case "rename-changed":
+      return "renamed";
+    case "change":
+      return "changed";
+  }
+}
+
+function collectDiffNavigatorDirectoryPaths(nodes: ReadonlyArray<TurnDiffTreeNode>): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    if (node.kind !== "directory") continue;
+    paths.push(node.path);
+    paths.push(...collectDiffNavigatorDirectoryPaths(node.children));
+  }
+  return paths;
 }
