@@ -1,4 +1,4 @@
-import { EnvironmentId, MessageId } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, TurnId } from "@t3tools/contracts";
 import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
@@ -348,6 +348,61 @@ describe("MessagesTimeline", () => {
 
     expect(markup).not.toContain("Show full message");
     expect(markup).toContain('data-user-message-collapsible="false"');
+  });
+
+  it("renders assistant changed files collapsed below the reply by default", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const turnId = TurnId.make("turn-1");
+    const assistantMessageId = MessageId.make("assistant-1");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-1",
+            kind: "message",
+            createdAt: "2026-03-17T19:12:28.000Z",
+            message: {
+              id: assistantMessageId,
+              role: "assistant",
+              text: "Done",
+              turnId,
+              createdAt: "2026-03-17T19:12:28.000Z",
+              updatedAt: "2026-03-17T19:12:28.000Z",
+              streaming: false,
+            },
+          },
+        ]}
+        turnDiffSummaryByAssistantMessageId={
+          new Map([
+            [
+              assistantMessageId,
+              {
+                turnId,
+                checkpointTurnCount: 1,
+                checkpointRef: "checkpoint-1" as never,
+                status: "ready",
+                files: [
+                  { path: "apps/web/src/index.ts", kind: "modified", additions: 2, deletions: 1 },
+                  { path: "apps/web/src/main.ts", kind: "modified", additions: 3, deletions: 0 },
+                ],
+                assistantMessageId,
+                completedAt: "2026-03-17T19:12:28.000Z",
+              },
+            ],
+          ])
+        }
+      />,
+    );
+
+    expect(markup).toContain("max-w-3xl");
+    expect(markup).not.toContain("max-w-6xl");
+    expect(markup).not.toContain("[@media(min-width:72rem)]:grid");
+    expect(markup).toContain("Changed files (2)");
+    expect(markup).toContain("Expand all");
+    expect(markup).toContain("apps/web/src");
+    expect(markup).not.toContain("index.ts");
+    expect(markup).not.toContain("main.ts");
   });
 
   it("renders inline terminal labels with the composer chip UI", async () => {

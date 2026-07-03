@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { buildPatchCacheKey, getRenderablePatch } from "./diffRendering";
+import { buildPatchCacheKey, getRenderablePatch, summarizeFileDiffStats } from "./diffRendering";
 
 describe("buildPatchCacheKey", () => {
   it("returns a stable cache key for identical content", () => {
@@ -80,5 +80,29 @@ describe("getRenderablePatch", () => {
     expect(parsed?.kind).toBe("files");
     if (parsed?.kind !== "files") return;
     expect(parsed.files[0]?.hunks[0]?.unifiedLineStart).toBe(47);
+  });
+
+  it("summarizes per-file additions and deletions from parsed hunks", () => {
+    const patch = [
+      "diff --git a/example.ts b/example.ts",
+      "--- a/example.ts",
+      "+++ b/example.ts",
+      "@@ -1,4 +1,5 @@",
+      " context",
+      "-before",
+      "+after",
+      "+added",
+      " context",
+      " context",
+    ].join("\n");
+
+    const parsed = getRenderablePatch(patch, "stats");
+    expect(parsed?.kind).toBe("files");
+    if (parsed?.kind !== "files" || !parsed.files[0]) return;
+
+    expect(summarizeFileDiffStats(parsed.files[0])).toEqual({
+      additions: 2,
+      deletions: 1,
+    });
   });
 });
