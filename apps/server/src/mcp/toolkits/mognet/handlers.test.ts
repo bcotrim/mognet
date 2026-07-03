@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { expect, it } from "@effect/vitest";
+import { expect, it, vi } from "@effect/vitest";
 import {
   EnvironmentId,
   ProjectId,
@@ -7,6 +7,9 @@ import {
   STANDALONE_CHAT_PROJECT_ID,
   ScheduledTaskId,
   ThreadId,
+  type TerminalOpenInput,
+  type TerminalSessionSnapshot,
+  type TerminalWriteInput,
   type ModelSelection,
   type OrchestrationCommand,
   type OrchestrationProjectShell,
@@ -25,6 +28,7 @@ import * as ScheduledTasks from "../../../scheduledTasks.ts";
 import * as OrchestrationEngine from "../../../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ThreadTurnBootstrapDispatcher from "../../../orchestration/ThreadTurnBootstrapDispatcher.ts";
+import * as TerminalManager from "../../../terminal/Manager.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { MognetToolkitHandlersLive } from "./handlers.ts";
 import { MognetToolkit } from "./tools.ts";
@@ -48,6 +52,27 @@ const project: OrchestrationProjectShell = {
   scripts: [],
   createdAt: now,
   updatedAt: now,
+};
+
+const testAction = {
+  id: "test",
+  name: "Test",
+  command: "vp test",
+  icon: "test",
+  runOnWorktreeCreate: false,
+} as const;
+
+const setupAction = {
+  id: "setup",
+  name: "Setup",
+  command: "pnpm install",
+  icon: "configure",
+  runOnWorktreeCreate: true,
+} as const;
+
+const projectWithActions: OrchestrationProjectShell = {
+  ...project,
+  scripts: [setupAction, testAction],
 };
 
 const threadShell: OrchestrationThreadShell = {
@@ -177,6 +202,7 @@ function testLayer(
     readonly threadShells?: ReadonlyArray<OrchestrationThreadShell>;
     readonly threads?: ReadonlyArray<OrchestrationThread>;
     readonly invocation?: typeof invocation;
+    readonly terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
   },
 ) {
   const projects = options?.projects ?? [project];
@@ -279,6 +305,18 @@ function testLayer(
     start: Effect.void,
     streamChanges: Stream.empty,
   });
+  const terminalManager = TerminalManager.TerminalManager.of({
+    open: () => Effect.die("unused"),
+    attachStream: () => Effect.die("unused"),
+    write: () => Effect.die("unused"),
+    resize: () => Effect.die("unused"),
+    clear: () => Effect.die("unused"),
+    restart: () => Effect.die("unused"),
+    close: () => Effect.die("unused"),
+    subscribe: () => Effect.succeed(() => undefined),
+    subscribeMetadata: () => Effect.succeed(() => undefined),
+    ...options?.terminalManager,
+  });
 
   return McpServer.toolkit(MognetToolkit).pipe(
     Layer.provide(MognetToolkitHandlersLive),
@@ -295,6 +333,7 @@ function testLayer(
       Layer.succeed(ThreadTurnBootstrapDispatcher.ThreadTurnBootstrapDispatcher, dispatcher),
     ),
     Layer.provide(Layer.succeed(ScheduledTasks.ScheduledTasks, scheduledTasks)),
+    Layer.provide(Layer.succeed(TerminalManager.TerminalManager, terminalManager)),
     Layer.provide(
       Layer.succeed(
         ServerConfig.ServerConfig,
@@ -349,6 +388,210 @@ it.effect("reads project context and starts a bootstrapped thread", () =>
         });
       }),
     ).pipe(Effect.provide(testLayer(commands)));
+  }),
+);
+
+it.effect("lists and creates project actions", () =>
+  Effect.gen(function* () {
+    const commands: OrchestrationCommand[] = [];
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const server = yield* McpServer.McpServer;
+
+        const list = yield* server
+          .callTool({ name: "mognet_project_actions_list", arguments: {} })
+          .pipe(Effect.provideService(McpSchema.McpServerClient, client));
+        expect(list.isError).toBe(false);
+        expect(list.structuredContent).toMatchObject({
+          projectId,
+          scope: { kind: "workspace-project", containerId: projectId },
+          actions: [],
+        });
+
+        const created = yield* server
+          .callTool({
+            name: "mognet_project_actions_create",
+            arguments: {
+              name: "Run Tests",
+              command: "vp test",
+              icon: "test",
+              runOnWorktreeCreate: true,
+            },
+          })
+          .pipe(Effect.provideService(McpSchema.McpServerClient, client));
+        expect(created.isError).toBe(false);
+        expect(created.structuredContent).toMatchObject({
+          projectId,
+          action: {
+            id: "run-tests",
+            name: "Run Tests",
+            command: "vp test",
+            icon: "test",
+            runOnWorktreeCreate: true,
+          },
+          actions: [
+            {
+              id: "run-tests",
+              runOnWorktreeCreate: true,
+            },
+          ],
+          sequence: 1,
+        });
+        expect(commands).toHaveLength(1);
+        expect(commands[0]).toMatchObject({
+          type: "project.meta.update",
+          projectId,
+          scripts: [
+            {
+              id: "run-tests",
+              name: "Run Tests",
+              command: "vp test",
+              icon: "test",
+              runOnWorktreeCreate: true,
+            },
+          ],
+        });
+      }),
+    ).pipe(Effect.provide(testLayer(commands)));
+  }),
+);
+
+it.effect("updates and deletes project actions through project meta updates", () =>
+  Effect.gen(function* () {
+    const commands: OrchestrationCommand[] = [];
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const server = yield* McpServer.McpServer;
+
+        const updated = yield* server
+          .callTool({
+            name: "mognet_project_actions_update",
+            arguments: {
+              actionId: "test",
+              command: "vp run test",
+              runOnWorktreeCreate: true,
+            },
+          })
+          .pipe(Effect.provideService(McpSchema.McpServerClient, client));
+        expect(updated.isError).toBe(false);
+        expect(updated.structuredContent).toMatchObject({
+          action: {
+            id: "test",
+            command: "vp run test",
+            runOnWorktreeCreate: true,
+          },
+          actions: [
+            { id: "setup", runOnWorktreeCreate: false },
+            { id: "test", runOnWorktreeCreate: true },
+          ],
+        });
+
+        const deleted = yield* server
+          .callTool({
+            name: "mognet_project_actions_delete",
+            arguments: { actionId: "setup" },
+          })
+          .pipe(Effect.provideService(McpSchema.McpServerClient, client));
+        expect(deleted.isError).toBe(false);
+        expect(deleted.structuredContent).toMatchObject({
+          action: null,
+          actions: [{ id: "test" }],
+          sequence: 2,
+        });
+        expect(commands).toHaveLength(2);
+        expect(commands[0]).toMatchObject({
+          type: "project.meta.update",
+          scripts: [
+            { id: "setup", runOnWorktreeCreate: false },
+            { id: "test", command: "vp run test", runOnWorktreeCreate: true },
+          ],
+        });
+        expect(commands[1]).toMatchObject({
+          type: "project.meta.update",
+          scripts: [{ id: "test" }],
+        });
+      }),
+    ).pipe(
+      Effect.provide(
+        testLayer(commands, {
+          projects: [projectWithActions],
+          threadShells: [threadShell],
+          threads: [thread],
+        }),
+      ),
+    );
+  }),
+);
+
+it.effect("runs a project action in a fresh terminal", () =>
+  Effect.gen(function* () {
+    const commands: OrchestrationCommand[] = [];
+    const open = vi.fn((input: TerminalOpenInput) =>
+      Effect.succeed({
+        threadId: input.threadId,
+        terminalId: input.terminalId,
+        cwd: input.cwd,
+        worktreePath: input.worktreePath ?? null,
+        status: "running",
+        pid: 123,
+        history: "",
+        exitCode: null,
+        exitSignal: null,
+        label: input.terminalId,
+        updatedAt: now,
+      } satisfies TerminalSessionSnapshot),
+    );
+    const write = vi.fn((_input: TerminalWriteInput) => Effect.void);
+
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const server = yield* McpServer.McpServer;
+
+        const run = yield* server
+          .callTool({
+            name: "mognet_project_actions_run",
+            arguments: { actionId: "test" },
+          })
+          .pipe(Effect.provideService(McpSchema.McpServerClient, client));
+        expect(run.isError).toBe(false);
+        expect(run.structuredContent).toMatchObject({
+          projectId,
+          action: testAction,
+          threadId,
+          cwd: "/tmp/mognet-tools",
+          worktreePath: "/tmp/mognet-tools",
+          terminal: {
+            status: "running",
+          },
+        });
+        expect(run.structuredContent?.terminalId).toMatch(/^action-test-/);
+        expect(open).toHaveBeenCalledWith({
+          threadId,
+          terminalId: expect.stringMatching(/^action-test-/),
+          cwd: "/tmp/mognet-tools",
+          worktreePath: "/tmp/mognet-tools",
+          env: {
+            MOGNET_PROJECT_ROOT: "/tmp/mognet-tools",
+            MOGNET_WORKTREE_PATH: "/tmp/mognet-tools",
+          },
+        });
+        expect(write).toHaveBeenCalledWith({
+          threadId,
+          terminalId: expect.stringMatching(/^action-test-/),
+          data: "vp test\r",
+        });
+        expect(commands).toHaveLength(0);
+      }),
+    ).pipe(
+      Effect.provide(
+        testLayer(commands, {
+          projects: [projectWithActions],
+          threadShells: [threadShell],
+          threads: [thread],
+          terminalManager: { open, write },
+        }),
+      ),
+    );
   }),
 );
 

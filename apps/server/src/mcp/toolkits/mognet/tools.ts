@@ -1,9 +1,12 @@
 import {
   ModelSelection,
+  MAX_SCRIPT_ID_LENGTH,
   NonNegativeInt,
   OrchestrationProjectShell,
   OrchestrationThread,
   OrchestrationThreadShell,
+  ProjectScript,
+  ProjectScriptIcon,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
@@ -13,6 +16,7 @@ import {
   ScheduledTaskListResult,
   ScheduledTaskMutationResult,
   ScheduledTaskUpdateInput,
+  TerminalSessionSnapshot,
   ThreadId,
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
@@ -21,15 +25,19 @@ import * as Crypto from "effect/Crypto";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
 import * as ScheduledTasks from "../../../scheduledTasks.ts";
+import * as OrchestrationEngine from "../../../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ThreadTurnBootstrapDispatcher from "../../../orchestration/ThreadTurnBootstrapDispatcher.ts";
+import * as TerminalManager from "../../../terminal/Manager.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
   ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+  OrchestrationEngine.OrchestrationEngineService,
   ThreadTurnBootstrapDispatcher.ThreadTurnBootstrapDispatcher,
   ScheduledTasks.ScheduledTasks,
+  TerminalManager.TerminalManager,
   Crypto.Crypto,
 ];
 
@@ -91,6 +99,49 @@ const OptionalTitle = Schema.optional(
 
 const Prompt = TrimmedNonEmptyString.check(Schema.isMaxLength(120_000)).annotate({
   description: "Prompt to send as the first user message in the new thread.",
+});
+
+const ProjectActionId = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(MAX_SCRIPT_ID_LENGTH),
+  Schema.isPattern(/^[a-z0-9][a-z0-9-]*$/),
+).annotate({
+  description:
+    "Project action id. Use lowercase letters, digits, and hyphens; maximum 24 characters.",
+});
+
+const ProjectActionName = TrimmedNonEmptyString.check(Schema.isMaxLength(160)).annotate({
+  description: "Human-readable project action name.",
+});
+
+const ProjectActionCommand = TrimmedNonEmptyString.check(Schema.isMaxLength(8_192)).annotate({
+  description: "Shell command to write into a Mognet terminal when this action runs.",
+});
+
+const OptionalProjectActionIcon = Schema.optional(
+  ProjectScriptIcon.annotate({
+    description: "Icon hint for the action. Defaults to play.",
+  }),
+).annotate({
+  description: "Icon hint for the action. Defaults to play.",
+});
+
+const OptionalRunOnWorktreeCreate = Schema.optional(
+  Schema.Boolean.annotate({
+    description:
+      "Whether this action is the setup action automatically run for new worktrees. Only one project action can have this enabled.",
+  }),
+).annotate({
+  description:
+    "Whether this action is the setup action automatically run for new worktrees. Only one project action can have this enabled.",
+});
+
+const ProjectActionPreviewUrl = TrimmedNonEmptyString.check(Schema.isMaxLength(2_048)).annotate({
+  description: "Optional URL to open in the in-app preview when this action runs.",
+});
+
+const TerminalId = TrimmedNonEmptyString.check(Schema.isMaxLength(128)).annotate({
+  description:
+    "Terminal id to run the action in. Omit to create a fresh action terminal for this run.",
 });
 
 const WorkspaceMode = Schema.Literals(["local", "worktree"]).annotate({
@@ -273,6 +324,101 @@ export type MognetThreadHandoffInput = typeof MognetThreadHandoffInput.Type;
 export const MognetScheduledTasksListInput = Tool.EmptyParams;
 export type MognetScheduledTasksListInput = typeof MognetScheduledTasksListInput.Type;
 
+export const MognetProjectActionsListInput = Schema.Struct({
+  projectId: OptionalProjectId,
+});
+export type MognetProjectActionsListInput = typeof MognetProjectActionsListInput.Type;
+
+export const MognetProjectActionsCreateInput = Schema.Struct({
+  projectId: OptionalProjectId,
+  actionId: Schema.optional(
+    ProjectActionId.annotate({
+      description: "Explicit action id. Omit to derive one from the action name.",
+    }),
+  ).annotate({
+    description: "Explicit action id. Omit to derive one from the action name.",
+  }),
+  name: ProjectActionName,
+  command: ProjectActionCommand,
+  icon: OptionalProjectActionIcon,
+  runOnWorktreeCreate: OptionalRunOnWorktreeCreate,
+  previewUrl: Schema.optional(ProjectActionPreviewUrl).annotate({
+    description: "Optional URL to open in the in-app preview when this action runs.",
+  }),
+  autoOpenPreview: Schema.optional(
+    Schema.Boolean.annotate({
+      description:
+        "Automatically open the in-app preview at previewUrl when this action starts. Ignored without previewUrl.",
+    }),
+  ).annotate({
+    description:
+      "Automatically open the in-app preview at previewUrl when this action starts. Ignored without previewUrl.",
+  }),
+});
+export type MognetProjectActionsCreateInput = typeof MognetProjectActionsCreateInput.Type;
+
+export const MognetProjectActionsUpdateInput = Schema.Struct({
+  projectId: OptionalProjectId,
+  actionId: ProjectActionId,
+  name: Schema.optional(ProjectActionName).annotate({
+    description: "New human-readable project action name.",
+  }),
+  command: Schema.optional(ProjectActionCommand).annotate({
+    description: "New shell command for the project action.",
+  }),
+  icon: OptionalProjectActionIcon,
+  runOnWorktreeCreate: OptionalRunOnWorktreeCreate,
+  previewUrl: Schema.optional(Schema.NullOr(ProjectActionPreviewUrl)).annotate({
+    description: "New preview URL. Use null to clear the preview URL.",
+  }),
+  autoOpenPreview: Schema.optional(
+    Schema.Boolean.annotate({
+      description: "Automatically open the in-app preview at previewUrl when this action starts.",
+    }),
+  ).annotate({
+    description: "Automatically open the in-app preview at previewUrl when this action starts.",
+  }),
+});
+export type MognetProjectActionsUpdateInput = typeof MognetProjectActionsUpdateInput.Type;
+
+export const MognetProjectActionsDeleteInput = Schema.Struct({
+  projectId: OptionalProjectId,
+  actionId: ProjectActionId,
+});
+export type MognetProjectActionsDeleteInput = typeof MognetProjectActionsDeleteInput.Type;
+
+export const MognetProjectActionsRunInput = Schema.Struct({
+  projectId: OptionalProjectId,
+  threadId: Schema.optional(
+    ThreadId.annotate({
+      description:
+        "Thread whose terminal should run the action. Omit to use this agent session's current thread.",
+    }),
+  ).annotate({
+    description:
+      "Thread whose terminal should run the action. Omit to use this agent session's current thread.",
+  }),
+  actionId: ProjectActionId,
+  terminalId: Schema.optional(TerminalId).annotate({
+    description:
+      "Terminal id to run the action in. Omit to create a fresh action terminal for this run.",
+  }),
+  cwd: Schema.optional(
+    TrimmedNonEmptyString.annotate({
+      description:
+        "Working directory for the terminal. Defaults to the thread worktree path, then project root.",
+    }),
+  ).annotate({
+    description:
+      "Working directory for the terminal. Defaults to the thread worktree path, then project root.",
+  }),
+  worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)).annotate({
+    description:
+      "Worktree path to bind to the terminal. Defaults to the target thread worktree path.",
+  }),
+});
+export type MognetProjectActionsRunInput = typeof MognetProjectActionsRunInput.Type;
+
 export const MognetRoute = Schema.Struct({
   environmentId: TrimmedNonEmptyString,
   threadId: ThreadId,
@@ -375,6 +521,37 @@ export const MognetOpenThreadResult = Schema.Struct({
 });
 export type MognetOpenThreadResult = typeof MognetOpenThreadResult.Type;
 
+export const MognetProjectActionsListResult = Schema.Struct({
+  projectId: ProjectId,
+  scope: MognetScope,
+  presentation: MognetPresentationPolicy,
+  actions: Schema.Array(ProjectScript),
+});
+export type MognetProjectActionsListResult = typeof MognetProjectActionsListResult.Type;
+
+export const MognetProjectActionsMutationResult = Schema.Struct({
+  projectId: ProjectId,
+  scope: MognetScope,
+  presentation: MognetPresentationPolicy,
+  action: Schema.NullOr(ProjectScript),
+  actions: Schema.Array(ProjectScript),
+  sequence: NonNegativeInt,
+});
+export type MognetProjectActionsMutationResult = typeof MognetProjectActionsMutationResult.Type;
+
+export const MognetProjectActionsRunResult = Schema.Struct({
+  projectId: ProjectId,
+  scope: MognetScope,
+  presentation: MognetPresentationPolicy,
+  action: ProjectScript,
+  threadId: ThreadId,
+  terminalId: TrimmedNonEmptyString,
+  cwd: TrimmedNonEmptyString,
+  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  terminal: TerminalSessionSnapshot,
+});
+export type MognetProjectActionsRunResult = typeof MognetProjectActionsRunResult.Type;
+
 export class MognetMcpError extends Schema.TaggedErrorClass<MognetMcpError>()("MognetMcpError", {
   operation: TrimmedNonEmptyString,
   message: TrimmedNonEmptyString,
@@ -446,6 +623,60 @@ export const MognetThreadOpenTool = readonlyTool(
     failure: MognetMcpError,
     dependencies,
   }).annotate(Tool.Title, "Resolve Mognet thread route"),
+);
+
+export const MognetProjectActionsListTool = readonlyTool(
+  Tool.make("mognet_project_actions_list", {
+    description:
+      "List configured Mognet project actions for a workspace project. Project actions are saved shell commands exposed in the UI action menu; they do not apply to standalone Chat scopes.",
+    parameters: MognetProjectActionsListInput,
+    success: MognetProjectActionsListResult,
+    failure: MognetMcpError,
+    dependencies,
+  }).annotate(Tool.Title, "List project actions"),
+);
+
+export const MognetProjectActionsCreateTool = safeMutationTool(
+  Tool.make("mognet_project_actions_create", {
+    description:
+      "Create a Mognet project action for a workspace project. Omit actionId to derive a stable id from the action name. Setting runOnWorktreeCreate=true makes this the single setup action.",
+    parameters: MognetProjectActionsCreateInput,
+    success: MognetProjectActionsMutationResult,
+    failure: MognetMcpError,
+    dependencies,
+  }).annotate(Tool.Title, "Create project action"),
+);
+
+export const MognetProjectActionsUpdateTool = safeMutationTool(
+  Tool.make("mognet_project_actions_update", {
+    description:
+      "Update a Mognet project action by id. Setting runOnWorktreeCreate=true clears that flag from other actions in the same workspace project.",
+    parameters: MognetProjectActionsUpdateInput,
+    success: MognetProjectActionsMutationResult,
+    failure: MognetMcpError,
+    dependencies,
+  }).annotate(Tool.Title, "Update project action"),
+);
+
+export const MognetProjectActionsDeleteTool = destructiveTool(
+  Tool.make("mognet_project_actions_delete", {
+    description: "Delete a Mognet project action from a workspace project by id.",
+    parameters: MognetProjectActionsDeleteInput,
+    success: MognetProjectActionsMutationResult,
+    failure: MognetMcpError,
+    dependencies,
+  }).annotate(Tool.Title, "Delete project action"),
+);
+
+export const MognetProjectActionsRunTool = destructiveTool(
+  Tool.make("mognet_project_actions_run", {
+    description:
+      "Execute a saved Mognet project action by opening a thread terminal and writing the action shell command. Omit terminalId to create a fresh action terminal for the run.",
+    parameters: MognetProjectActionsRunInput,
+    success: MognetProjectActionsRunResult,
+    failure: MognetMcpError,
+    dependencies,
+  }).annotate(Tool.Title, "Run project action"),
 );
 
 export const MognetScheduledTasksListTool = readonlyTool(
@@ -530,6 +761,11 @@ export const MognetToolkit = Toolkit.make(
   MognetThreadStatusTool,
   MognetThreadStartTool,
   MognetThreadOpenTool,
+  MognetProjectActionsListTool,
+  MognetProjectActionsCreateTool,
+  MognetProjectActionsUpdateTool,
+  MognetProjectActionsDeleteTool,
+  MognetProjectActionsRunTool,
   MognetScheduledTasksListTool,
   MognetScheduledTasksCreateTool,
   MognetScheduledTasksUpdateTool,

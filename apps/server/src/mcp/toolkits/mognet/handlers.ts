@@ -6,6 +6,7 @@ import {
   ProjectId,
   STANDALONE_CHAT_PROJECT_ID,
   ThreadId,
+  type ProjectScript,
   type ModelSelection,
   type OrchestrationCommand,
   type OrchestrationProjectShell,
@@ -14,14 +15,17 @@ import {
   type ProviderInteractionMode,
   type RuntimeMode,
 } from "@t3tools/contracts";
+import { nextProjectScriptId, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import * as ScheduledTasks from "../../../scheduledTasks.ts";
+import * as OrchestrationEngine from "../../../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ThreadTurnBootstrapDispatcher from "../../../orchestration/ThreadTurnBootstrapDispatcher.ts";
+import * as TerminalManager from "../../../terminal/Manager.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import {
   MognetMcpError,
@@ -30,6 +34,14 @@ import {
   type MognetThreadSummary,
   MognetToolkit,
   type MognetDelegateTaskInput,
+  type MognetProjectActionsCreateInput,
+  type MognetProjectActionsDeleteInput,
+  type MognetProjectActionsListInput,
+  type MognetProjectActionsListResult,
+  type MognetProjectActionsMutationResult,
+  type MognetProjectActionsRunInput,
+  type MognetProjectActionsRunResult,
+  type MognetProjectActionsUpdateInput,
   type MognetProjectContextResult,
   type MognetThreadCommandResult,
   type MognetThreadHandoffInput,
@@ -40,6 +52,7 @@ import {
 } from "./tools.ts";
 
 type ThreadTurnStartCommand = Extract<OrchestrationCommand, { type: "thread.turn.start" }>;
+type ProjectMetaUpdateCommand = Extract<OrchestrationCommand, { type: "project.meta.update" }>;
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -276,6 +289,94 @@ const randomUuid = Effect.fn("MognetToolkit.randomUuid")(function* (operation: s
 
 const commandId = (operation: string) =>
   randomUuid(operation).pipe(Effect.map((uuid) => CommandId.make(`mcp:${operation}:${uuid}`)));
+
+const projectActionScope = (project: OrchestrationProjectShell) => {
+  const scope = scopeFor(project, null);
+  const presentation = presentationForScope(scope);
+  if (presentation === null) {
+    throw new Error("Project action scope presentation resolution failed.");
+  }
+  return { scope, presentation };
+};
+
+const getWorkspaceProjectTarget = Effect.fn("MognetToolkit.getWorkspaceProjectTarget")(function* (
+  operation: string,
+  input: { readonly projectId?: ProjectId | undefined },
+) {
+  const currentThread = input.projectId === undefined ? yield* getCurrentThread(operation) : null;
+  const projectId = input.projectId ?? currentThread?.projectId;
+  if (projectId === undefined) {
+    return yield* new MognetMcpError({
+      operation,
+      message: "No target project was supplied and the current thread is unavailable.",
+    });
+  }
+  const project = yield* getProjectOrFail(operation, projectId);
+  if (project.kind !== "workspace") {
+    return yield* new MognetMcpError({
+      operation,
+      message: "Project actions require a workspace project.",
+    });
+  }
+  return { project, currentThread };
+});
+
+const findProjectActionOrFail = Effect.fn("MognetToolkit.findProjectActionOrFail")(function* (
+  operation: string,
+  project: OrchestrationProjectShell,
+  actionId: string,
+) {
+  const action = project.scripts.find((script) => script.id === actionId);
+  if (action === undefined) {
+    return yield* new MognetMcpError({
+      operation,
+      message: `Project action '${actionId}' was not found.`,
+    });
+  }
+  return action;
+});
+
+const withExclusiveSetupAction = (
+  scripts: ReadonlyArray<ProjectScript>,
+  action: ProjectScript,
+): ProjectScript[] =>
+  scripts.map((script) =>
+    script.id === action.id
+      ? action
+      : action.runOnWorktreeCreate
+        ? { ...script, runOnWorktreeCreate: false }
+        : script,
+  );
+
+const dispatchProjectActionsUpdate = Effect.fn("MognetToolkit.dispatchProjectActionsUpdate")(
+  function* (
+    operation: string,
+    project: OrchestrationProjectShell,
+    actions: ReadonlyArray<ProjectScript>,
+    action: ProjectScript | null,
+  ) {
+    const engine = yield* OrchestrationEngine.OrchestrationEngineService;
+    const command: ProjectMetaUpdateCommand = {
+      type: "project.meta.update",
+      commandId: yield* commandId(operation),
+      projectId: project.id,
+      scripts: Array.from(actions),
+    };
+    const result = yield* engine.dispatch(command).pipe(Effect.mapError(toMognetError(operation)));
+    const { scope, presentation } = projectActionScope({
+      ...project,
+      scripts: Array.from(actions),
+    });
+    return {
+      projectId: project.id,
+      scope,
+      presentation,
+      action,
+      actions: Array.from(actions),
+      sequence: result.sequence,
+    } satisfies MognetProjectActionsMutationResult;
+  },
+);
 
 const resolveNewThreadTarget = Effect.fn("MognetToolkit.resolveNewThreadTarget")(function* (
   operation: string,
@@ -617,6 +718,166 @@ const threadOpen = Effect.fn("MognetToolkit.threadOpen")(function* (input: {
   };
 });
 
+const projectActionsList = Effect.fn("MognetToolkit.projectActionsList")(function* (
+  input: MognetProjectActionsListInput,
+) {
+  const operation = "project_actions_list";
+  yield* requireOrchestration(operation);
+  const { project } = yield* getWorkspaceProjectTarget(operation, input);
+  const { scope, presentation } = projectActionScope(project);
+  return {
+    projectId: project.id,
+    scope,
+    presentation,
+    actions: project.scripts,
+  } satisfies MognetProjectActionsListResult;
+});
+
+const projectActionsCreate = Effect.fn("MognetToolkit.projectActionsCreate")(function* (
+  input: MognetProjectActionsCreateInput,
+) {
+  const operation = "project_actions_create";
+  yield* requireOrchestration(operation);
+  const { project } = yield* getWorkspaceProjectTarget(operation, input);
+  const actionId =
+    input.actionId ??
+    nextProjectScriptId(
+      input.name,
+      project.scripts.map((script) => script.id),
+    );
+  if (project.scripts.some((script) => script.id === actionId)) {
+    return yield* new MognetMcpError({
+      operation,
+      message: `Project action '${actionId}' already exists.`,
+    });
+  }
+
+  const action: ProjectScript = {
+    id: actionId,
+    name: input.name,
+    command: input.command,
+    icon: input.icon ?? "play",
+    runOnWorktreeCreate: input.runOnWorktreeCreate ?? false,
+    ...(input.previewUrl !== undefined ? { previewUrl: input.previewUrl } : {}),
+    ...(input.previewUrl !== undefined && input.autoOpenPreview !== undefined
+      ? { autoOpenPreview: input.autoOpenPreview }
+      : {}),
+  };
+  const actions = action.runOnWorktreeCreate
+    ? [...project.scripts.map((script) => ({ ...script, runOnWorktreeCreate: false })), action]
+    : [...project.scripts, action];
+
+  return yield* dispatchProjectActionsUpdate(operation, project, actions, action);
+});
+
+const projectActionsUpdate = Effect.fn("MognetToolkit.projectActionsUpdate")(function* (
+  input: MognetProjectActionsUpdateInput,
+) {
+  const operation = "project_actions_update";
+  yield* requireOrchestration(operation);
+  const { project } = yield* getWorkspaceProjectTarget(operation, input);
+  const existing = yield* findProjectActionOrFail(operation, project, input.actionId);
+  const previewUrl =
+    input.previewUrl === undefined
+      ? existing.previewUrl
+      : input.previewUrl === null
+        ? undefined
+        : input.previewUrl;
+  const actionBase: ProjectScript = {
+    ...existing,
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.command !== undefined ? { command: input.command } : {}),
+    ...(input.icon !== undefined ? { icon: input.icon } : {}),
+    ...(input.runOnWorktreeCreate !== undefined
+      ? { runOnWorktreeCreate: input.runOnWorktreeCreate }
+      : {}),
+    ...(previewUrl !== undefined ? { previewUrl } : {}),
+    ...(previewUrl !== undefined && input.autoOpenPreview !== undefined
+      ? { autoOpenPreview: input.autoOpenPreview }
+      : {}),
+  };
+  const action: ProjectScript =
+    previewUrl === undefined
+      ? (({ previewUrl: _previewUrl, autoOpenPreview: _autoOpenPreview, ...withoutPreview }) =>
+          withoutPreview)(actionBase)
+      : actionBase;
+  const actions = withExclusiveSetupAction(project.scripts, action);
+  return yield* dispatchProjectActionsUpdate(operation, project, actions, action);
+});
+
+const projectActionsDelete = Effect.fn("MognetToolkit.projectActionsDelete")(function* (
+  input: MognetProjectActionsDeleteInput,
+) {
+  const operation = "project_actions_delete";
+  yield* requireOrchestration(operation);
+  const { project } = yield* getWorkspaceProjectTarget(operation, input);
+  yield* findProjectActionOrFail(operation, project, input.actionId);
+  const actions = project.scripts.filter((script) => script.id !== input.actionId);
+  return yield* dispatchProjectActionsUpdate(operation, project, actions, null);
+});
+
+const projectActionsRun = Effect.fn("MognetToolkit.projectActionsRun")(function* (
+  input: MognetProjectActionsRunInput,
+) {
+  const operation = "project_actions_run";
+  yield* requireOrchestration(operation);
+  const invocation = yield* McpInvocationContext.McpInvocationContext;
+  const thread = yield* getThreadOrFail(operation, input.threadId ?? invocation.threadId);
+  if (input.projectId !== undefined && input.projectId !== thread.projectId) {
+    return yield* new MognetMcpError({
+      operation,
+      message: `Thread '${thread.id}' does not belong to project '${input.projectId}'.`,
+    });
+  }
+  const project = yield* getProjectOrFail(operation, thread.projectId);
+  if (project.kind !== "workspace") {
+    return yield* new MognetMcpError({
+      operation,
+      message: "Project actions require a workspace project.",
+    });
+  }
+  const action = yield* findProjectActionOrFail(operation, project, input.actionId);
+  const terminalManager = yield* TerminalManager.TerminalManager;
+  const worktreePath = input.worktreePath === undefined ? thread.worktreePath : input.worktreePath;
+  const cwd = input.cwd ?? worktreePath ?? project.workspaceRoot;
+  const terminalId =
+    input.terminalId ?? `action-${action.id}-${(yield* randomUuid(operation)).slice(0, 8)}`;
+  const env = projectScriptRuntimeEnv({
+    project: { cwd: project.workspaceRoot },
+    worktreePath,
+  });
+
+  const terminal = yield* terminalManager
+    .open({
+      threadId: thread.id,
+      terminalId,
+      cwd,
+      worktreePath: worktreePath ?? null,
+      env,
+    })
+    .pipe(Effect.mapError(toMognetError(operation)));
+  yield* terminalManager
+    .write({
+      threadId: thread.id,
+      terminalId,
+      data: `${action.command}\r`,
+    })
+    .pipe(Effect.mapError(toMognetError(operation)));
+  const { scope, presentation } = projectActionScope(project);
+
+  return {
+    projectId: project.id,
+    scope,
+    presentation,
+    action,
+    threadId: thread.id,
+    terminalId,
+    cwd,
+    worktreePath: worktreePath ?? null,
+    terminal,
+  } satisfies MognetProjectActionsRunResult;
+});
+
 const delegateTask = Effect.fn("MognetToolkit.delegateTask")(function* (
   input: MognetDelegateTaskInput,
 ) {
@@ -727,6 +988,11 @@ const handlers = {
   mognet_thread_status: (input) => threadStatus(input ?? {}),
   mognet_thread_start: (input) => startThread(input),
   mognet_thread_open: (input) => threadOpen(input ?? {}),
+  mognet_project_actions_list: (input) => projectActionsList(input ?? {}),
+  mognet_project_actions_create: (input) => projectActionsCreate(input),
+  mognet_project_actions_update: (input) => projectActionsUpdate(input),
+  mognet_project_actions_delete: (input) => projectActionsDelete(input),
+  mognet_project_actions_run: (input) => projectActionsRun(input),
   mognet_scheduled_tasks_list: () =>
     Effect.gen(function* () {
       yield* requireScheduledTasks("scheduled_tasks_list");
