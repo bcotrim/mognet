@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `5cda81562`
-- Reviewed on: `2026-07-03`
+- Last reviewed upstream commit: `4ac094fef689b71f475e41a9a2fce167804a5e4e`
+- Reviewed on: `2026-07-04`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -42,8 +42,8 @@ Every sync, including scheduled task runs, must:
 2. Inspect candidate commits.
 
    ```bash
-   git log --oneline 5cda81562..upstream/main
-   git diff --stat 5cda81562...upstream/main
+   git log --oneline 4ac094fef689b71f475e41a9a2fce167804a5e4e..upstream/main
+   git diff --stat 4ac094fef689b71f475e41a9a2fce167804a5e4e...upstream/main
    ```
 
    If the last reviewed upstream marker already matches `upstream/main`, stop:
