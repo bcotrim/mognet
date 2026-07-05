@@ -20,6 +20,9 @@ export default defineConfig({
     hookTimeout: 60_000,
     testTimeout: 60_000,
   },
+  staged: {
+    "*": "vp fmt",
+  },
   fmt: {
     ignorePatterns: [
       ".reference",
