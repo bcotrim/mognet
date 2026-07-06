@@ -17,6 +17,7 @@ import { buildQuotedReviewComment } from "~/reviewCommentContext";
 
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { MessageCopyButton } from "./MessageCopyButton";
 
 interface QuoteReplySelectorProps {
   children: ReactNode;
@@ -315,12 +316,20 @@ export function QuoteReplySelector({
                 <div className="mb-2 flex items-center gap-2">
                   <MessageCircle className="size-3.5 text-muted-foreground" />
                   <span className="text-xs font-medium">Quote reply</span>
+                  <MessageCopyButton
+                    text={selection.quote}
+                    size="icon-xs"
+                    variant="ghost"
+                    ariaLabel="Copy selected text"
+                    tooltip="Copy selected text"
+                    target="selected text"
+                    className="ml-auto"
+                  />
                   <Button
                     type="button"
                     aria-label="Cancel quote reply"
                     size="icon-xs"
                     variant="ghost"
-                    className="ml-auto"
                     onClick={clearSelection}
                   >
                     <XIcon className="size-3.5" />
