@@ -101,6 +101,13 @@ function fitTerminalSafely(fitAddon: FitAddon): boolean {
   }
 }
 
+export function threadTerminalDrawerRootClassName(isPanel: boolean): string {
+  return cn(
+    "thread-terminal-drawer relative flex min-w-0 w-full flex-col overflow-hidden bg-background",
+    isPanel ? "h-full flex-1" : "shrink-0 border-t border-border/80",
+  );
+}
+
 function runtimeEnvSignature(runtimeEnv: Record<string, string> | undefined): string {
   if (!runtimeEnv) return "";
   return JSON.stringify(
@@ -333,6 +340,7 @@ export function TerminalViewport({
   const selectionActionOpenRef = useRef(false);
   const selectionActionTimerRef = useRef<number | null>(null);
   const keybindingsRef = useRef(keybindings);
+  const reportedTerminalSizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const runtimeEnvKey = useMemo(() => runtimeEnvSignature(runtimeEnv), [runtimeEnv]);
   const handleSessionExited = useEffectEvent(() => {
     onSessionExited();
@@ -363,6 +371,24 @@ export function TerminalViewport({
       input: { threadId, terminalId, cols, rows },
     }),
   );
+  const reportTerminalSize = useEffectEvent((terminal: Terminal) => {
+    const nextSize = { cols: terminal.cols, rows: terminal.rows };
+    const reportedSize = reportedTerminalSizeRef.current;
+    if (reportedSize?.cols === nextSize.cols && reportedSize.rows === nextSize.rows) return;
+    reportedTerminalSizeRef.current = nextSize;
+    void resizeTerminal(nextSize.cols, nextSize.rows);
+  });
+  const fitAndResizeTerminal = useEffectEvent(() => {
+    const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+    if (!terminal || !fitAddon) return;
+    const wasAtBottom = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY;
+    if (!fitTerminalSafely(fitAddon)) return;
+    if (wasAtBottom) {
+      terminal.scrollToBottom();
+    }
+    reportTerminalSize(terminal);
+  });
   const terminalBuffer = terminalSession.buffer;
   const terminalError = terminalSession.error;
   const terminalStatus = terminalSession.status;
@@ -400,6 +426,7 @@ export function TerminalViewport({
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+    reportedTerminalSizeRef.current = null;
     previousSessionRef.current = {
       buffer: "",
       status: "closed",
@@ -675,16 +702,7 @@ export function TerminalViewport({
     });
 
     const fitTimer = window.setTimeout(() => {
-      const activeTerminal = terminalRef.current;
-      const activeFitAddon = fitAddonRef.current;
-      if (!activeTerminal || !activeFitAddon) return;
-      const wasAtBottom =
-        activeTerminal.buffer.active.viewportY >= activeTerminal.buffer.active.baseY;
-      fitTerminalSafely(activeFitAddon);
-      if (wasAtBottom) {
-        activeTerminal.scrollToBottom();
-      }
-      void resizeTerminal(activeTerminal.cols, activeTerminal.rows);
+      fitAndResizeTerminal();
     }, 30);
 
     return () => {
@@ -700,12 +718,34 @@ export function TerminalViewport({
       themeObserver.disconnect();
       terminalRef.current = null;
       fitAddonRef.current = null;
+      reportedTerminalSizeRef.current = null;
       terminal.dispose();
     };
     // autoFocus is intentionally omitted;
     // it is only read at mount time and must not trigger terminal teardown/recreation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cwd, environmentId, runtimeEnvKey, terminalId, threadId, worktreePath]);
+
+  useEffect(() => {
+    const mount = containerRef.current;
+    if (!mount || typeof ResizeObserver === "undefined") return;
+
+    let frame = 0;
+    const resizeObserver = new ResizeObserver(() => {
+      if (frame !== 0) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        fitAndResizeTerminal();
+      });
+    });
+    resizeObserver.observe(mount);
+    return () => {
+      resizeObserver.disconnect();
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -782,13 +822,8 @@ export function TerminalViewport({
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
     if (!terminal || !fitAddon) return;
-    const wasAtBottom = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY;
     const frame = window.requestAnimationFrame(() => {
-      fitTerminalSafely(fitAddon);
-      if (wasAtBottom) {
-        terminal.scrollToBottom();
-      }
-      void resizeTerminal(terminal.cols, terminal.rows);
+      fitAndResizeTerminal();
     });
     return () => {
       window.cancelAnimationFrame(frame);
@@ -1195,10 +1230,7 @@ export default function ThreadTerminalDrawer({
     return (
       <aside
         data-terminal-owner={isPanel ? "right-panel" : "drawer"}
-        className={cn(
-          "thread-terminal-drawer relative flex min-w-0 flex-col overflow-hidden bg-background",
-          isPanel ? "h-full flex-1" : "shrink-0 border-t border-border/80",
-        )}
+        className={threadTerminalDrawerRootClassName(isPanel)}
         style={isPanel ? undefined : { height: `${drawerHeight}px` }}
       >
         {!isPanel ? (
@@ -1229,10 +1261,7 @@ export default function ThreadTerminalDrawer({
   return (
     <aside
       data-terminal-owner={isPanel ? "right-panel" : "drawer"}
-      className={cn(
-        "thread-terminal-drawer relative flex min-w-0 flex-col overflow-hidden bg-background",
-        isPanel ? "h-full flex-1" : "shrink-0 border-t border-border/80",
-      )}
+      className={threadTerminalDrawerRootClassName(isPanel)}
       style={isPanel ? undefined : { height: `${drawerHeight}px` }}
     >
       {!isPanel ? (
