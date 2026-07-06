@@ -168,7 +168,7 @@
   .chat-composer-lower-chrome {
     margin-top: -1px;
     padding-top: 1px;
-    background: linear-gradient(to bottom, transparent 0, var(--background) 0.875rem);
+    background: var(--background);
   }
 
   @media (min-width: 40rem) {
