@@ -17,6 +17,8 @@ const host = process.env.HOST?.trim() || "localhost";
 const configuredWsUrl = process.env.VITE_WS_URL?.trim();
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
 const sourcemapEnv = process.env.MOGNET_WEB_SOURCEMAP?.trim().toLowerCase();
+const bundledDevEnv = process.env.MOGNET_BUNDLED_DEV?.trim().toLowerCase();
+const bundledDev = bundledDevEnv === "1" || bundledDevEnv === "true";
 
 const buildSourcemap: boolean | "hidden" =
   sourcemapEnv === "0" || sourcemapEnv === "false"
@@ -95,6 +97,9 @@ export default defineConfig(() => {
     resolve: {
       tsconfigPaths: true,
       dedupe: ["react", "react-dom"],
+    },
+    experimental: {
+      bundledDev,
     },
     server: {
       host,
