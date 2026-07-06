@@ -16,6 +16,7 @@ export function createReviewEnvironmentAtoms<R, E>(
       label: "environment-data:review:diff-preview",
       tag: WS_METHODS.reviewGetDiffPreview,
       staleTimeMs: 5_000,
+      refreshIntervalMs: 5_000,
     }),
     openSnapshot: createEnvironmentRpcCommand(runtime, {
       label: "environment-command:review:open-snapshot",
