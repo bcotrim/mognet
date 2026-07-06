@@ -17,6 +17,10 @@ const host = process.env.HOST?.trim() || "localhost";
 const configuredWsUrl = process.env.VITE_WS_URL?.trim();
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
 const sourcemapEnv = process.env.MOGNET_WEB_SOURCEMAP?.trim().toLowerCase();
+
+// Vite 8.1's experimental bundled dev mode: serves rolldown-bundled chunks in
+// dev for much faster startup/reload on large module graphs, with HMR served
+// as hot patches. Opt-in while experimental: MOGNET_BUNDLED_DEV=1 pnpm dev:web
 const bundledDevEnv = process.env.MOGNET_BUNDLED_DEV?.trim().toLowerCase();
 const bundledDev = bundledDevEnv === "1" || bundledDevEnv === "true";
 

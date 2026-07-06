@@ -724,6 +724,7 @@ function makeManager(input?: {
       getFullThreadDiffContext: () => Effect.die("unused"),
       getThreadShellById: () => Effect.die("unused"),
       getThreadDetailById: () => Effect.die("unused"),
+      getThreadDetailSnapshot: () => Effect.die("unused"),
     },
   );
 
