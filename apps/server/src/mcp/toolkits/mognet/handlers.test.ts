@@ -272,6 +272,14 @@ function testLayer(
         matchingThread === undefined ? Option.none() : Option.some(matchingThread),
       );
     },
+    getThreadDetailSnapshot: (id) => {
+      const matchingThread = threads.find((thread) => thread.id === id);
+      return Effect.succeed(
+        matchingThread === undefined
+          ? Option.none()
+          : Option.some({ snapshotSequence: 1, thread: matchingThread }),
+      );
+    },
   });
   const engine = OrchestrationEngine.OrchestrationEngineService.of({
     readEvents: () => Stream.empty,
