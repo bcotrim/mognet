@@ -21,7 +21,6 @@ export default defineConfig({
     testTimeout: 60_000,
   },
   staged: {
-    // Formatter only for now — no lint or typecheck on commit.
     "*": "vp fmt",
   },
   fmt: {
