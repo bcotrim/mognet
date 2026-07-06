@@ -3,8 +3,17 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   resolveTerminalSelectionActionPosition,
   shouldHandleTerminalSelectionMouseUp,
+  threadTerminalDrawerRootClassName,
   terminalSelectionActionDelayForClickCount,
 } from "./ThreadTerminalDrawer";
+
+describe("threadTerminalDrawerRootClassName", () => {
+  it("lets right-panel terminals fill the available width", () => {
+    expect(threadTerminalDrawerRootClassName(true).split(/\s+/)).toEqual(
+      expect.arrayContaining(["w-full", "h-full", "flex-1"]),
+    );
+  });
+});
 
 describe("resolveTerminalSelectionActionPosition", () => {
   it("prefers the selection rect over the last pointer position", () => {
