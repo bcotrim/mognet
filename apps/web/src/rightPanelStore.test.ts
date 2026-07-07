@@ -42,6 +42,28 @@ describe("rightPanelStore", () => {
     });
   });
 
+  it("downgrades persisted review diff surfaces to live diff surfaces", () => {
+    expect(
+      migratePersistedRightPanelState({
+        byThreadKey: {
+          "env-1:thread-A": {
+            isOpen: true,
+            activeSurfaceId: "diff",
+            surfaces: [{ id: "diff", kind: "diff", mode: "review", reviewId: "review-1" }],
+          },
+        },
+      }),
+    ).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: "diff",
+          surfaces: [{ id: "diff", kind: "diff" }],
+        },
+      },
+    });
+  });
+
   it("upgrades saved single-session terminal surfaces to split-capable surfaces", () => {
     expect(
       migratePersistedRightPanelState({

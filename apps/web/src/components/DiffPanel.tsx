@@ -6,28 +6,27 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import type {
+  ReviewDiffPreviewResult,
   ReviewFileContext,
   ReviewFinding,
-  ReviewId,
   ScopedThreadRef,
   TurnId,
 } from "@t3tools/contracts";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import {
   ArrowRightIcon,
+  BookOpenTextIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
-  FileSearchIcon,
   FolderClosedIcon,
   FolderIcon,
+  MessageSquareIcon,
   PilcrowIcon,
-  RefreshCwIcon,
   Rows3Icon,
   SearchIcon,
   TextWrapIcon,
-  XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenInPreferredEditor } from "../editorPreferences";
@@ -35,6 +34,11 @@ import { type DraftId } from "../composerDraftStore";
 import { openDiffFilePrimaryAction } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
+import type {
+  InteractiveReviewTour,
+  InteractiveReviewTourAnchor,
+  InteractiveReviewTourStep,
+} from "~/lib/interactiveReviewTour";
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
 import { useTheme } from "../hooks/useTheme";
 import {
@@ -77,12 +81,10 @@ import {
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { useEnvironmentQuery } from "../state/query";
-import { useAtomCommand } from "../state/use-atom-command";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
-import { useRightPanelStore } from "../rightPanelStore";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
@@ -101,6 +103,41 @@ interface DiffCodeViewFile {
 }
 
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
+const EMPTY_REVIEW_FILE_CONTEXT: ReadonlyMap<string, ReviewFileContext> = new Map();
+const EMPTY_REVIEW_FINDINGS: ReadonlyMap<string, ReadonlyArray<ReviewFinding>> = new Map();
+
+function collectTourStepFilePaths(step: InteractiveReviewTourStep): string[] {
+  return Array.from(new Set([...step.files, ...step.anchors.map((anchor) => anchor.filePath)]));
+}
+
+function formatTourAnchorRange(anchor: InteractiveReviewTourAnchor): string {
+  if (anchor.rangeLabel) return anchor.rangeLabel;
+  if (anchor.startLine === null) return "";
+  return anchor.endLine && anchor.endLine !== anchor.startLine
+    ? `${anchor.startLine}-${anchor.endLine}`
+    : `${anchor.startLine}`;
+}
+
+function sameReviewDiffPreviewContent(
+  left: ReviewDiffPreviewResult,
+  right: ReviewDiffPreviewResult,
+): boolean {
+  if (left.cwd !== right.cwd || left.sources.length !== right.sources.length) return false;
+  return left.sources.every((leftSource, index) => {
+    const rightSource = right.sources[index];
+    return (
+      rightSource !== undefined &&
+      leftSource.id === rightSource.id &&
+      leftSource.kind === rightSource.kind &&
+      leftSource.title === rightSource.title &&
+      leftSource.baseRef === rightSource.baseRef &&
+      leftSource.headRef === rightSource.headRef &&
+      leftSource.diff === rightSource.diff &&
+      leftSource.diffHash === rightSource.diffHash &&
+      leftSource.truncated === rightSource.truncated
+    );
+  });
+}
 
 const DIFF_PANEL_UNSAFE_CSS = `
 [data-diffs-header],
@@ -203,7 +240,8 @@ const DIFF_PANEL_UNSAFE_CSS = `
 interface DiffPanelProps {
   mode?: DiffPanelMode;
   composerDraftTarget: ScopedThreadRef | DraftId;
-  reviewId?: ReviewId | undefined;
+  interactiveReviewTour?: InteractiveReviewTour | null;
+  onAskInteractiveReviewStep?: (step: InteractiveReviewTourStep) => void;
 }
 
 export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
@@ -211,7 +249,8 @@ export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 export default function DiffPanel({
   mode = "inline",
   composerDraftTarget,
-  reviewId,
+  interactiveReviewTour = null,
+  onAskInteractiveReviewStep,
 }: DiffPanelProps) {
   const { resolvedTheme } = useTheme();
   const settings = useClientSettings();
@@ -224,15 +263,9 @@ export default function DiffPanel({
     fileKeys: EMPTY_COLLAPSED_DIFF_FILE_KEYS,
   }));
   const [navigatedFileKey, setNavigatedFileKey] = useState<string | null>(null);
-  const [reviewActionError, setReviewActionError] = useState<string | null>(null);
-  const [reviewActionPending, setReviewActionPending] = useState<"open" | "refresh" | null>(null);
+  const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null);
+  const [isTourPanelCollapsed, setTourPanelCollapsed] = useState(false);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
-  const openReviewSnapshot = useAtomCommand(reviewEnvironment.openSnapshot, {
-    reportFailure: false,
-  });
-  const refreshReviewSnapshot = useAtomCommand(reviewEnvironment.refreshSnapshot, {
-    reportFailure: false,
-  });
 
   const routeThreadRef = useParams({
     strict: false,
@@ -260,16 +293,13 @@ export default function DiffPanel({
     activeThread?.environmentId ?? null,
     serverConfig?.availableEditors ?? [],
   );
-  const reviewSnapshotQuery = useEnvironmentQuery(
-    activeThread && reviewId
-      ? reviewEnvironment.snapshot({
-          environmentId: activeThread.environmentId,
-          input: { reviewId },
-        })
-      : null,
+  const tourSteps = interactiveReviewTour?.steps ?? [];
+  const activeTourStep =
+    tourSteps.find((step) => step.id === activeTourStepId) ?? tourSteps[0] ?? null;
+  const activeTourStepFilePaths = useMemo(
+    () => (activeTourStep ? collectTourStepFilePaths(activeTourStep) : []),
+    [activeTourStep],
   );
-  const reviewSnapshot = reviewSnapshotQuery.data;
-  const isReviewMode = reviewId !== undefined;
   const gitStatusQuery = useEnvironmentQuery(
     activeThread !== null && activeThread !== undefined && activeCwd != null
       ? vcsEnvironment.status({
@@ -304,6 +334,11 @@ export default function DiffPanel({
     );
   }, [diffSelection, orderedTurnDiffSummaries, routeThreadRef]);
 
+  useEffect(() => {
+    setActiveTourStepId(interactiveReviewTour?.steps[0]?.id ?? null);
+    setTourPanelCollapsed(false);
+  }, [interactiveReviewTour?.sourceMessageId, interactiveReviewTour?.steps]);
+
   const selectedTurnId = diffSelection.kind === "turn" ? diffSelection.turnId : null;
   const selectedGitScope = diffSelection.kind === "unstaged" ? "unstaged" : "branch";
   const selectedBaseRef = diffSelection.kind === "branch" ? diffSelection.baseRef : null;
@@ -328,9 +363,7 @@ export default function DiffPanel({
         ? "Latest turn"
         : `Turn ${selectedCheckpointTurnCount ?? "?"}`;
   const reviewSectionId = selectedTurn ? `turn:${selectedTurn.turnId}` : selectedGitScope;
-  const activeReviewSectionId = reviewSnapshot
-    ? `review:${reviewSnapshot.reviewId}`
-    : reviewSectionId;
+  const activeReviewSectionId = reviewSectionId;
   const collapseScopeKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${activeReviewSectionId}`
     : null;
@@ -343,7 +376,7 @@ export default function DiffPanel({
     : selectedGitScope === "unstaged"
       ? "Working tree"
       : "Branch changes";
-  const activeReviewSectionTitle = reviewSnapshot?.source.title ?? reviewSectionTitle;
+  const activeReviewSectionTitle = reviewSectionTitle;
   const selectedCheckpointRange = useMemo(
     () =>
       typeof selectedCheckpointTurnCount === "number"
@@ -377,38 +410,88 @@ export default function DiffPanel({
         })
       : null,
   );
-  const shouldRetryBranchDiffAtEnvironmentCwd =
-    selectedTurnId === null &&
-    primaryBranchDiffPreview.error?.includes("configured workspace root") === true &&
-    serverConfig?.cwd !== undefined &&
-    serverConfig.cwd !== activeCwd;
-  const fallbackBranchDiffPreview = useEnvironmentQuery(
-    shouldRetryBranchDiffAtEnvironmentCwd && activeThread && serverConfig
-      ? reviewEnvironment.diffPreview({
-          environmentId: activeThread.environmentId,
-          input: {
-            cwd: serverConfig.cwd,
-            ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
-            ignoreWhitespace: diffIgnoreWhitespace,
-          },
-        })
-      : null,
+  const branchDiffPreview = primaryBranchDiffPreview;
+  const branchDiffPreviewKey =
+    selectedTurnId === null && activeThread && activeCwd
+      ? [
+          activeThread.environmentId,
+          activeCwd,
+          selectedBaseRef ?? "",
+          diffIgnoreWhitespace ? "ignore-whitespace" : "include-whitespace",
+        ].join("\u0000")
+      : null;
+  const [stableBranchDiffPreview, setStableBranchDiffPreview] = useState<{
+    readonly key: string;
+    readonly data: ReviewDiffPreviewResult;
+  } | null>(null);
+  useEffect(() => {
+    if (!branchDiffPreviewKey) {
+      setStableBranchDiffPreview(null);
+      return;
+    }
+    const previewData = branchDiffPreview.data;
+    if (previewData) {
+      setStableBranchDiffPreview((current) =>
+        current?.key === branchDiffPreviewKey &&
+        sameReviewDiffPreviewContent(current.data, previewData)
+          ? current
+          : { key: branchDiffPreviewKey, data: previewData },
+      );
+    }
+  }, [branchDiffPreview.data, branchDiffPreviewKey]);
+  const stableBranchDiffPreviewData =
+    stableBranchDiffPreview?.key === branchDiffPreviewKey ? stableBranchDiffPreview.data : null;
+  const branchDiffPreviewData =
+    branchDiffPreview.data && stableBranchDiffPreviewData
+      ? sameReviewDiffPreviewContent(stableBranchDiffPreviewData, branchDiffPreview.data)
+        ? stableBranchDiffPreviewData
+        : branchDiffPreview.data
+      : (branchDiffPreview.data ?? stableBranchDiffPreviewData);
+  const selectedGitSourceKind =
+    selectedGitScope === "unstaged" ? ("working-tree" as const) : ("branch-range" as const);
+  const selectedGitSource = branchDiffPreviewData?.sources.find(
+    (source) => source.kind === selectedGitSourceKind,
   );
-  const branchDiffPreview = shouldRetryBranchDiffAtEnvironmentCwd
-    ? fallbackBranchDiffPreview
-    : primaryBranchDiffPreview;
-  const selectedGitSource = branchDiffPreview.data?.sources.find(
+  const tourFallbackGitSource = interactiveReviewTour
+    ? branchDiffPreviewData?.sources.find(
+        (source) => source.kind !== selectedGitSourceKind && source.diff.trim().length > 0,
+      )
+    : undefined;
+  useEffect(() => {
+    if (
+      !routeThreadRef ||
+      selectedTurnId !== null ||
+      !interactiveReviewTour ||
+      selectedGitSource?.diff.trim() ||
+      !tourFallbackGitSource
+    ) {
+      return;
+    }
+    useDiffPanelStore
+      .getState()
+      .selectGitScope(
+        routeThreadRef,
+        tourFallbackGitSource.kind === "working-tree" ? "unstaged" : "branch",
+      );
+  }, [
+    interactiveReviewTour,
+    routeThreadRef,
+    selectedGitSource?.diff,
+    selectedTurnId,
+    tourFallbackGitSource,
+  ]);
+  const selectedGitSourceForRefs = branchDiffPreviewData?.sources.find(
     (source) => source.kind === (selectedGitScope === "unstaged" ? "working-tree" : "branch-range"),
   );
   const localBranchRefs = useEnvironmentQuery(
     selectedTurnId === null &&
       selectedGitScope === "branch" &&
       activeThread &&
-      branchDiffPreview.data?.cwd
+      branchDiffPreviewData?.cwd
       ? vcsEnvironment.listRefs({
           environmentId: activeThread.environmentId,
           input: {
-            cwd: branchDiffPreview.data.cwd,
+            cwd: branchDiffPreviewData.cwd,
             includeMatchingRemoteRefs: true,
             refKind: "local",
             ...(baseRefQuery.trim().length > 0 ? { query: baseRefQuery.trim() } : {}),
@@ -421,11 +504,11 @@ export default function DiffPanel({
     selectedTurnId === null &&
       selectedGitScope === "branch" &&
       activeThread &&
-      branchDiffPreview.data?.cwd
+      branchDiffPreviewData?.cwd
       ? vcsEnvironment.listRefs({
           environmentId: activeThread.environmentId,
           input: {
-            cwd: branchDiffPreview.data.cwd,
+            cwd: branchDiffPreviewData.cwd,
             includeMatchingRemoteRefs: true,
             refKind: "remote",
             ...(baseRefQuery.trim().length > 0 ? { query: baseRefQuery.trim() } : {}),
@@ -435,7 +518,8 @@ export default function DiffPanel({
       : null,
   );
   const baseRefChoices = buildBaseRefChoices(
-    localBranchRefs.data?.refs.filter((ref) => ref.name !== selectedGitSource?.headRef) ?? [],
+    localBranchRefs.data?.refs.filter((ref) => ref.name !== selectedGitSourceForRefs?.headRef) ??
+      [],
     remoteBranchRefs.data?.refs ?? [],
   );
   const matchingBaseRefChoices = filterBaseRefChoices(baseRefChoices, baseRefQuery);
@@ -458,24 +542,18 @@ export default function DiffPanel({
   const liveSelectedPatchError = selectedTurn
     ? activeCheckpointDiff.error
     : branchDiffPreview.error;
-  const selectedPatch = isReviewMode ? reviewSnapshot?.diff : liveSelectedPatch;
-  const isSelectedPatchTruncated = isReviewMode
-    ? reviewSnapshot?.diffTruncated === true
-    : liveSelectedPatchTruncated;
-  const isLoadingSelectedPatch = isReviewMode
-    ? reviewSnapshotQuery.isPending && !reviewSnapshot
-    : liveSelectedPatchLoading;
-  const selectedPatchError = isReviewMode ? reviewSnapshotQuery.error : liveSelectedPatchError;
+  const selectedPatch = liveSelectedPatch;
+  const isSelectedPatchTruncated = liveSelectedPatchTruncated;
   const hasResolvedPatch = typeof selectedPatch === "string";
+  const isLoadingSelectedPatch = !hasResolvedPatch && liveSelectedPatchLoading;
+  const selectedPatchError = hasResolvedPatch ? null : liveSelectedPatchError;
   const hasNoNetChanges = hasResolvedPatch && selectedPatch.trim().length === 0;
   const renderablePatch = useMemo(
     () =>
       getRenderablePatch(selectedPatch, `diff-panel:${resolvedTheme}`, {
-        compactPartialHunkOffsets: isReviewMode
-          ? reviewSnapshot?.source.kind !== "turn"
-          : selectedTurnId === null,
+        compactPartialHunkOffsets: selectedTurnId === null,
       }),
-    [isReviewMode, resolvedTheme, reviewSnapshot?.source.kind, selectedPatch, selectedTurnId],
+    [resolvedTheme, selectedPatch, selectedTurnId],
   );
   const renderableFiles = useMemo(() => {
     if (!renderablePatch || renderablePatch.kind !== "files") {
@@ -488,7 +566,7 @@ export default function DiffPanel({
       }),
     );
   }, [renderablePatch]);
-  const codeViewFiles = useMemo<DiffCodeViewFile[]>(
+  const allCodeViewFiles = useMemo<DiffCodeViewFile[]>(
     () =>
       renderableFiles.map((fileDiff) => {
         const fileKey = buildFileDiffRenderKey(fileDiff);
@@ -501,20 +579,24 @@ export default function DiffPanel({
       }),
     [collapsedDiffFileKeys, renderableFiles],
   );
-  const reviewFileContextByPath = useMemo(
-    () => new Map((reviewSnapshot?.files ?? []).map((file) => [file.filePath, file])),
-    [reviewSnapshot?.files],
-  );
-  const reviewFindingsByFilePath = useMemo(
-    () =>
-      new Map(
-        (reviewSnapshot?.files ?? []).map((file) => [
-          file.filePath,
-          file.findings.filter((finding) => finding.anchor !== null),
-        ]),
-      ),
-    [reviewSnapshot?.files],
-  );
+  const codeViewFiles = useMemo<DiffCodeViewFile[]>(() => {
+    if (!activeTourStep || activeTourStepFilePaths.length === 0) {
+      return allCodeViewFiles;
+    }
+    const filePathSet = new Set(activeTourStepFilePaths);
+    const scopedFiles = allCodeViewFiles.filter((file) => filePathSet.has(file.filePath));
+    if (scopedFiles.length === 0) return allCodeViewFiles;
+    const order = new Map(activeTourStepFilePaths.map((filePath, index) => [filePath, index]));
+    return scopedFiles
+      .toSorted(
+        (left, right) =>
+          (order.get(left.filePath) ?? Number.MAX_SAFE_INTEGER) -
+          (order.get(right.filePath) ?? Number.MAX_SAFE_INTEGER),
+      )
+      .map((file) => ({ ...file, collapsed: false }));
+  }, [activeTourStep, activeTourStepFilePaths, allCodeViewFiles]);
+  const reviewFileContextByPath = EMPTY_REVIEW_FILE_CONTEXT;
+  const reviewFindingsByFilePath = EMPTY_REVIEW_FINDINGS;
   const selectedFileKey = selectedFilePath
     ? (codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath)?.fileKey ?? null)
     : null;
@@ -540,6 +622,15 @@ export default function DiffPanel({
     setNavigatedFileKey(fileKey);
     codeViewRef.current?.scrollTo({ type: "item", id: fileKey, align: "start" });
   }, []);
+  const scrollToDiffFilePath = useCallback(
+    (filePath: string) => {
+      const file =
+        codeViewFiles.find((candidate) => candidate.filePath === filePath) ??
+        allCodeViewFiles.find((candidate) => candidate.filePath === filePath);
+      if (file) scrollToDiffFile(file.fileKey);
+    },
+    [allCodeViewFiles, codeViewFiles, scrollToDiffFile],
+  );
 
   const openDiffFile = useCallback(
     (filePath: string) => {
@@ -595,93 +686,6 @@ export default function DiffPanel({
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectBranchBaseRef(routeThreadRef, baseRef);
   };
-  const handleOpenReview = useCallback(() => {
-    if (!routeThreadRef || !activeThread || !activeCwd) return;
-    const cwd = branchDiffPreview.data?.cwd ?? activeCwd;
-    const source =
-      selectedTurn && selectedCheckpointRange
-        ? {
-            kind: "turn" as const,
-            turnId: selectedTurn.turnId,
-            fromTurnCount: selectedCheckpointRange.fromTurnCount,
-            toTurnCount: selectedCheckpointRange.toTurnCount,
-            title: reviewSectionTitle,
-          }
-        : selectedGitSource?.diff.trim()
-          ? {
-              kind:
-                selectedGitScope === "unstaged"
-                  ? ("working-tree" as const)
-                  : ("branch-range" as const),
-              ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
-              ...(selectedGitSource?.title ? { title: selectedGitSource.title } : {}),
-            }
-          : {
-              kind: "smart" as const,
-              ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
-            };
-
-    setReviewActionError(null);
-    setReviewActionPending("open");
-    void openReviewSnapshot({
-      environmentId: activeThread.environmentId,
-      input: {
-        cwd,
-        threadId: routeThreadRef.threadId,
-        origin: "manual",
-        source,
-        ignoreWhitespace: diffIgnoreWhitespace,
-      },
-    }).then((result) => {
-      setReviewActionPending(null);
-      if (result._tag === "Success") {
-        useRightPanelStore.getState().openReview(routeThreadRef, result.value.reviewId);
-        return;
-      }
-      if (!isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        setReviewActionError(error instanceof Error ? error.message : "Failed to open review.");
-      }
-    });
-  }, [
-    activeCwd,
-    activeThread,
-    branchDiffPreview.data?.cwd,
-    diffIgnoreWhitespace,
-    openReviewSnapshot,
-    reviewSectionTitle,
-    routeThreadRef,
-    selectedBaseRef,
-    selectedCheckpointRange,
-    selectedGitScope,
-    selectedGitSource?.title,
-    selectedTurn,
-  ]);
-  const handleRefreshReview = useCallback(() => {
-    if (!routeThreadRef || !activeThread || !reviewId) return;
-    setReviewActionError(null);
-    setReviewActionPending("refresh");
-    void refreshReviewSnapshot({
-      environmentId: activeThread.environmentId,
-      input: { reviewId },
-    }).then((result) => {
-      setReviewActionPending(null);
-      if (result._tag === "Success") {
-        useRightPanelStore.getState().openReview(routeThreadRef, result.value.reviewId);
-        reviewSnapshotQuery.refresh();
-        return;
-      }
-      if (!isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        setReviewActionError(error instanceof Error ? error.message : "Failed to refresh review.");
-      }
-    });
-  }, [activeThread, refreshReviewSnapshot, reviewId, reviewSnapshotQuery, routeThreadRef]);
-  const handleExitReview = useCallback(() => {
-    if (!routeThreadRef) return;
-    useRightPanelStore.getState().open(routeThreadRef, "diff");
-  }, [routeThreadRef]);
-
   const displayControls = (
     <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
       <ToggleGroup
@@ -921,147 +925,44 @@ export default function DiffPanel({
           </div>
         )}
       </div>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-55 [-webkit-app-region:no-drag]"
-              disabled={!activeThread || !activeCwd || reviewActionPending !== null}
-              onClick={handleOpenReview}
-            >
-              <FileSearchIcon className="size-3" />
-              <span>Review</span>
-            </button>
-          }
-        />
-        <TooltipPopup side="top">Generate review snapshot</TooltipPopup>
-      </Tooltip>
       {displayControls}
     </>
   );
-
-  const reviewHeaderRow = (
-    <>
-      <div className="flex min-w-0 flex-1 items-center gap-2 [-webkit-app-region:no-drag]">
-        <span className="inline-flex h-6 shrink-0 items-center rounded-md bg-muted/70 px-2 text-xs font-medium text-foreground">
-          Review
-        </span>
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
-          {reviewSnapshot?.source.title ?? "Loading review..."}
-        </span>
-        {reviewSnapshot ? (
-          <>
-            <span className="rounded-sm border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
-              {reviewSnapshot.status}
-            </span>
-            <span
-              className={cn(
-                "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase",
-                reviewSnapshot.freshness === "stale"
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300"
-                  : "border-border/70 text-muted-foreground",
-              )}
-            >
-              {reviewSnapshot.freshness}
-            </span>
-          </>
-        ) : null}
-      </div>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-55 [-webkit-app-region:no-drag]"
-              disabled={!reviewId || reviewActionPending !== null}
-              aria-label="Refresh review"
-              onClick={handleRefreshReview}
-            >
-              <RefreshCwIcon
-                className={cn("size-3", reviewActionPending === "refresh" && "animate-spin")}
-              />
-            </button>
-          }
-        />
-        <TooltipPopup side="top">Refresh review</TooltipPopup>
-      </Tooltip>
-      {displayControls}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [-webkit-app-region:no-drag]"
-              aria-label="Exit review"
-              onClick={handleExitReview}
-            >
-              <XIcon className="size-3" />
-            </button>
-          }
-        />
-        <TooltipPopup side="top">Exit review</TooltipPopup>
-      </Tooltip>
-    </>
-  );
-
-  const headerRow = isReviewMode ? reviewHeaderRow : normalHeaderRow;
 
   return (
-    <DiffPanelShell mode={mode} header={headerRow}>
+    <DiffPanelShell mode={mode} header={normalHeaderRow}>
       {!activeThread ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           Select a thread to inspect turn diffs.
         </div>
-      ) : !isReviewMode && !isGitRepo ? (
+      ) : !isGitRepo ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           Turn diffs are unavailable because this project is not a git repository.
         </div>
-      ) : !isReviewMode && selectedTurnId !== null && orderedTurnDiffSummaries.length === 0 ? (
+      ) : selectedTurnId !== null && orderedTurnDiffSummaries.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           No completed turns yet.
         </div>
       ) : (
         <>
           <div className="diff-panel-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {reviewActionError && (
-              <p className="shrink-0 border-b border-border/70 bg-red-500/10 px-3 py-1.5 text-[11px] text-red-600 dark:text-red-300">
-                {reviewActionError}
-              </p>
-            )}
-            {isReviewMode && reviewSnapshot?.freshness === "stale" && (
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
-                <span>This review is stale because the selected diff changed.</span>
-                <button
-                  type="button"
-                  className="rounded-sm border border-amber-500/30 px-1.5 py-0.5 font-medium hover:bg-amber-500/10"
-                  onClick={handleRefreshReview}
-                >
-                  Refresh
-                </button>
-              </div>
-            )}
-            {isReviewMode && reviewSnapshot?.status === "pending" && (
-              <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
-                Review generation is still running.
-              </p>
-            )}
-            {isReviewMode && reviewSnapshot?.status === "failed" && (
-              <p className="shrink-0 border-b border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[11px] text-red-600 dark:text-red-300">
-                {reviewSnapshot.error?.message ?? "Review generation failed."}
-              </p>
-            )}
             {isSelectedPatchTruncated && (
               <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
-                {isReviewMode
-                  ? "This review was generated from truncated diff content. Findings may be incomplete."
-                  : "This diff was truncated because it exceeded the preview limit. The changes shown are incomplete."}
+                This diff was truncated because it exceeded the preview limit. The changes shown are
+                incomplete.
               </p>
             )}
-            {isReviewMode && reviewSnapshot?.summary.trim() ? (
-              <div className="shrink-0 border-b border-border/70 bg-background px-3 py-2 text-xs text-foreground">
-                {reviewSnapshot.summary}
-              </div>
+            {interactiveReviewTour && activeTourStep ? (
+              <InteractiveReviewTourPanel
+                tour={interactiveReviewTour}
+                activeStep={activeTourStep}
+                activeStepIndex={tourSteps.findIndex((step) => step.id === activeTourStep.id)}
+                onSelectStep={setActiveTourStepId}
+                onSelectFile={scrollToDiffFilePath}
+                onAskStep={onAskInteractiveReviewStep}
+                collapsed={isTourPanelCollapsed}
+                onCollapsedChange={setTourPanelCollapsed}
+              />
             ) : null}
             {selectedPatchError && !renderablePatch && (
               <div className="px-3">
@@ -1072,13 +973,11 @@ export default function DiffPanel({
               isLoadingSelectedPatch ? (
                 <DiffPanelLoadingState
                   label={
-                    isReviewMode
-                      ? "Loading review snapshot..."
-                      : selectedTurn
-                        ? "Loading checkpoint diff..."
-                        : selectedGitScope === "unstaged"
-                          ? "Loading working tree diff..."
-                          : "Loading branch diff..."
+                    selectedTurn
+                      ? "Loading checkpoint diff..."
+                      : selectedGitScope === "unstaged"
+                        ? "Loading working tree diff..."
+                        : "Loading branch diff..."
                   }
                 />
               ) : (
@@ -1197,6 +1096,237 @@ export default function DiffPanel({
         </>
       )}
     </DiffPanelShell>
+  );
+}
+
+function InteractiveReviewTourPanel({
+  tour,
+  activeStep,
+  activeStepIndex,
+  onSelectStep,
+  onSelectFile,
+  onAskStep,
+  collapsed,
+  onCollapsedChange,
+}: {
+  tour: InteractiveReviewTour;
+  activeStep: InteractiveReviewTourStep;
+  activeStepIndex: number;
+  onSelectStep: (stepId: string) => void;
+  onSelectFile: (filePath: string) => void;
+  onAskStep: ((step: InteractiveReviewTourStep) => void) | undefined;
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+}) {
+  const safeStepIndex = Math.max(0, activeStepIndex);
+  const previousStep = tour.steps[safeStepIndex - 1] ?? null;
+  const nextStep = tour.steps[safeStepIndex + 1] ?? null;
+
+  return (
+    <div className="shrink-0 border-b border-border bg-background">
+      <div className="flex min-w-0 items-start gap-3 px-3 py-3">
+        <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/45 text-muted-foreground">
+          <BookOpenTextIcon className="size-3.5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="min-w-0 space-y-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                Step {safeStepIndex + 1} of {tour.steps.length}
+              </span>
+              <span className="text-[10px] text-muted-foreground/70">•</span>
+              <span className="rounded-sm border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
+                {activeStep.kind}
+              </span>
+              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                {tour.title}
+              </span>
+            </div>
+            <h3
+              className="truncate text-sm leading-5 font-semibold text-foreground"
+              title={activeStep.title}
+            >
+              {activeStep.title}
+            </h3>
+          </div>
+          <div
+            aria-hidden={collapsed}
+            className={cn(
+              "grid min-w-0 overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-200 ease-out motion-reduce:transition-none",
+              collapsed ? "mt-0 grid-rows-[0fr] opacity-0" : "mt-2 grid-rows-[1fr] opacity-100",
+            )}
+          >
+            <div className={cn("min-h-0 overflow-hidden", collapsed && "pointer-events-none")}>
+              <div className="interactive-review-tour-body grid min-w-0 gap-3">
+                <div className="min-w-0 space-y-1.5">
+                  <p className="text-sm leading-relaxed text-foreground/85">{activeStep.body}</p>
+                  {activeStep.whyThisMatters ? (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      <span className="font-medium text-foreground/80">Why it matters: </span>
+                      {activeStep.whyThisMatters}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="min-w-0 space-y-2 text-xs">
+                  {activeStep.files.length > 0 ? (
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                        Step files
+                      </p>
+                      <div className="flex min-w-0 flex-wrap gap-1">
+                        {activeStep.files.map((filePath) => (
+                          <button
+                            key={filePath}
+                            type="button"
+                            className="max-w-full truncate rounded-sm border border-border/70 bg-muted/35 px-1.5 py-0.5 font-mono text-[11px] text-foreground/85 hover:bg-muted"
+                            tabIndex={collapsed ? -1 : undefined}
+                            onClick={() => onSelectFile(filePath)}
+                          >
+                            {filePath}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {activeStep.anchors.length > 0 ? (
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                        Code notes
+                      </p>
+                      <div className="space-y-1">
+                        {activeStep.anchors.map((anchor) => {
+                          const range = formatTourAnchorRange(anchor);
+                          return (
+                            <button
+                              key={`${anchor.filePath}:${range}:${anchor.note ?? ""}`}
+                              type="button"
+                              className="block w-full rounded-sm border border-border/70 bg-muted/20 px-2 py-1 text-left hover:bg-muted/45"
+                              tabIndex={collapsed ? -1 : undefined}
+                              onClick={() => onSelectFile(anchor.filePath)}
+                            >
+                              <span className="block truncate font-mono text-[11px] text-foreground/85">
+                                {anchor.filePath}
+                                {range ? ` ${range}` : ""}
+                              </span>
+                              {anchor.note ? (
+                                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                                  {anchor.note}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              {activeStep.questions.length > 0 || activeStep.alternatives.length > 0 ? (
+                <div className="interactive-review-tour-discussion grid gap-2 border-t border-border/60 pt-2 text-xs">
+                  {activeStep.questions.length > 0 ? (
+                    <div>
+                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                        Questions
+                      </p>
+                      <ul className="space-y-1 text-muted-foreground">
+                        {activeStep.questions.map((question) => (
+                          <li key={question}>{question}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {activeStep.alternatives.length > 0 ? (
+                    <div>
+                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                        Alternatives
+                      </p>
+                      <ul className="space-y-1 text-muted-foreground">
+                        {activeStep.alternatives.map((alternative) => (
+                          <li key={alternative}>{alternative}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-expanded={!collapsed}
+                  aria-label={collapsed ? "Expand walkthrough" : "Collapse walkthrough"}
+                  onClick={() => onCollapsedChange(!collapsed)}
+                >
+                  <ChevronDownIcon
+                    className={cn("size-3.5 transition-transform", collapsed && "-rotate-90")}
+                  />
+                </button>
+              }
+            />
+            <TooltipPopup>{collapsed ? "Expand walkthrough" : "Collapse walkthrough"}</TooltipPopup>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!previousStep}
+                  aria-label="Previous tour step"
+                  onClick={() => {
+                    if (previousStep) onSelectStep(previousStep.id);
+                  }}
+                >
+                  <ChevronRightIcon className="size-3.5 rotate-180" />
+                </button>
+              }
+            />
+            <TooltipPopup>Previous step</TooltipPopup>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!nextStep}
+                  aria-label="Next tour step"
+                  onClick={() => {
+                    if (nextStep) onSelectStep(nextStep.id);
+                  }}
+                >
+                  <ChevronRightIcon className="size-3.5" />
+                </button>
+              }
+            />
+            <TooltipPopup>Next step</TooltipPopup>
+          </Tooltip>
+          {onAskStep ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-muted"
+                    onClick={() => onAskStep(activeStep)}
+                  >
+                    <MessageSquareIcon className="size-3.5" />
+                    <span>Ask</span>
+                  </button>
+                }
+              />
+              <TooltipPopup>Ask about this step in chat</TooltipPopup>
+            </Tooltip>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 

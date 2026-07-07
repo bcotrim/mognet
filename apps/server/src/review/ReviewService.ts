@@ -396,10 +396,29 @@ export const make = Effect.gen(function* () {
       return;
     }
 
+    const registeredProject = yield* projectionSnapshotQuery
+      .getActiveProjectByWorkspaceRoot(cwd)
+      .pipe(
+        Effect.map(Option.isSome),
+        Effect.mapError(
+          (cause) =>
+            new VcsRepositoryDetectionError({
+              operation: "ReviewService.getDiffPreview",
+              cwd,
+              detail: "Failed to verify whether diff preview cwd belongs to a registered project.",
+              cause,
+            }),
+        ),
+      );
+    if (registeredProject) {
+      return;
+    }
+
     return yield* new VcsRepositoryDetectionError({
       operation: "ReviewService.getDiffPreview",
       cwd,
-      detail: "Review diff preview cwd must stay within the configured workspace root.",
+      detail:
+        "Review diff preview cwd must stay within the configured workspace root or a registered project.",
     });
   });
 
