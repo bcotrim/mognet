@@ -344,6 +344,11 @@ describe("parseStandaloneComposerSlashCommand", () => {
     expect(parseStandaloneComposerSlashCommand("/default")).toBe("default");
   });
 
+  it("parses standalone interactive review aliases", () => {
+    expect(parseStandaloneComposerSlashCommand("/interactive-review")).toBe("interactive-review");
+    expect(parseStandaloneComposerSlashCommand("/tour")).toBe("interactive-review");
+  });
+
   it("ignores slash commands with extra message text", () => {
     expect(parseStandaloneComposerSlashCommand("/plan explain this")).toBeNull();
   });

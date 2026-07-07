@@ -95,6 +95,10 @@ import {
   extractTrailingPreviewAnnotation,
   type ParsedPreviewAnnotation,
 } from "~/lib/previewAnnotation";
+import {
+  stripInteractiveReviewTourArtifact,
+  stripInteractiveReviewTourPrompt,
+} from "~/lib/interactiveReviewTour";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
@@ -829,7 +833,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
-  const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
+  const displayedUserMessage = deriveDisplayedUserMessageState(
+    stripInteractiveReviewTourPrompt(row.message.text),
+  );
   const terminalContexts = displayedUserMessage.contexts;
   const previewAnnotations: ParsedPreviewAnnotation[] = [];
   let visibleText = displayedUserMessage.visibleText;
@@ -977,7 +983,9 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  const strippedMessageText = stripInteractiveReviewTourArtifact(row.message.text ?? "");
+  const messageText =
+    strippedMessageText || (row.message.streaming ? "" : "Interactive review tour captured.");
 
   return (
     <div className="relative min-w-0 px-1 py-0.5">
@@ -1023,7 +1031,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
 
 function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const assistantCopyState = resolveAssistantMessageCopyState({
-    text: row.message.text ?? null,
+    text: stripInteractiveReviewTourArtifact(row.message.text ?? "") || null,
     showCopyButton: row.showAssistantCopyButton,
     streaming: row.assistantCopyStreaming,
   });

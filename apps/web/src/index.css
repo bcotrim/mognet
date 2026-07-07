@@ -815,6 +815,21 @@ label:has(> select#reasoning-effort) select {
   }
 }
 
+.interactive-review-tour-body,
+.interactive-review-tour-discussion {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 54rem) {
+  .interactive-review-tour-body {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.55fr);
+  }
+
+  .interactive-review-tour-discussion {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .diff-render-file,
 .diff-render-surface > diffs-container {
   border: 1px solid var(--border);

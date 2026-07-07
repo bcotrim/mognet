@@ -65,7 +65,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
-import { useDiffPanelStore } from "../diffPanelStore";
+import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
 import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
@@ -178,6 +178,13 @@ import {
 import { appendPreviewAnnotationPrompt } from "../lib/previewAnnotation";
 import { appendReviewCommentsToPrompt, type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
+import {
+  buildInteractiveReviewTourPrompt,
+  extractInteractiveReviewTourFromText,
+  isInteractiveReviewRequest,
+  type InteractiveReviewTour,
+  type InteractiveReviewTourStep,
+} from "../lib/interactiveReviewTour";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
@@ -278,6 +285,46 @@ const TYPE_TO_FOCUS_INTERACTIVE_SELECTOR = [
   '[role="switch"]',
   '[role="tab"]',
 ].join(",");
+
+function formatInteractiveReviewDiffScope(
+  selection: ReturnType<typeof selectThreadDiffPanelSelection>,
+): string {
+  switch (selection.kind) {
+    case "turn":
+      return "Selected turn diff";
+    case "unstaged":
+      return "Dirty worktree";
+    case "branch":
+      return selection.baseRef ? `Branch changes against ${selection.baseRef}` : "Branch changes";
+  }
+}
+
+function buildInteractiveReviewStepFollowUpPrompt(step: InteractiveReviewTourStep): string {
+  const files = step.files.length > 0 ? `\nFiles: ${step.files.join(", ")}` : "";
+  const anchors =
+    step.anchors.length > 0
+      ? `\nAnchors:\n${step.anchors
+          .map((anchor) => {
+            const range = anchor.rangeLabel
+              ? ` ${anchor.rangeLabel}`
+              : anchor.startLine
+                ? ` ${anchor.startLine}${anchor.endLine ? `-${anchor.endLine}` : ""}`
+                : "";
+            return `- ${anchor.filePath}${range}${anchor.note ? `: ${anchor.note}` : ""}`;
+          })
+          .join("\n")}`
+      : "";
+  return [
+    "Can we discuss this interactive review step?",
+    "",
+    `Step: ${step.title}`,
+    `Why it matters: ${step.whyThisMatters || step.body}`,
+    files,
+    anchors,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 const TYPE_TO_FOCUS_FLOATING_LAYER_SELECTOR = [
   '[data-slot="dialog"]',
   '[data-slot="menu-popup"]',
@@ -860,6 +907,13 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const diffSelection = useDiffPanelStore((state) =>
+    selectThreadDiffPanelSelection(state.byThreadKey, activeThreadRef),
+  );
+  const interactiveReviewDiffScopeLabel = useMemo(
+    () => formatInteractiveReviewDiffScope(diffSelection),
+    [diffSelection],
+  );
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
     readonly messageId: MessageId | null;
@@ -1498,6 +1552,15 @@ function ChatViewContent(props: ChatViewProps) {
       };
     });
   }, [serverAttachmentUrlById, serverMessages]);
+  const latestInteractiveReviewTour = useMemo<InteractiveReviewTour | null>(() => {
+    for (let index = displayServerMessages.length - 1; index >= 0; index -= 1) {
+      const message = displayServerMessages[index];
+      if (!message || message.role !== "assistant" || message.streaming) continue;
+      const tour = extractInteractiveReviewTourFromText(message.text, message.id);
+      if (tour) return tour;
+    }
+    return null;
+  }, [displayServerMessages]);
   useEffect(() => {
     if (typeof Image === "undefined" || displayServerMessages.length === 0) {
       return;
@@ -1771,6 +1834,20 @@ function ChatViewContent(props: ChatViewProps) {
       useRightPanelStore.getState().toggle(activeThreadRef, "diff");
     }
   }, [activeThreadRef, diffOpen, isServerThread, onDiffPanelOpen]);
+
+  const onAskInteractiveReviewStep = useCallback(
+    (step: InteractiveReviewTourStep) => {
+      const prompt = buildInteractiveReviewStepFollowUpPrompt(step);
+      promptRef.current = prompt;
+      setComposerDraftPrompt(composerDraftTarget, prompt);
+      composerRef.current?.resetCursorState({
+        prompt,
+        cursor: collapseExpandedComposerCursor(prompt, prompt.length),
+        detectTrigger: false,
+      });
+    },
+    [composerDraftTarget, composerRef, setComposerDraftPrompt],
+  );
 
   const envLocked = Boolean(
     activeThread &&
@@ -3331,7 +3408,8 @@ function ChatViewContent(props: ChatViewProps) {
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
-    const promptForSend = promptRef.current;
+    let promptForSend = promptRef.current;
+    const promptForRetry = promptForSend;
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -3368,12 +3446,41 @@ function ChatViewContent(props: ChatViewProps) {
       composerReviewComments.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
-    if (standaloneSlashCommand) {
+    const wantsInteractiveReview =
+      standaloneSlashCommand === "interactive-review" || isInteractiveReviewRequest(trimmed);
+    if (standaloneSlashCommand && standaloneSlashCommand !== "interactive-review") {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget);
       composerRef.current?.resetCursorState();
       return;
+    }
+    if (wantsInteractiveReview) {
+      if (!hasWorkspaceProject || !activeProject) {
+        setThreadError(activeThread.id, "Interactive reviews need a workspace project.");
+        return;
+      }
+      if (!isGitRepo) {
+        setThreadError(activeThread.id, "Interactive reviews need a Git repository.");
+        return;
+      }
+      const normalizedInteractiveReviewCommand = trimmed.toLowerCase();
+      promptForSend = buildInteractiveReviewTourPrompt({
+        userRequest:
+          normalizedInteractiveReviewCommand === "/interactive-review" ||
+          normalizedInteractiveReviewCommand === "/tour"
+            ? ""
+            : trimmed,
+        projectTitle: activeProject.title,
+        workspaceRoot: activeProject.workspaceRoot,
+        worktreePath: activeThread.worktreePath ?? null,
+        branch: activeThread.branch ?? null,
+        diffScopeLabel: interactiveReviewDiffScopeLabel,
+      });
+      if (activeThreadRef) {
+        useRightPanelStore.getState().open(activeThreadRef, "diff");
+        onDiffPanelOpen?.();
+      }
     }
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
@@ -3644,20 +3751,20 @@ function ChatViewContent(props: ChatViewProps) {
           const next = existing.filter((message) => message.id !== messageIdForSend);
           return next.length === existing.length ? existing : next;
         });
-        promptRef.current = promptForSend;
+        promptRef.current = promptForRetry;
         const retryComposerImages = composerImagesSnapshot.map(cloneComposerImageForRetry);
         composerImagesRef.current = retryComposerImages;
         composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
         composerElementContextsRef.current = composerElementContextsSnapshot;
-        setComposerDraftPrompt(composerDraftTarget, promptForSend);
+        setComposerDraftPrompt(composerDraftTarget, promptForRetry);
         addComposerDraftImages(composerDraftTarget, retryComposerImages);
         setComposerDraftTerminalContexts(composerDraftTarget, composerTerminalContextsSnapshot);
         setComposerDraftElementContexts(composerDraftTarget, composerElementContextsSnapshot);
         setComposerDraftPreviewAnnotations(composerDraftTarget, composerPreviewAnnotationsSnapshot);
         setComposerDraftReviewComments(composerDraftTarget, composerReviewCommentsSnapshot);
         composerRef.current?.resetCursorState({
-          cursor: collapseExpandedComposerCursor(promptForSend, promptForSend.length),
-          prompt: promptForSend,
+          cursor: collapseExpandedComposerCursor(promptForRetry, promptForRetry.length),
+          prompt: promptForRetry,
           detectTrigger: true,
         });
       }
@@ -4408,9 +4515,8 @@ function ChatViewContent(props: ChatViewProps) {
         <DiffPanel
           mode="embedded"
           composerDraftTarget={composerDraftTarget}
-          reviewId={
-            activeRightPanelSurface.mode === "review" ? activeRightPanelSurface.reviewId : undefined
-          }
+          interactiveReviewTour={latestInteractiveReviewTour}
+          onAskInteractiveReviewStep={onAskInteractiveReviewStep}
         />
       </Suspense>
     ) : activeRightPanelSurface?.kind === "plan" ? (

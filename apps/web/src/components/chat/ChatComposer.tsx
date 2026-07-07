@@ -971,6 +971,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           label: "/default",
           description: "Switch this thread back to normal build mode",
         },
+        {
+          id: "slash:interactive-review",
+          type: "slash-command",
+          command: "interactive-review",
+          label: "/interactive-review",
+          description: "Ask the agent for an interactive tour of the current diff",
+        },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
         (command) => ({
@@ -1581,6 +1588,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           if (applied) {
             setComposerHighlightedItemId(null);
             setIsComposerModelPickerOpen(true);
+          }
+          return;
+        }
+        if (item.command === "interactive-review") {
+          const replacement = "/interactive-review";
+          const applied = applyPromptReplacement(
+            trigger.rangeStart,
+            trigger.rangeEnd,
+            replacement,
+            {
+              expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
+            },
+          );
+          if (applied) {
+            setComposerHighlightedItemId(null);
           }
           return;
         }

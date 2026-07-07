@@ -7,7 +7,14 @@ import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Stream from "effect/Stream";
 
-import { DEFAULT_SERVER_SETTINGS, ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  DEFAULT_PROJECT_THREAD_ENV_MODE,
+  DEFAULT_SERVER_SETTINGS,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as CheckpointDiffQuery from "../checkpointing/CheckpointDiffQuery.ts";
 import { ServerConfig } from "../config.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -22,6 +29,7 @@ function makeLayer(input: {
   readonly workspaceRoot: string;
   readonly baseDir: string;
   readonly detectCalls?: Array<{ readonly cwd: string }>;
+  readonly registeredProjectRoots?: ReadonlySet<string>;
 }) {
   return ReviewService.layer.pipe(
     Layer.provide(
@@ -40,7 +48,26 @@ function makeLayer(input: {
       Layer.succeed(
         ProjectionSnapshotQuery.ProjectionSnapshotQuery,
         ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
-          getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+          getActiveProjectByWorkspaceRoot: (workspaceRoot: string) =>
+            input.registeredProjectRoots?.has(workspaceRoot)
+              ? Effect.succeed(
+                  Option.some({
+                    id: ProjectId.make("project-review-test"),
+                    kind: "workspace" as const,
+                    title: "Review Test",
+                    workspaceRoot,
+                    repositoryIdentity: null,
+                    defaultModelSelection: null,
+                    defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+                    newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+                    textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+                    scripts: [],
+                    createdAt: "2026-01-01T00:00:00.000Z",
+                    updatedAt: "2026-01-01T00:00:00.000Z",
+                    deletedAt: null,
+                  }),
+                )
+              : Effect.succeed(Option.none()),
         } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
       ),
     ),
@@ -123,6 +150,34 @@ describe("ReviewService", () => {
         /must stay within the configured workspace root/,
       );
       assert.deepStrictEqual(detectCalls, []);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("allows diff preview cwd for a registered project outside configured roots", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
+      const registeredRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-registered-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
+      const detectCalls: Array<{ readonly cwd: string }> = [];
+
+      const result = yield* Effect.gen(function* () {
+        const review = yield* ReviewService.ReviewService;
+        return yield* review.getDiffPreview({ cwd: registeredRoot });
+      }).pipe(
+        Effect.provide(
+          makeLayer({
+            workspaceRoot,
+            baseDir,
+            detectCalls,
+            registeredProjectRoots: new Set([registeredRoot]),
+          }),
+        ),
+      );
+
+      assert.strictEqual(result.cwd, registeredRoot);
+      assert.deepStrictEqual(result.sources, []);
+      assert.deepStrictEqual(detectCalls, [{ cwd: registeredRoot }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
