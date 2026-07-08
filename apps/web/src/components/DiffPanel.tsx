@@ -7,14 +7,13 @@ import {
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import type {
   ReviewDiffPreviewResult,
-  ReviewDiffPreviewSource,
   ReviewFileContext,
   ReviewFinding,
   ScopedThreadRef,
   TurnId,
 } from "@t3tools/contracts";
 import { REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES } from "@t3tools/contracts";
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata, SelectedLineRange, SelectionSide } from "@pierre/diffs";
 import {
   ArrowRightIcon,
   BookOpenTextIcon,
@@ -22,7 +21,6 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
-  CopyIcon,
   FolderClosedIcon,
   FolderIcon,
   MessageSquareIcon,
@@ -85,7 +83,6 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { Dialog, DialogDescription, DialogHeader, DialogPopup, DialogTitle } from "./ui/dialog";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
@@ -122,6 +119,24 @@ function formatTourAnchorRange(anchor: InteractiveReviewTourAnchor): string {
   return anchor.endLine && anchor.endLine !== anchor.startLine
     ? `${anchor.startLine}-${anchor.endLine}`
     : `${anchor.startLine}`;
+}
+
+function isLineInDiffSide(
+  fileDiff: FileDiffMetadata,
+  lineNumber: number,
+  side: SelectionSide,
+): boolean {
+  return fileDiff.hunks.some((hunk) => {
+    const start = side === "additions" ? hunk.additionStart : hunk.deletionStart;
+    const count = side === "additions" ? hunk.additionCount : hunk.deletionCount;
+    return count > 0 && lineNumber >= start && lineNumber < start + count;
+  });
+}
+
+function resolveTourAnchorSide(fileDiff: FileDiffMetadata, lineNumber: number): SelectionSide {
+  if (isLineInDiffSide(fileDiff, lineNumber, "additions")) return "additions";
+  if (isLineInDiffSide(fileDiff, lineNumber, "deletions")) return "deletions";
+  return "additions";
 }
 
 function sameReviewDiffPreviewContent(
@@ -271,7 +286,6 @@ export default function DiffPanel({
   const [navigatedFileKey, setNavigatedFileKey] = useState<string | null>(null);
   const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null);
   const [isTourPanelCollapsed, setTourPanelCollapsed] = useState(false);
-  const [fullDiffDialogOpen, setFullDiffDialogOpen] = useState(false);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
 
   const routeThreadRef = useParams({
@@ -413,6 +427,7 @@ export default function DiffPanel({
             cwd: activeCwd,
             ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
             ignoreWhitespace: diffIgnoreWhitespace,
+            maxOutputBytes: REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES,
           },
         })
       : null,
@@ -425,6 +440,7 @@ export default function DiffPanel({
           activeCwd,
           selectedBaseRef ?? "",
           diffIgnoreWhitespace ? "ignore-whitespace" : "include-whitespace",
+          REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES,
         ].join("\u0000")
       : null;
   const [stableBranchDiffPreview, setStableBranchDiffPreview] = useState<{
@@ -457,22 +473,6 @@ export default function DiffPanel({
   const selectedGitSourceKind =
     selectedGitScope === "unstaged" ? ("working-tree" as const) : ("branch-range" as const);
   const selectedGitSource = branchDiffPreviewData?.sources.find(
-    (source) => source.kind === selectedGitSourceKind,
-  );
-  const fullDiffPreview = useEnvironmentQuery(
-    fullDiffDialogOpen && selectedTurnId === null && activeThread && activeCwd
-      ? reviewEnvironment.diffPreview({
-          environmentId: activeThread.environmentId,
-          input: {
-            cwd: activeCwd,
-            ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
-            ignoreWhitespace: diffIgnoreWhitespace,
-            maxOutputBytes: REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES,
-          },
-        })
-      : null,
-  );
-  const fullDiffSource = fullDiffPreview.data?.sources.find(
     (source) => source.kind === selectedGitSourceKind,
   );
   const tourFallbackGitSource = interactiveReviewTour
@@ -608,7 +608,7 @@ export default function DiffPanel({
     }
     const filePathSet = new Set(activeTourStepFilePaths);
     const scopedFiles = allCodeViewFiles.filter((file) => filePathSet.has(file.filePath));
-    if (scopedFiles.length === 0) return allCodeViewFiles;
+    if (scopedFiles.length !== filePathSet.size) return allCodeViewFiles;
     const order = new Map(activeTourStepFilePaths.map((filePath, index) => [filePath, index]));
     return scopedFiles
       .toSorted(
@@ -634,10 +634,6 @@ export default function DiffPanel({
   }, [collapseScopeKey]);
 
   useEffect(() => {
-    setFullDiffDialogOpen(false);
-  }, [collapseScopeKey, diffIgnoreWhitespace, selectedBaseRef, selectedGitScope, selectedTurnId]);
-
-  useEffect(() => {
     if (!selectedFilePath) return;
     const file = codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath);
     if (!file) return;
@@ -657,6 +653,52 @@ export default function DiffPanel({
       if (file) scrollToDiffFile(file.fileKey);
     },
     [allCodeViewFiles, codeViewFiles, scrollToDiffFile],
+  );
+  const scrollToDiffAnchor = useCallback(
+    (anchor: InteractiveReviewTourAnchor) => {
+      const file =
+        codeViewFiles.find((candidate) => candidate.filePath === anchor.filePath) ??
+        allCodeViewFiles.find((candidate) => candidate.filePath === anchor.filePath);
+      if (!file) return;
+
+      setNavigatedFileKey(file.fileKey);
+      if (anchor.startLine === null) {
+        codeViewRef.current?.scrollTo({ type: "item", id: file.fileKey, align: "start" });
+        return;
+      }
+
+      const anchorEndLine = anchor.endLine ?? anchor.startLine;
+      const startLine = Math.min(anchor.startLine, anchorEndLine);
+      const endLine = Math.max(anchor.startLine, anchorEndLine);
+      const range: SelectedLineRange | null =
+        endLine !== startLine
+          ? {
+              start: startLine,
+              side: resolveTourAnchorSide(file.fileDiff, startLine),
+              end: endLine,
+              endSide: resolveTourAnchorSide(file.fileDiff, endLine),
+            }
+          : null;
+      codeViewRef.current?.scrollTo(
+        range
+          ? {
+              type: "range",
+              id: file.fileKey,
+              range,
+              align: "center",
+              behavior: "smooth-auto",
+            }
+          : {
+              type: "line",
+              id: file.fileKey,
+              lineNumber: startLine,
+              side: resolveTourAnchorSide(file.fileDiff, startLine),
+              align: "center",
+              behavior: "smooth-auto",
+            },
+      );
+    },
+    [allCodeViewFiles, codeViewFiles],
   );
 
   const openDiffFile = useCallback(
@@ -976,19 +1018,8 @@ export default function DiffPanel({
             {isSelectedPatchTruncated && (
               <div className="flex shrink-0 items-center gap-3 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
                 <p className="min-w-0 flex-1">
-                  This diff was truncated because it exceeded the preview limit. The changes shown
-                  are incomplete.
+                  This diff exceeds the render limit. The changes shown are incomplete.
                 </p>
-                {selectedTurnId === null ? (
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    className="h-6 px-2 text-[11px]"
-                    onClick={() => setFullDiffDialogOpen(true)}
-                  >
-                    View full diff
-                  </Button>
-                ) : null}
               </div>
             )}
             {interactiveReviewTour && activeTourStep ? (
@@ -998,6 +1029,7 @@ export default function DiffPanel({
                 activeStepIndex={tourSteps.findIndex((step) => step.id === activeTourStep.id)}
                 onSelectStep={setActiveTourStepId}
                 onSelectFile={scrollToDiffFilePath}
+                onSelectAnchor={scrollToDiffAnchor}
                 onAskStep={onAskInteractiveReviewStep}
                 collapsed={isTourPanelCollapsed}
                 onCollapsedChange={setTourPanelCollapsed}
@@ -1132,110 +1164,9 @@ export default function DiffPanel({
               </div>
             )}
           </div>
-          <FullDiffDialog
-            open={fullDiffDialogOpen}
-            title={selectedScopeLabel}
-            source={fullDiffSource ?? null}
-            fallbackSource={selectedGitSource ?? null}
-            isLoading={fullDiffPreview.isPending}
-            error={fullDiffPreview.error}
-            onOpenChange={setFullDiffDialogOpen}
-          />
         </>
       )}
     </DiffPanelShell>
-  );
-}
-
-function formatByteCount(value: number): string {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function FullDiffDialog({
-  open,
-  title,
-  source,
-  fallbackSource,
-  isLoading,
-  error,
-  onOpenChange,
-}: {
-  open: boolean;
-  title: string;
-  source: ReviewDiffPreviewSource | null;
-  fallbackSource: ReviewDiffPreviewSource | null;
-  isLoading: boolean;
-  error: unknown;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const activeSource = source ?? fallbackSource;
-  const diff = activeSource?.diff ?? "";
-  const byteCount = useMemo(() => new TextEncoder().encode(diff).byteLength, [diff]);
-
-  useEffect(() => {
-    setCopied(false);
-  }, [diff, open]);
-
-  const copyDiff = useCallback(() => {
-    if (!diff || typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
-    void navigator.clipboard.writeText(diff).then(() => setCopied(true));
-  }, [diff]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="h-[min(85vh,900px)] max-w-5xl overflow-hidden">
-        <DialogHeader className="border-b border-border/70 bg-background px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3 pr-8">
-            <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate text-base leading-5">Full diff</DialogTitle>
-              <DialogDescription className="mt-1 truncate text-xs">
-                {title}
-                {activeSource ? ` · ${activeSource.title}` : ""}
-                {byteCount > 0 ? ` · ${formatByteCount(byteCount)}` : ""}
-              </DialogDescription>
-            </div>
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={!diff}
-              onClick={copyDiff}
-              className="shrink-0"
-            >
-              {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-        </DialogHeader>
-        {activeSource?.truncated ? (
-          <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/8 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
-            This diff still exceeds the {formatByteCount(REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES)}
-            full-diff limit. The visible text is incomplete.
-          </div>
-        ) : null}
-        <div className="min-h-0 flex-1 overflow-auto bg-background">
-          {isLoading && !source ? (
-            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-              Loading full diff...
-            </div>
-          ) : error && !source ? (
-            <div className="flex h-full items-center justify-center px-6 text-center text-xs text-destructive">
-              {error instanceof Error ? error.message : "Unable to load full diff."}
-            </div>
-          ) : diff.trim().length === 0 ? (
-            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-              No diff available.
-            </div>
-          ) : (
-            <pre className="min-h-full overflow-visible p-4 font-mono text-[11px] leading-relaxed whitespace-pre text-foreground">
-              {diff}
-            </pre>
-          )}
-        </div>
-      </DialogPopup>
-    </Dialog>
   );
 }
 
@@ -1245,6 +1176,7 @@ function InteractiveReviewTourPanel({
   activeStepIndex,
   onSelectStep,
   onSelectFile,
+  onSelectAnchor,
   onAskStep,
   collapsed,
   onCollapsedChange,
@@ -1254,6 +1186,7 @@ function InteractiveReviewTourPanel({
   activeStepIndex: number;
   onSelectStep: (stepId: string) => void;
   onSelectFile: (filePath: string) => void;
+  onSelectAnchor: (anchor: InteractiveReviewTourAnchor) => void;
   onAskStep: ((step: InteractiveReviewTourStep, text: string) => void) | undefined;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -1357,7 +1290,7 @@ function InteractiveReviewTourPanel({
                               type="button"
                               className="block w-full rounded-sm border border-border/70 bg-muted/20 px-2 py-1 text-left hover:bg-muted/45"
                               tabIndex={collapsed ? -1 : undefined}
-                              onClick={() => onSelectFile(anchor.filePath)}
+                              onClick={() => onSelectAnchor(anchor)}
                             >
                               <span className="block truncate font-mono text-[11px] text-foreground/85">
                                 {anchor.filePath}
