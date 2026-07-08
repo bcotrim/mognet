@@ -27,6 +27,14 @@ export interface ReviewCommentContext {
   readonly fenceLanguage?: string | undefined;
 }
 
+export function isQuotedReviewComment(comment: ReviewCommentContext): boolean {
+  return (
+    comment.sectionId.startsWith("assistant:") ||
+    comment.sectionId.startsWith("plan:") ||
+    comment.sectionId.startsWith("review-step:")
+  );
+}
+
 interface DiffReviewLine {
   readonly change: "context" | "add" | "delete";
   readonly oldLineNumber: number | null;

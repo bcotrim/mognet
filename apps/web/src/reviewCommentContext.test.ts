@@ -9,6 +9,7 @@ import {
   buildReviewCommentRenderablePatch,
   formatReviewCommentContext,
   inferReviewCommentFenceLanguage,
+  isQuotedReviewComment,
   parseReviewCommentMessageSegments,
   restoreDiffReviewCommentRange,
 } from "./reviewCommentContext";
@@ -141,6 +142,29 @@ describe("review comment context parsing", () => {
       }),
     );
     expect(prompt).toContain("```md\nWe should keep this path reliable.\n```");
+  });
+
+  it("treats review-step comments as quoted review comments", () => {
+    const comment = buildQuotedReviewComment({
+      id: "review-step-1",
+      sourceId: "review-step:step-a",
+      sourceTitle: "Review step",
+      sourceLabel: "Dependency order",
+      quote: "Read the site list before the session frame.",
+      text: "Can we validate this against the backend constraint?",
+      rangeLabel: "Step",
+    });
+
+    expect(isQuotedReviewComment(comment)).toBe(true);
+    expect(comment).toEqual(
+      expect.objectContaining({
+        sectionId: "review-step:step-a",
+        sectionTitle: "Review step",
+        filePath: "Dependency order",
+        rangeLabel: "Step",
+        fenceLanguage: "md",
+      }),
+    );
   });
 
   it("formats mixed diff-side selections with the mobile review-comment contract", () => {

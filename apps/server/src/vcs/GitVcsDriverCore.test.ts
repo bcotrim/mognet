@@ -243,6 +243,33 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         );
       }),
     );
+
+    it.effect("honors explicit diff preview output limits", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* writeTextFile(
+          cwd,
+          "README.md",
+          Array.from({ length: 80 }, (_, index) => `line ${index}`).join("\n"),
+        );
+
+        const truncated = yield* driver.getReviewDiffPreview({ cwd, maxOutputBytes: 160 });
+        const expanded = yield* driver.getReviewDiffPreview({ cwd, maxOutputBytes: 20_000 });
+        const truncatedSource = truncated.sources.find((source) => source.kind === "working-tree");
+        const expandedSource = expanded.sources.find((source) => source.kind === "working-tree");
+
+        assert.strictEqual(truncatedSource?.truncated, true);
+        assert.strictEqual(expandedSource?.truncated, false);
+        assert.include(expandedSource?.diff ?? "", "line 79");
+        assert.notInclude(truncatedSource?.diff ?? "", "line 79");
+        assert.isBelow(
+          truncatedSource?.diff.length ?? 0,
+          expandedSource?.diff.length ?? Number.POSITIVE_INFINITY,
+        );
+      }),
+    );
   });
 
   describe("repository status", () => {

@@ -9,10 +9,15 @@ import {
 import { GitCommandError, TextGenerationError } from "./git.ts";
 import { VcsError } from "./vcs.ts";
 
+export const REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES = 10_000_000;
+
 export const ReviewDiffPreviewInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   baseRef: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  maxOutputBytes: Schema.optionalKey(
+    NonNegativeInt.check(Schema.isLessThanOrEqualTo(REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES)),
+  ),
 });
 export type ReviewDiffPreviewInput = typeof ReviewDiffPreviewInput.Type;
 

@@ -137,7 +137,7 @@ import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings"
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { ChevronDownIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react";
-import { cn, randomHex } from "~/lib/utils";
+import { cn, randomHex, randomUUID } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
@@ -176,7 +176,11 @@ import {
   formatElementContextLabel,
 } from "../lib/elementContext";
 import { appendPreviewAnnotationPrompt } from "../lib/previewAnnotation";
-import { appendReviewCommentsToPrompt, type ReviewCommentContext } from "../reviewCommentContext";
+import {
+  appendReviewCommentsToPrompt,
+  buildQuotedReviewComment,
+  type ReviewCommentContext,
+} from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
 import {
   buildInteractiveReviewTourPrompt,
@@ -299,7 +303,7 @@ function formatInteractiveReviewDiffScope(
   }
 }
 
-function buildInteractiveReviewStepFollowUpPrompt(step: InteractiveReviewTourStep): string {
+function buildInteractiveReviewStepQuote(step: InteractiveReviewTourStep): string {
   const files = step.files.length > 0 ? `\nFiles: ${step.files.join(", ")}` : "";
   const anchors =
     step.anchors.length > 0
@@ -314,13 +318,23 @@ function buildInteractiveReviewStepFollowUpPrompt(step: InteractiveReviewTourSte
           })
           .join("\n")}`
       : "";
+  const questions =
+    step.questions.length > 0
+      ? `\nQuestions:\n${step.questions.map((question) => `- ${question}`).join("\n")}`
+      : "";
+  const alternatives =
+    step.alternatives.length > 0
+      ? `\nAlternatives:\n${step.alternatives.map((alternative) => `- ${alternative}`).join("\n")}`
+      : "";
   return [
-    "Can we discuss this interactive review step?",
-    "",
     `Step: ${step.title}`,
-    `Why it matters: ${step.whyThisMatters || step.body}`,
+    "",
+    step.body,
+    step.whyThisMatters ? `Why it matters: ${step.whyThisMatters}` : "",
     files,
     anchors,
+    questions,
+    alternatives,
   ]
     .filter(Boolean)
     .join("\n");
@@ -1835,18 +1849,23 @@ function ChatViewContent(props: ChatViewProps) {
     }
   }, [activeThreadRef, diffOpen, isServerThread, onDiffPanelOpen]);
 
+  const addComposerDraftReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const onAskInteractiveReviewStep = useCallback(
-    (step: InteractiveReviewTourStep) => {
-      const prompt = buildInteractiveReviewStepFollowUpPrompt(step);
-      promptRef.current = prompt;
-      setComposerDraftPrompt(composerDraftTarget, prompt);
-      composerRef.current?.resetCursorState({
-        prompt,
-        cursor: collapseExpandedComposerCursor(prompt, prompt.length),
-        detectTrigger: false,
-      });
+    (step: InteractiveReviewTourStep, text: string) => {
+      addComposerDraftReviewComment(
+        composerDraftTarget,
+        buildQuotedReviewComment({
+          id: `review-step:${randomUUID()}`,
+          sourceId: `review-step:${step.id}`,
+          sourceTitle: "Review step",
+          sourceLabel: step.title,
+          quote: buildInteractiveReviewStepQuote(step),
+          text,
+          rangeLabel: "Step",
+        }),
+      );
     },
-    [composerDraftTarget, composerRef, setComposerDraftPrompt],
+    [addComposerDraftReviewComment, composerDraftTarget],
   );
 
   const envLocked = Boolean(

@@ -7,11 +7,13 @@ import {
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import type {
   ReviewDiffPreviewResult,
+  ReviewDiffPreviewSource,
   ReviewFileContext,
   ReviewFinding,
   ScopedThreadRef,
   TurnId,
 } from "@t3tools/contracts";
+import { REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES } from "@t3tools/contracts";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import {
   ArrowRightIcon,
@@ -20,6 +22,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
+  CopyIcon,
   FolderClosedIcon,
   FolderIcon,
   MessageSquareIcon,
@@ -80,6 +83,9 @@ import {
   DropdownMenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
+import { Dialog, DialogDescription, DialogHeader, DialogPopup, DialogTitle } from "./ui/dialog";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
@@ -241,7 +247,7 @@ interface DiffPanelProps {
   mode?: DiffPanelMode;
   composerDraftTarget: ScopedThreadRef | DraftId;
   interactiveReviewTour?: InteractiveReviewTour | null;
-  onAskInteractiveReviewStep?: (step: InteractiveReviewTourStep) => void;
+  onAskInteractiveReviewStep?: (step: InteractiveReviewTourStep, text: string) => void;
 }
 
 export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
@@ -265,6 +271,7 @@ export default function DiffPanel({
   const [navigatedFileKey, setNavigatedFileKey] = useState<string | null>(null);
   const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null);
   const [isTourPanelCollapsed, setTourPanelCollapsed] = useState(false);
+  const [fullDiffDialogOpen, setFullDiffDialogOpen] = useState(false);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
 
   const routeThreadRef = useParams({
@@ -452,6 +459,22 @@ export default function DiffPanel({
   const selectedGitSource = branchDiffPreviewData?.sources.find(
     (source) => source.kind === selectedGitSourceKind,
   );
+  const fullDiffPreview = useEnvironmentQuery(
+    fullDiffDialogOpen && selectedTurnId === null && activeThread && activeCwd
+      ? reviewEnvironment.diffPreview({
+          environmentId: activeThread.environmentId,
+          input: {
+            cwd: activeCwd,
+            ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
+            ignoreWhitespace: diffIgnoreWhitespace,
+            maxOutputBytes: REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES,
+          },
+        })
+      : null,
+  );
+  const fullDiffSource = fullDiffPreview.data?.sources.find(
+    (source) => source.kind === selectedGitSourceKind,
+  );
   const tourFallbackGitSource = interactiveReviewTour
     ? branchDiffPreviewData?.sources.find(
         (source) => source.kind !== selectedGitSourceKind && source.diff.trim().length > 0,
@@ -609,6 +632,10 @@ export default function DiffPanel({
   useEffect(() => {
     setNavigatedFileKey(null);
   }, [collapseScopeKey]);
+
+  useEffect(() => {
+    setFullDiffDialogOpen(false);
+  }, [collapseScopeKey, diffIgnoreWhitespace, selectedBaseRef, selectedGitScope, selectedTurnId]);
 
   useEffect(() => {
     if (!selectedFilePath) return;
@@ -947,10 +974,22 @@ export default function DiffPanel({
         <>
           <div className="diff-panel-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {isSelectedPatchTruncated && (
-              <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
-                This diff was truncated because it exceeded the preview limit. The changes shown are
-                incomplete.
-              </p>
+              <div className="flex shrink-0 items-center gap-3 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+                <p className="min-w-0 flex-1">
+                  This diff was truncated because it exceeded the preview limit. The changes shown
+                  are incomplete.
+                </p>
+                {selectedTurnId === null ? (
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => setFullDiffDialogOpen(true)}
+                  >
+                    View full diff
+                  </Button>
+                ) : null}
+              </div>
             )}
             {interactiveReviewTour && activeTourStep ? (
               <InteractiveReviewTourPanel
@@ -1093,9 +1132,110 @@ export default function DiffPanel({
               </div>
             )}
           </div>
+          <FullDiffDialog
+            open={fullDiffDialogOpen}
+            title={selectedScopeLabel}
+            source={fullDiffSource ?? null}
+            fallbackSource={selectedGitSource ?? null}
+            isLoading={fullDiffPreview.isPending}
+            error={fullDiffPreview.error}
+            onOpenChange={setFullDiffDialogOpen}
+          />
         </>
       )}
     </DiffPanelShell>
+  );
+}
+
+function formatByteCount(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FullDiffDialog({
+  open,
+  title,
+  source,
+  fallbackSource,
+  isLoading,
+  error,
+  onOpenChange,
+}: {
+  open: boolean;
+  title: string;
+  source: ReviewDiffPreviewSource | null;
+  fallbackSource: ReviewDiffPreviewSource | null;
+  isLoading: boolean;
+  error: unknown;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const activeSource = source ?? fallbackSource;
+  const diff = activeSource?.diff ?? "";
+  const byteCount = useMemo(() => new TextEncoder().encode(diff).byteLength, [diff]);
+
+  useEffect(() => {
+    setCopied(false);
+  }, [diff, open]);
+
+  const copyDiff = useCallback(() => {
+    if (!diff || typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
+    void navigator.clipboard.writeText(diff).then(() => setCopied(true));
+  }, [diff]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="h-[min(85vh,900px)] max-w-5xl overflow-hidden">
+        <DialogHeader className="border-b border-border/70 bg-background px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3 pr-8">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-base leading-5">Full diff</DialogTitle>
+              <DialogDescription className="mt-1 truncate text-xs">
+                {title}
+                {activeSource ? ` · ${activeSource.title}` : ""}
+                {byteCount > 0 ? ` · ${formatByteCount(byteCount)}` : ""}
+              </DialogDescription>
+            </div>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={!diff}
+              onClick={copyDiff}
+              className="shrink-0"
+            >
+              {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+        </DialogHeader>
+        {activeSource?.truncated ? (
+          <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/8 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
+            This diff still exceeds the {formatByteCount(REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES)}
+            full-diff limit. The visible text is incomplete.
+          </div>
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-auto bg-background">
+          {isLoading && !source ? (
+            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+              Loading full diff...
+            </div>
+          ) : error && !source ? (
+            <div className="flex h-full items-center justify-center px-6 text-center text-xs text-destructive">
+              {error instanceof Error ? error.message : "Unable to load full diff."}
+            </div>
+          ) : diff.trim().length === 0 ? (
+            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+              No diff available.
+            </div>
+          ) : (
+            <pre className="min-h-full overflow-visible p-4 font-mono text-[11px] leading-relaxed whitespace-pre text-foreground">
+              {diff}
+            </pre>
+          )}
+        </div>
+      </DialogPopup>
+    </Dialog>
   );
 }
 
@@ -1114,13 +1254,28 @@ function InteractiveReviewTourPanel({
   activeStepIndex: number;
   onSelectStep: (stepId: string) => void;
   onSelectFile: (filePath: string) => void;
-  onAskStep: ((step: InteractiveReviewTourStep) => void) | undefined;
+  onAskStep: ((step: InteractiveReviewTourStep, text: string) => void) | undefined;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
 }) {
   const safeStepIndex = Math.max(0, activeStepIndex);
   const previousStep = tour.steps[safeStepIndex - 1] ?? null;
   const nextStep = tour.steps[safeStepIndex + 1] ?? null;
+  const [questionDraft, setQuestionDraft] = useState("");
+  const [questionOpen, setQuestionOpen] = useState(false);
+
+  useEffect(() => {
+    setQuestionDraft("");
+    setQuestionOpen(false);
+  }, [activeStep.id]);
+
+  const submitQuestion = () => {
+    const text = questionDraft.trim();
+    if (!text || !onAskStep) return;
+    onAskStep(activeStep, text);
+    setQuestionDraft("");
+    setQuestionOpen(false);
+  };
 
   return (
     <div className="shrink-0 border-b border-border bg-background">
@@ -1249,6 +1404,48 @@ function InteractiveReviewTourPanel({
                   ) : null}
                 </div>
               ) : null}
+              {questionOpen && onAskStep ? (
+                <div className="mt-3 rounded-md border border-border/70 bg-muted/20 p-2.5">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-medium text-foreground">
+                    <MessageSquareIcon className="size-3.5 text-muted-foreground" />
+                    <span>Ask about this step</span>
+                  </div>
+                  <Textarea
+                    autoFocus
+                    size="sm"
+                    value={questionDraft}
+                    placeholder="Type a question"
+                    aria-label="Question about this review step"
+                    onChange={(event) => setQuestionDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setQuestionDraft("");
+                        setQuestionOpen(false);
+                      }
+                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                        event.preventDefault();
+                        submitQuestion();
+                      }
+                    }}
+                  />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setQuestionDraft("");
+                        setQuestionOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button size="sm" disabled={!questionDraft.trim()} onClick={submitQuestion}>
+                      Add to chat
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1314,7 +1511,10 @@ function InteractiveReviewTourPanel({
                   <button
                     type="button"
                     className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-muted"
-                    onClick={() => onAskStep(activeStep)}
+                    onClick={() => {
+                      onCollapsedChange(false);
+                      setQuestionOpen(true);
+                    }}
                   >
                     <MessageSquareIcon className="size-3.5" />
                     <span>Ask</span>

@@ -40,4 +40,24 @@ describe("ComposerPendingReviewComments", () => {
     expect(markup).toContain("AI reply: the hook no longer stores IntersectionObserver");
     expect(markup).not.toContain("AI reply Quote");
   });
+
+  it("labels review-step chips with the step context excerpt", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingReviewComments
+        comments={[
+          quotedComment({
+            id: "review-step-1",
+            sectionId: "review-step:step-a",
+            sectionTitle: "Review step",
+            filePath: "Three layers",
+            diff: "Step: Three layers\n\nThe diff has a clear dependency order.",
+          }),
+        ]}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("Review step: Step: Three layers");
+    expect(markup).not.toContain("Three layers Quote");
+  });
 });

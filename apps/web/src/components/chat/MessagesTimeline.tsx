@@ -114,6 +114,7 @@ import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import {
   buildReviewCommentRenderablePatch,
   formatReviewCommentFence,
+  isQuotedReviewComment,
   parseReviewCommentMessageSegments,
   type ReviewCommentContext,
 } from "../../reviewCommentContext";
@@ -1639,8 +1640,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
 function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentContext }) {
   const ctx = use(TimelineRowCtx);
   const fenceLanguage = comment.fenceLanguage ?? "diff";
-  const isQuotedReply =
-    comment.sectionId.startsWith("assistant:") || comment.sectionId.startsWith("plan:");
+  const isQuotedReply = isQuotedReviewComment(comment);
   const renderablePatch = getRenderablePatch(
     buildReviewCommentRenderablePatch(comment),
     `review-comment:${comment.id}`,
