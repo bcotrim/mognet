@@ -1807,13 +1807,17 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     };
   });
 
-  const readUntrackedReviewDiffs = Effect.fn("readUntrackedReviewDiffs")(function* (cwd: string) {
+  const readUntrackedReviewDiffs = Effect.fn("readUntrackedReviewDiffs")(function* (
+    cwd: string,
+    listMaxOutputBytes: number,
+    maxOutputBytes: number,
+  ) {
     const untrackedResult = yield* executeGit(
       "GitVcsDriver.readUntrackedReviewDiffs.list",
       cwd,
       ["ls-files", "--others", "--exclude-standard", "-z"],
       {
-        maxOutputBytes: WORKSPACE_FILES_MAX_OUTPUT_BYTES,
+        maxOutputBytes: listMaxOutputBytes,
         appendTruncationMarker: true,
       },
     );
@@ -1831,7 +1835,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           ["diff", "--no-index", "--patch", "--minimal", "--", "/dev/null", relativePath],
           {
             allowNonZeroExit: true,
-            maxOutputBytes: REVIEW_UNTRACKED_DIFF_MAX_OUTPUT_BYTES,
+            maxOutputBytes,
             appendTruncationMarker: true,
           },
         ),
@@ -1849,6 +1853,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const getReviewDiffPreview = Effect.fn("getReviewDiffPreview")(function* (
     input: ReviewDiffPreviewInput,
   ) {
+    const maxOutputBytes = input.maxOutputBytes ?? REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES;
+    const untrackedListMaxOutputBytes = input.maxOutputBytes ?? WORKSPACE_FILES_MAX_OUTPUT_BYTES;
+    const untrackedMaxOutputBytes = input.maxOutputBytes ?? REVIEW_UNTRACKED_DIFF_MAX_OUTPUT_BYTES;
     const details = yield* statusDetailsLocal(input.cwd);
     if (!details.isRepo) {
       return {
@@ -1879,7 +1886,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         "--",
       ],
       {
-        maxOutputBytes: REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES,
+        maxOutputBytes,
         appendTruncationMarker: true,
       },
     ).pipe(
@@ -1891,9 +1898,11 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         stderrTruncated: false,
       })),
     );
-    const dirtyUntracked = yield* readUntrackedReviewDiffs(input.cwd).pipe(
-      Effect.orElseSucceed(() => ({ diff: "", truncated: false })),
-    );
+    const dirtyUntracked = yield* readUntrackedReviewDiffs(
+      input.cwd,
+      untrackedListMaxOutputBytes,
+      untrackedMaxOutputBytes,
+    ).pipe(Effect.orElseSucceed(() => ({ diff: "", truncated: false })));
     const dirtyDiff = [dirtyTrackedResult.stdout.trimEnd(), dirtyUntracked.diff.trimEnd()]
       .filter((diff) => diff.length > 0)
       .join("\n");
@@ -1911,7 +1920,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
               `${baseRef}...HEAD`,
             ],
             {
-              maxOutputBytes: REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES,
+              maxOutputBytes,
               appendTruncationMarker: true,
             },
           ).pipe(
