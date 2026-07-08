@@ -108,6 +108,10 @@ interface DiffCodeViewFile {
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
 const EMPTY_REVIEW_FILE_CONTEXT: ReadonlyMap<string, ReviewFileContext> = new Map();
 const EMPTY_REVIEW_FINDINGS: ReadonlyMap<string, ReadonlyArray<ReviewFinding>> = new Map();
+const EMPTY_TOUR_CODE_NOTES: ReadonlyMap<
+  string,
+  ReadonlyArray<InteractiveReviewTourAnchor>
+> = new Map();
 
 function collectTourStepFilePaths(step: InteractiveReviewTourStep): string[] {
   return Array.from(new Set([...step.files, ...step.anchors.map((anchor) => anchor.filePath)]));
@@ -321,6 +325,19 @@ export default function DiffPanel({
     () => (activeTourStep ? collectTourStepFilePaths(activeTourStep) : []),
     [activeTourStep],
   );
+  const activeTourStepCodeNotesByFilePath = useMemo(() => {
+    if (!activeTourStep || activeTourStep.anchors.length === 0) return EMPTY_TOUR_CODE_NOTES;
+    const notesByFilePath = new Map<string, InteractiveReviewTourAnchor[]>();
+    for (const anchor of activeTourStep.anchors) {
+      const notes = notesByFilePath.get(anchor.filePath);
+      if (notes) {
+        notes.push(anchor);
+      } else {
+        notesByFilePath.set(anchor.filePath, [anchor]);
+      }
+    }
+    return notesByFilePath;
+  }, [activeTourStep]);
   const gitStatusQuery = useEnvironmentQuery(
     activeThread !== null && activeThread !== undefined && activeCwd != null
       ? vcsEnvironment.status({
@@ -628,6 +645,8 @@ export default function DiffPanel({
   )
     ? navigatedFileKey
     : selectedFileKey;
+  const showDiffFileNavigator =
+    codeViewFiles.length > 1 || activeTourStepCodeNotesByFilePath.size > 0;
 
   useEffect(() => {
     setNavigatedFileKey(null);
@@ -645,15 +664,6 @@ export default function DiffPanel({
     setNavigatedFileKey(fileKey);
     codeViewRef.current?.scrollTo({ type: "item", id: fileKey, align: "start" });
   }, []);
-  const scrollToDiffFilePath = useCallback(
-    (filePath: string) => {
-      const file =
-        codeViewFiles.find((candidate) => candidate.filePath === filePath) ??
-        allCodeViewFiles.find((candidate) => candidate.filePath === filePath);
-      if (file) scrollToDiffFile(file.fileKey);
-    },
-    [allCodeViewFiles, codeViewFiles, scrollToDiffFile],
-  );
   const scrollToDiffAnchor = useCallback(
     (anchor: InteractiveReviewTourAnchor) => {
       const file =
@@ -1028,8 +1038,6 @@ export default function DiffPanel({
                 activeStep={activeTourStep}
                 activeStepIndex={tourSteps.findIndex((step) => step.id === activeTourStep.id)}
                 onSelectStep={setActiveTourStepId}
-                onSelectFile={scrollToDiffFilePath}
-                onSelectAnchor={scrollToDiffAnchor}
                 onAskStep={onAskInteractiveReviewStep}
                 collapsed={isTourPanelCollapsed}
                 onCollapsedChange={setTourPanelCollapsed}
@@ -1064,16 +1072,18 @@ export default function DiffPanel({
               <div
                 className={cn(
                   "diff-panel-file-layout",
-                  codeViewFiles.length > 1 && "diff-panel-file-layout-with-nav",
+                  showDiffFileNavigator && "diff-panel-file-layout-with-nav",
                 )}
               >
-                {codeViewFiles.length > 1 ? (
+                {showDiffFileNavigator ? (
                   <DiffFileNavigator
                     activeFileKey={activeNavigatorFileKey}
                     files={codeViewFiles}
+                    codeNotesByFilePath={activeTourStepCodeNotesByFilePath}
                     reviewFileContextByPath={reviewFileContextByPath}
                     resolvedTheme={resolvedTheme}
                     onSelectFile={scrollToDiffFile}
+                    onSelectCodeNote={scrollToDiffAnchor}
                   />
                 ) : null}
                 <div
@@ -1175,8 +1185,6 @@ function InteractiveReviewTourPanel({
   activeStep,
   activeStepIndex,
   onSelectStep,
-  onSelectFile,
-  onSelectAnchor,
   onAskStep,
   collapsed,
   onCollapsedChange,
@@ -1185,8 +1193,6 @@ function InteractiveReviewTourPanel({
   activeStep: InteractiveReviewTourStep;
   activeStepIndex: number;
   onSelectStep: (stepId: string) => void;
-  onSelectFile: (filePath: string) => void;
-  onSelectAnchor: (anchor: InteractiveReviewTourAnchor) => void;
   onAskStep: ((step: InteractiveReviewTourStep, text: string) => void) | undefined;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -1245,7 +1251,7 @@ function InteractiveReviewTourPanel({
             )}
           >
             <div className={cn("min-h-0 overflow-hidden", collapsed && "pointer-events-none")}>
-              <div className="interactive-review-tour-body grid min-w-0 gap-3">
+              <div className="grid min-w-0 gap-3">
                 <div className="min-w-0 space-y-1.5">
                   <p className="text-sm leading-relaxed text-foreground/85">{activeStep.body}</p>
                   {activeStep.whyThisMatters ? (
@@ -1253,59 +1259,6 @@ function InteractiveReviewTourPanel({
                       <span className="font-medium text-foreground/80">Why it matters: </span>
                       {activeStep.whyThisMatters}
                     </p>
-                  ) : null}
-                </div>
-                <div className="min-w-0 space-y-2 text-xs">
-                  {activeStep.files.length > 0 ? (
-                    <div className="min-w-0">
-                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                        Step files
-                      </p>
-                      <div className="flex min-w-0 flex-wrap gap-1">
-                        {activeStep.files.map((filePath) => (
-                          <button
-                            key={filePath}
-                            type="button"
-                            className="max-w-full truncate rounded-sm border border-border/70 bg-muted/35 px-1.5 py-0.5 font-mono text-[11px] text-foreground/85 hover:bg-muted"
-                            tabIndex={collapsed ? -1 : undefined}
-                            onClick={() => onSelectFile(filePath)}
-                          >
-                            {filePath}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {activeStep.anchors.length > 0 ? (
-                    <div className="min-w-0">
-                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                        Code notes
-                      </p>
-                      <div className="space-y-1">
-                        {activeStep.anchors.map((anchor) => {
-                          const range = formatTourAnchorRange(anchor);
-                          return (
-                            <button
-                              key={`${anchor.filePath}:${range}:${anchor.note ?? ""}`}
-                              type="button"
-                              className="block w-full rounded-sm border border-border/70 bg-muted/20 px-2 py-1 text-left hover:bg-muted/45"
-                              tabIndex={collapsed ? -1 : undefined}
-                              onClick={() => onSelectAnchor(anchor)}
-                            >
-                              <span className="block truncate font-mono text-[11px] text-foreground/85">
-                                {anchor.filePath}
-                                {range ? ` ${range}` : ""}
-                              </span>
-                              {anchor.note ? (
-                                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-                                  {anchor.note}
-                                </span>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
                   ) : null}
                 </div>
               </div>
@@ -1466,15 +1419,19 @@ function InteractiveReviewTourPanel({
 function DiffFileNavigator({
   activeFileKey,
   files,
+  codeNotesByFilePath,
   reviewFileContextByPath,
   resolvedTheme,
   onSelectFile,
+  onSelectCodeNote,
 }: {
   activeFileKey: string | null;
   files: ReadonlyArray<DiffCodeViewFile>;
+  codeNotesByFilePath: ReadonlyMap<string, ReadonlyArray<InteractiveReviewTourAnchor>>;
   reviewFileContextByPath: ReadonlyMap<string, ReviewFileContext>;
   resolvedTheme: "light" | "dark";
   onSelectFile: (fileKey: string) => void;
+  onSelectCodeNote: (anchor: InteractiveReviewTourAnchor) => void;
 }) {
   const filesByPath = useMemo(() => new Map(files.map((file) => [file.filePath, file])), [files]);
   const summaryStat = useMemo(
@@ -1510,14 +1467,34 @@ function DiffFileNavigator({
     () => collectDiffNavigatorDirectoryPaths(treeNodes).join("\u0000"),
     [treeNodes],
   );
+  const codeNotesKey = useMemo(
+    () =>
+      files
+        .flatMap((file) =>
+          (codeNotesByFilePath.get(file.filePath) ?? []).map(
+            (anchor) =>
+              `${file.filePath}:${anchor.startLine ?? ""}:${anchor.endLine ?? ""}:${
+                anchor.rangeLabel ?? ""
+              }:${anchor.note ?? ""}`,
+          ),
+        )
+        .join("\u0000"),
+    [codeNotesByFilePath, files],
+  );
   const [collapsedDirectoryPaths, setCollapsedDirectoryPaths] = useState<{
     key: string;
     paths: ReadonlySet<string>;
   }>(() => ({ key: directoryPathsKey, paths: new Set() }));
+  const [collapsedCodeNotePaths, setCollapsedCodeNotePaths] = useState<{
+    key: string;
+    paths: ReadonlySet<string>;
+  }>(() => ({ key: codeNotesKey, paths: new Set() }));
   const collapsedPaths =
     collapsedDirectoryPaths.key === directoryPathsKey
       ? collapsedDirectoryPaths.paths
       : new Set<string>();
+  const collapsedNotePaths =
+    collapsedCodeNotePaths.key === codeNotesKey ? collapsedCodeNotePaths.paths : new Set<string>();
   const toggleDirectory = useCallback(
     (path: string) => {
       setCollapsedDirectoryPaths((current) => {
@@ -1531,6 +1508,20 @@ function DiffFileNavigator({
       });
     },
     [directoryPathsKey],
+  );
+  const toggleCodeNotes = useCallback(
+    (filePath: string) => {
+      setCollapsedCodeNotePaths((current) => {
+        const next = new Set(current.key === codeNotesKey ? current.paths : []);
+        if (next.has(filePath)) {
+          next.delete(filePath);
+        } else {
+          next.add(filePath);
+        }
+        return { key: codeNotesKey, paths: next };
+      });
+    },
+    [codeNotesKey],
   );
 
   const renderNode = (node: TurnDiffTreeNode, depth: number) => {
@@ -1577,56 +1568,111 @@ function DiffFileNavigator({
     const reviewFile = reviewFileContextByPath.get(file.filePath);
     const findingCount = reviewFile?.findings.length ?? 0;
     const highestSeverity = getHighestReviewFindingSeverity(reviewFile?.findings ?? []);
+    const codeNotes = codeNotesByFilePath.get(file.filePath) ?? [];
+    const hasCodeNotes = codeNotes.length > 0;
+    const codeNotesExpanded = hasCodeNotes && !collapsedNotePaths.has(file.filePath);
 
     return (
-      <button
+      <div
         key={`file:${node.path}`}
-        type="button"
         className={cn(
-          "grid w-full min-w-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pr-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+          "w-full min-w-0 rounded-md transition-colors",
           isActive
             ? "bg-accent/70 text-foreground"
             : "text-muted-foreground hover:bg-accent/45 hover:text-foreground",
         )}
-        style={{ paddingLeft: `${leftPadding}px` }}
-        aria-current={isActive ? "true" : undefined}
-        title={file.filePath}
-        onClick={() => onSelectFile(file.fileKey)}
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <PierreEntryIcon
-            pathValue={file.filePath}
-            kind="file"
-            theme={resolvedTheme}
-            className="size-3.5"
-          />
-          <span className="truncate font-mono text-[11px] leading-4">{node.name}</span>
-        </span>
-        <span className="flex min-w-0 items-center gap-1.5">
-          {findingCount > 0 && highestSeverity ? (
-            <span
-              className={cn(
-                "rounded-sm border px-1 py-0.5 text-[10px] leading-none font-medium tabular-nums",
-                reviewSeverityClassName(highestSeverity),
-              )}
-              title={`${findingCount} review finding${findingCount === 1 ? "" : "s"}`}
-            >
-              {findingCount}
-            </span>
-          ) : null}
-          {hasNonZeroStat(stat) ? (
-            <DiffStatLabel
-              additions={stat.additions}
-              deletions={stat.deletions}
-              className="text-[10px] leading-4"
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <button
+            type="button"
+            className="flex min-w-0 cursor-pointer items-center gap-1.5 py-1.5 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+            style={{ paddingLeft: `${leftPadding}px` }}
+            aria-current={isActive ? "true" : undefined}
+            title={file.filePath}
+            onClick={() => onSelectFile(file.fileKey)}
+          >
+            <PierreEntryIcon
+              pathValue={file.filePath}
+              kind="file"
+              theme={resolvedTheme}
+              className="size-3.5 shrink-0"
             />
-          ) : (
-            <span className="font-mono text-[10px] text-muted-foreground/65">
-              {formatDiffChangeType(file.fileDiff.type)}
-            </span>
-          )}
-        </span>
-      </button>
+            <span className="truncate font-mono text-[11px] leading-4">{node.name}</span>
+          </button>
+          <span className="flex min-w-0 items-center gap-1.5 py-1.5 pr-2">
+            {hasCodeNotes ? (
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1 text-[10px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+                  codeNotesExpanded
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border/70 bg-background/70 text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                aria-expanded={codeNotesExpanded}
+                aria-label={`${codeNotesExpanded ? "Collapse" : "Expand"} ${codeNotes.length} code note${
+                  codeNotes.length === 1 ? "" : "s"
+                } for ${file.filePath}`}
+                onClick={() => toggleCodeNotes(file.filePath)}
+              >
+                <ChevronRightIcon
+                  className={cn("size-3 transition-transform", codeNotesExpanded && "rotate-90")}
+                />
+                <MessageSquareIcon className="size-3" />
+                <span className="tabular-nums">{codeNotes.length}</span>
+              </button>
+            ) : null}
+            {findingCount > 0 && highestSeverity ? (
+              <span
+                className={cn(
+                  "rounded-sm border px-1 py-0.5 text-[10px] leading-none font-medium tabular-nums",
+                  reviewSeverityClassName(highestSeverity),
+                )}
+                title={`${findingCount} review finding${findingCount === 1 ? "" : "s"}`}
+              >
+                {findingCount}
+              </span>
+            ) : null}
+            {hasNonZeroStat(stat) ? (
+              <DiffStatLabel
+                additions={stat.additions}
+                deletions={stat.deletions}
+                className="text-[10px] leading-4"
+              />
+            ) : (
+              <span className="font-mono text-[10px] text-muted-foreground/65">
+                {formatDiffChangeType(file.fileDiff.type)}
+              </span>
+            )}
+          </span>
+        </div>
+        {codeNotesExpanded ? (
+          <div className="space-y-1 pb-1 pr-1.5" style={{ paddingLeft: `${leftPadding + 23}px` }}>
+            {codeNotes.map((anchor) => {
+              const range = formatTourAnchorRange(anchor);
+              return (
+                <button
+                  key={`${file.filePath}:${anchor.startLine ?? ""}:${anchor.endLine ?? ""}:${
+                    anchor.rangeLabel ?? ""
+                  }:${anchor.note ?? ""}`}
+                  type="button"
+                  className="block w-full rounded-sm border border-border/70 bg-background/55 px-1.5 py-1 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                  onClick={() => onSelectCodeNote(anchor)}
+                >
+                  <span className="block truncate font-mono text-[10px] leading-4 text-foreground/80">
+                    {range ? `L${range}` : "File note"}
+                  </span>
+                  {anchor.note ? (
+                    <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                      {anchor.note}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
     );
   };
 
