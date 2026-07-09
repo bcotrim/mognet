@@ -6,9 +6,14 @@ import type {
   FileDiffMetadata,
   SelectedLineRange,
 } from "@pierre/diffs";
-import { CodeView, type CodeViewHandle, type CodeViewProps } from "@pierre/diffs/react";
+import {
+  CodeView,
+  type CodeViewHandle,
+  type CodeViewProps,
+  useWorkerPool,
+} from "@pierre/diffs/react";
 import type { ReviewFileContext, ReviewFinding, ScopedThreadRef } from "@t3tools/contracts";
-import { useCallback, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { fnv1a32 } from "~/lib/diffRendering";
@@ -43,6 +48,7 @@ type AnnotatableCodeViewScrollViewer = {
   getTopForItem(id: string): number | undefined;
 };
 const EMPTY_REVIEW_COMMENTS: ReadonlyArray<ReviewCommentContext> = [];
+const WORKER_POOL_STUCK_FALLBACK_MS = 3000;
 
 function annotationSide(range: SelectedLineRange): AnnotationSide {
   return (range.endSide ?? range.side) === "deletions" ? "deletions" : "additions";
@@ -122,6 +128,8 @@ export function AnnotatableCodeView({
   onScroll,
   renderHeaderPrefix,
 }: AnnotatableCodeViewProps) {
+  const workerPool = useWorkerPool();
+  const [disableWorkerPool, setDisableWorkerPool] = useState(false);
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const removeReviewComment = useComposerDraftStore((store) => store.removeReviewComment);
   const reviewComments = useComposerDraftStore(
@@ -238,6 +246,29 @@ export function AnnotatableCodeView({
       sectionTitle,
     ],
   );
+
+  useEffect(() => {
+    if (!workerPool || disableWorkerPool || items.length === 0) return;
+
+    const syncWorkerStats = (stats = workerPool.getStats()) => {
+      if (stats.workersFailed) {
+        setDisableWorkerPool(true);
+      }
+    };
+    syncWorkerStats();
+
+    const unsubscribe = workerPool.subscribeToStatChanges(syncWorkerStats);
+    const timeoutId = window.setTimeout(() => {
+      if (workerPool.getStats().managerState !== "initialized") {
+        setDisableWorkerPool(true);
+      }
+    }, WORKER_POOL_STUCK_FALLBACK_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+    };
+  }, [disableWorkerPool, items.length, workerPool]);
 
   const setSelectedLines = useCallback((selection: DiffCodeViewSelection | null) => {
     selectedLinesRef.current = selection;
@@ -391,9 +422,11 @@ export function AnnotatableCodeView({
   const hasOpenComment = draft !== null;
   return (
     <CodeView<DiffCommentAnnotationGroup>
+      key={disableWorkerPool ? "code-view-local-renderer" : "code-view-worker-renderer"}
       {...(viewerRef ? { ref: viewerRef } : {})}
       {...(className ? { className } : {})}
       {...(onScroll ? { onScroll } : {})}
+      disableWorkerPool={disableWorkerPool}
       items={items}
       selectedLines={selectedLines}
       onSelectedLinesChange={setSelectedLines}

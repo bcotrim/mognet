@@ -27,19 +27,19 @@ export function LocalCommentAnnotation({
     return (
       <div
         data-file-comment-annotation
-        className="mx-3 my-2 rounded-xl border border-border/70 bg-background p-3 shadow-sm"
+        className="mx-3 my-2 rounded-lg border border-border bg-popover p-2.5 font-sans text-popover-foreground shadow-xl"
         contentEditable={false}
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          <MessageCircle className="size-4 text-muted-foreground" />
+          <MessageCircle className="size-3.5 text-muted-foreground" />
           <span className="text-xs font-medium">Inline comment</span>
           <span className="ml-auto text-[11px] text-muted-foreground">{rangeLabel}</span>
           <Button variant="ghost" size="icon-xs" aria-label="Delete comment" onClick={onDelete}>
             <Trash2 className="size-3.5" />
           </Button>
         </div>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-popover-foreground">
           {savedText}
         </p>
       </div>
@@ -49,18 +49,17 @@ export function LocalCommentAnnotation({
   return (
     <div
       data-file-comment-annotation
-      className="mx-3 my-2 rounded-xl border border-border/70 bg-background p-3 shadow-lg"
+      className="mx-3 my-2 rounded-lg border border-border bg-popover p-2.5 font-sans text-popover-foreground shadow-xl"
       contentEditable={false}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="flex items-center gap-2">
-        <MessageCircle className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Ask about selection</span>
+      <div className="mb-2 flex items-center gap-2">
+        <MessageCircle className="size-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium">Ask about selection</span>
+        <span className="ml-auto text-[11px] text-muted-foreground">Lines {rangeLabel}</span>
       </div>
-      <div className="mt-1 text-xs text-muted-foreground">Lines {rangeLabel}</div>
       <Textarea
         autoFocus
-        className="mt-3"
         size="sm"
         value={text}
         placeholder="Ask a question or request a change"

@@ -143,4 +143,42 @@ describe("ChangedFilesTree", () => {
       }
     },
   );
+
+  it("shows inline comment counts on collapsed parent directories", () => {
+    const markup = renderToStaticMarkup(
+      <ChangedFilesTree
+        turnId={TurnId.make("turn-1")}
+        files={[
+          { path: "src/index.ts", kind: "modified", additions: 2, deletions: 1 },
+          { path: "src/main.ts", kind: "modified", additions: 3, deletions: 0 },
+        ]}
+        allDirectoriesExpanded={false}
+        inlineCommentCountByFilePath={new Map([["src/index.ts", 2]])}
+        resolvedTheme="light"
+        onOpenTurnDiff={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="2 inline comments in src"');
+    expect(markup).not.toContain("index.ts");
+  });
+
+  it("hides aggregate inline comment counts on expanded parent directories", () => {
+    const markup = renderToStaticMarkup(
+      <ChangedFilesTree
+        turnId={TurnId.make("turn-1")}
+        files={[
+          { path: "src/index.ts", kind: "modified", additions: 2, deletions: 1 },
+          { path: "src/main.ts", kind: "modified", additions: 3, deletions: 0 },
+        ]}
+        allDirectoriesExpanded
+        inlineCommentCountByFilePath={new Map([["src/index.ts", 2]])}
+        resolvedTheme="light"
+        onOpenTurnDiff={() => {}}
+      />,
+    );
+
+    expect(markup).not.toContain('aria-label="2 inline comments in src"');
+    expect(markup).toContain('aria-label="2 inline comments in src/index.ts"');
+  });
 });
