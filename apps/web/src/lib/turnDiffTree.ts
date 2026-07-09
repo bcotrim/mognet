@@ -115,6 +115,19 @@ export function summarizeTurnDiffStats(files: ReadonlyArray<TurnDiffTreeFileChan
   );
 }
 
+export function sumTurnDiffTreeFileValues(
+  node: TurnDiffTreeNode,
+  valuesByFilePath: ReadonlyMap<string, number>,
+): number {
+  if (node.kind === "file") {
+    return valuesByFilePath.get(node.path) ?? 0;
+  }
+  return node.children.reduce(
+    (total, childNode) => total + sumTurnDiffTreeFileValues(childNode, valuesByFilePath),
+    0,
+  );
+}
+
 export function buildTurnDiffTree(
   files: ReadonlyArray<TurnDiffTreeFileChange>,
 ): TurnDiffTreeNode[] {

@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenInPreferredEditor } from "../editorPreferences";
-import { type DraftId } from "../composerDraftStore";
+import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { openDiffFilePrimaryAction } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
@@ -50,14 +50,20 @@ import {
   resolveFileDiffPath,
   summarizeFileDiffStats,
 } from "../lib/diffRendering";
-import { buildTurnDiffTree, type TurnDiffTreeNode } from "../lib/turnDiffTree";
+import {
+  buildTurnDiffTree,
+  sumTurnDiffTreeFileValues,
+  type TurnDiffTreeNode,
+} from "../lib/turnDiffTree";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useProject, useThread } from "../state/entities";
 import { resolveThreadRouteRef } from "../threadRoutes";
+import type { ReviewCommentContext } from "../reviewCommentContext";
 import { useClientSettings } from "../hooks/useSettings";
 import { formatShortTimestamp } from "../timestampFormat";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { AnnotatableCodeView, type AnnotatableCodeViewHandle } from "./diffs/AnnotatableCodeView";
+import { InlineCommentCountBadge } from "./InlineCommentCountBadge";
 import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
@@ -108,6 +114,7 @@ interface DiffCodeViewFile {
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
 const EMPTY_REVIEW_FILE_CONTEXT: ReadonlyMap<string, ReviewFileContext> = new Map();
 const EMPTY_REVIEW_FINDINGS: ReadonlyMap<string, ReadonlyArray<ReviewFinding>> = new Map();
+const EMPTY_REVIEW_COMMENTS: ReadonlyArray<ReviewCommentContext> = [];
 const EMPTY_TOUR_CODE_NOTES: ReadonlyMap<
   string,
   ReadonlyArray<InteractiveReviewTourAnchor>
@@ -415,6 +422,18 @@ export default function DiffPanel({
       ? "Working tree"
       : "Branch changes";
   const activeReviewSectionTitle = reviewSectionTitle;
+  const reviewComments = useComposerDraftStore(
+    (store) => store.getComposerDraft(composerDraftTarget)?.reviewComments ?? EMPTY_REVIEW_COMMENTS,
+  );
+  const inlineCommentCountByFilePath = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const comment of reviewComments) {
+      if (comment.sectionId !== activeReviewSectionId) continue;
+      if ((comment.fenceLanguage ?? "diff") !== "diff") continue;
+      counts.set(comment.filePath, (counts.get(comment.filePath) ?? 0) + 1);
+    }
+    return counts;
+  }, [activeReviewSectionId, reviewComments]);
   const selectedCheckpointRange = useMemo(
     () =>
       typeof selectedCheckpointTurnCount === "number"
@@ -1080,6 +1099,7 @@ export default function DiffPanel({
                     activeFileKey={activeNavigatorFileKey}
                     files={codeViewFiles}
                     codeNotesByFilePath={activeTourStepCodeNotesByFilePath}
+                    inlineCommentCountByFilePath={inlineCommentCountByFilePath}
                     reviewFileContextByPath={reviewFileContextByPath}
                     resolvedTheme={resolvedTheme}
                     onSelectFile={scrollToDiffFile}
@@ -1420,6 +1440,7 @@ function DiffFileNavigator({
   activeFileKey,
   files,
   codeNotesByFilePath,
+  inlineCommentCountByFilePath,
   reviewFileContextByPath,
   resolvedTheme,
   onSelectFile,
@@ -1428,6 +1449,7 @@ function DiffFileNavigator({
   activeFileKey: string | null;
   files: ReadonlyArray<DiffCodeViewFile>;
   codeNotesByFilePath: ReadonlyMap<string, ReadonlyArray<InteractiveReviewTourAnchor>>;
+  inlineCommentCountByFilePath: ReadonlyMap<string, number>;
   reviewFileContextByPath: ReadonlyMap<string, ReviewFileContext>;
   resolvedTheme: "light" | "dark";
   onSelectFile: (fileKey: string) => void;
@@ -1447,6 +1469,14 @@ function DiffFileNavigator({
         { additions: 0, deletions: 0 },
       ),
     [files],
+  );
+  const inlineCommentTotal = useMemo(
+    () =>
+      files.reduce(
+        (total, file) => total + (inlineCommentCountByFilePath.get(file.filePath) ?? 0),
+        0,
+      ),
+    [files, inlineCommentCountByFilePath],
   );
   const treeNodes = useMemo(
     () =>
@@ -1528,6 +1558,8 @@ function DiffFileNavigator({
     const leftPadding = 8 + depth * 18;
     if (node.kind === "directory") {
       const isExpanded = !collapsedPaths.has(node.path);
+      const inlineCommentCount = sumTurnDiffTreeFileValues(node, inlineCommentCountByFilePath);
+      const showInlineCommentCount = !isExpanded && inlineCommentCount > 0;
       return (
         <div key={`dir:${node.path}`} className="space-y-0.5">
           <button
@@ -1548,12 +1580,22 @@ function DiffFileNavigator({
               )}
               <span className="truncate font-mono text-[11px] leading-4">{node.name}</span>
             </span>
-            {hasNonZeroStat(node.stat) ? (
-              <DiffStatLabel
-                additions={node.stat.additions}
-                deletions={node.stat.deletions}
-                className="text-[10px] leading-4"
-              />
+            {showInlineCommentCount || hasNonZeroStat(node.stat) ? (
+              <span className="flex shrink-0 items-center gap-1.5">
+                <InlineCommentCountBadge
+                  count={showInlineCommentCount ? inlineCommentCount : 0}
+                  label={`${inlineCommentCount} inline comment${
+                    inlineCommentCount === 1 ? "" : "s"
+                  } in ${node.path}`}
+                />
+                {hasNonZeroStat(node.stat) ? (
+                  <DiffStatLabel
+                    additions={node.stat.additions}
+                    deletions={node.stat.deletions}
+                    className="text-[10px] leading-4"
+                  />
+                ) : null}
+              </span>
             ) : null}
           </button>
           {isExpanded ? node.children.map((child) => renderNode(child, depth + 1)) : null}
@@ -1571,6 +1613,7 @@ function DiffFileNavigator({
     const codeNotes = codeNotesByFilePath.get(file.filePath) ?? [];
     const hasCodeNotes = codeNotes.length > 0;
     const codeNotesExpanded = hasCodeNotes && !collapsedNotePaths.has(file.filePath);
+    const inlineCommentCount = inlineCommentCountByFilePath.get(file.filePath) ?? 0;
 
     return (
       <div
@@ -1600,6 +1643,12 @@ function DiffFileNavigator({
             <span className="truncate font-mono text-[11px] leading-4">{node.name}</span>
           </button>
           <span className="flex min-w-0 items-center gap-1.5 py-1.5 pr-2">
+            <InlineCommentCountBadge
+              count={inlineCommentCount}
+              label={`${inlineCommentCount} inline comment${
+                inlineCommentCount === 1 ? "" : "s"
+              } in ${file.filePath}`}
+            />
             {hasCodeNotes ? (
               <button
                 type="button"
@@ -1693,6 +1742,13 @@ function DiffFileNavigator({
             </>
           ) : null}
         </span>
+        <InlineCommentCountBadge
+          className="ml-auto"
+          count={inlineCommentTotal}
+          label={`${inlineCommentTotal} inline comment${
+            inlineCommentTotal === 1 ? "" : "s"
+          } in changed files`}
+        />
       </div>
       <div className="space-y-0.5 p-1.5">{treeNodes.map((node) => renderNode(node, 0))}</div>
     </nav>
