@@ -30,6 +30,12 @@ describe("buildTurnDiffTree", () => {
         stat: { additions: 6, deletions: 3 },
         children: [
           {
+            kind: "file",
+            name: "index.ts",
+            path: "src/index.ts",
+            stat: { additions: 2, deletions: 1 },
+          },
+          {
             kind: "directory",
             name: "components",
             path: "src/components",
@@ -42,12 +48,6 @@ describe("buildTurnDiffTree", () => {
                 stat: { additions: 4, deletions: 2 },
               },
             ],
-          },
-          {
-            kind: "file",
-            name: "index.ts",
-            path: "src/index.ts",
-            stat: { additions: 2, deletions: 1 },
           },
         ],
       },
@@ -144,6 +144,66 @@ describe("buildTurnDiffTree", () => {
             kind: "file",
             name: "main.ts",
             path: "apps/server/main.ts",
+            stat: { additions: 4, deletions: 0 },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("preserves incoming file order across file and directory siblings", () => {
+    const tree = buildTurnDiffTree([
+      {
+        path: "apps/ui/src/data/core/browser-site-order.ts",
+        kind: "modified",
+        additions: 36,
+        deletions: 0,
+      },
+      {
+        path: "apps/ui/src/data/core/connectors/hosted/index.ts",
+        kind: "modified",
+        additions: 5,
+        deletions: 1,
+      },
+      {
+        path: "apps/ui/src/data/core/types.ts",
+        kind: "modified",
+        additions: 4,
+        deletions: 0,
+      },
+    ]);
+
+    expect(tree).toEqual([
+      {
+        kind: "directory",
+        name: "apps/ui/src/data/core",
+        path: "apps/ui/src/data/core",
+        stat: { additions: 45, deletions: 1 },
+        children: [
+          {
+            kind: "file",
+            name: "browser-site-order.ts",
+            path: "apps/ui/src/data/core/browser-site-order.ts",
+            stat: { additions: 36, deletions: 0 },
+          },
+          {
+            kind: "directory",
+            name: "connectors/hosted",
+            path: "apps/ui/src/data/core/connectors/hosted",
+            stat: { additions: 5, deletions: 1 },
+            children: [
+              {
+                kind: "file",
+                name: "index.ts",
+                path: "apps/ui/src/data/core/connectors/hosted/index.ts",
+                stat: { additions: 5, deletions: 1 },
+              },
+            ],
+          },
+          {
+            kind: "file",
+            name: "types.ts",
+            path: "apps/ui/src/data/core/types.ts",
             stat: { additions: 4, deletions: 0 },
           },
         ],

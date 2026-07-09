@@ -28,24 +28,21 @@ export interface TurnDiffTreeFileNode {
 export type TurnDiffTreeNode = TurnDiffTreeDirectoryNode | TurnDiffTreeFileNode;
 
 interface MutableDirectoryNode {
+  kind: "directory";
   name: string;
   path: string;
   stat: TurnDiffStat;
   directories: Map<string, MutableDirectoryNode>;
-  files: TurnDiffTreeFileNode[];
+  children: MutableTreeNode[];
 }
 
-const SORT_LOCALE_OPTIONS: Intl.CollatorOptions = { numeric: true, sensitivity: "base" };
+type MutableTreeNode = MutableDirectoryNode | TurnDiffTreeFileNode;
 
 function normalizePathSegments(pathValue: string): string[] {
   return pathValue
     .replaceAll("\\", "/")
     .split("/")
     .filter((segment) => segment.length > 0);
-}
-
-function compareByName(a: { name: string }, b: { name: string }): number {
-  return a.name.localeCompare(b.name, undefined, SORT_LOCALE_OPTIONS);
 }
 
 function readStat(file: TurnDiffTreeFileChange): TurnDiffStat | null {
@@ -83,22 +80,19 @@ function compactDirectoryNode(node: TurnDiffTreeDirectoryNode): TurnDiffTreeDire
 }
 
 function toTreeNodes(directory: MutableDirectoryNode): TurnDiffTreeNode[] {
-  const subdirectories: TurnDiffTreeDirectoryNode[] = Array.from(directory.directories.values())
-    .toSorted(compareByName)
-    .map<TurnDiffTreeDirectoryNode>((subdirectory) => ({
+  return directory.children.map((child) => {
+    if (child.kind === "file") return child;
+    return compactDirectoryNode({
       kind: "directory",
-      name: subdirectory.name,
-      path: subdirectory.path,
+      name: child.name,
+      path: child.path,
       stat: {
-        additions: subdirectory.stat.additions,
-        deletions: subdirectory.stat.deletions,
+        additions: child.stat.additions,
+        deletions: child.stat.deletions,
       },
-      children: toTreeNodes(subdirectory),
-    }))
-    .map((subdirectory) => compactDirectoryNode(subdirectory));
-
-  const files = directory.files.toSorted(compareByName);
-  return [...subdirectories, ...files];
+      children: toTreeNodes(child),
+    });
+  });
 }
 
 export function summarizeTurnDiffStats(files: ReadonlyArray<TurnDiffTreeFileChange>): TurnDiffStat {
@@ -119,11 +113,12 @@ export function buildTurnDiffTree(
   files: ReadonlyArray<TurnDiffTreeFileChange>,
 ): TurnDiffTreeNode[] {
   const root: MutableDirectoryNode = {
+    kind: "directory",
     name: "",
     path: "",
     stat: { additions: 0, deletions: 0 },
     directories: new Map(),
-    files: [],
+    children: [],
   };
 
   for (const file of files) {
@@ -148,19 +143,21 @@ export function buildTurnDiffTree(
         currentDirectory = existing;
       } else {
         const created: MutableDirectoryNode = {
+          kind: "directory",
           name: segment,
           path: nextPath,
           stat: { additions: 0, deletions: 0 },
           directories: new Map(),
-          files: [],
+          children: [],
         };
         currentDirectory.directories.set(segment, created);
+        currentDirectory.children.push(created);
         currentDirectory = created;
       }
       ancestors.push(currentDirectory);
     }
 
-    currentDirectory.files.push({
+    currentDirectory.children.push({
       kind: "file",
       name: fileName,
       path: filePath,

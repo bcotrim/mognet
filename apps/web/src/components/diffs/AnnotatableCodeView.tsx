@@ -39,6 +39,9 @@ interface DiffCommentAnnotationGroup {
 
 type DiffCommentLineAnnotation = DiffLineAnnotation<DiffCommentAnnotationGroup>;
 export type AnnotatableCodeViewHandle = CodeViewHandle<DiffCommentAnnotationGroup>;
+type AnnotatableCodeViewScrollViewer = {
+  getTopForItem(id: string): number | undefined;
+};
 const EMPTY_REVIEW_COMMENTS: ReadonlyArray<ReviewCommentContext> = [];
 
 function annotationSide(range: SelectedLineRange): AnnotationSide {
@@ -89,6 +92,7 @@ interface AnnotatableCodeViewProps {
   options: NonNullable<CodeViewProps<DiffCommentAnnotationGroup>["options"]>;
   viewerRef?: Ref<AnnotatableCodeViewHandle>;
   className?: string;
+  onScroll?: (scrollTop: number, viewer: AnnotatableCodeViewScrollViewer) => void;
   renderHeaderPrefix: (
     fileDiff: FileDiffMetadata,
     fileKey: string,
@@ -115,6 +119,7 @@ export function AnnotatableCodeView({
   options,
   viewerRef,
   className,
+  onScroll,
   renderHeaderPrefix,
 }: AnnotatableCodeViewProps) {
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
@@ -388,6 +393,7 @@ export function AnnotatableCodeView({
     <CodeView<DiffCommentAnnotationGroup>
       {...(viewerRef ? { ref: viewerRef } : {})}
       {...(className ? { className } : {})}
+      {...(onScroll ? { onScroll } : {})}
       items={items}
       selectedLines={selectedLines}
       onSelectedLinesChange={setSelectedLines}

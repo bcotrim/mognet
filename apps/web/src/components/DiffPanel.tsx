@@ -113,6 +113,25 @@ const EMPTY_TOUR_CODE_NOTES: ReadonlyMap<
   ReadonlyArray<InteractiveReviewTourAnchor>
 > = new Map();
 
+type DiffCodeViewScrollViewer = {
+  getTopForItem(id: string): number | undefined;
+};
+
+function resolveVisibleDiffFileKey(
+  files: ReadonlyArray<DiffCodeViewFile>,
+  scrollTop: number,
+  viewer: DiffCodeViewScrollViewer,
+): string | null {
+  let activeFileKey = files[0]?.fileKey ?? null;
+  for (const file of files) {
+    const itemTop = viewer.getTopForItem(file.fileKey);
+    if (typeof itemTop !== "number") continue;
+    if (itemTop > scrollTop + 1) break;
+    activeFileKey = file.fileKey;
+  }
+  return activeFileKey;
+}
+
 function collectTourStepFilePaths(step: InteractiveReviewTourStep): string[] {
   return Array.from(new Set([...step.files, ...step.anchors.map((anchor) => anchor.filePath)]));
 }
@@ -644,7 +663,7 @@ export default function DiffPanel({
     (candidate) => candidate.fileKey === navigatedFileKey,
   )
     ? navigatedFileKey
-    : selectedFileKey;
+    : (selectedFileKey ?? codeViewFiles[0]?.fileKey ?? null);
   const showDiffFileNavigator =
     codeViewFiles.length > 1 || activeTourStepCodeNotesByFilePath.size > 0;
 
@@ -664,6 +683,14 @@ export default function DiffPanel({
     setNavigatedFileKey(fileKey);
     codeViewRef.current?.scrollTo({ type: "item", id: fileKey, align: "start" });
   }, []);
+  const handleDiffViewScroll = useCallback(
+    (scrollTop: number, viewer: DiffCodeViewScrollViewer) => {
+      const visibleFileKey = resolveVisibleDiffFileKey(codeViewFiles, scrollTop, viewer);
+      if (!visibleFileKey) return;
+      setNavigatedFileKey((current) => (current === visibleFileKey ? current : visibleFileKey));
+    },
+    [codeViewFiles],
+  );
   const scrollToDiffAnchor = useCallback(
     (anchor: InteractiveReviewTourAnchor) => {
       const file =
@@ -1108,6 +1135,7 @@ export default function DiffPanel({
                     composerDraftTarget={composerDraftTarget}
                     reviewFileContextByPath={reviewFileContextByPath}
                     reviewFindingsByFilePath={reviewFindingsByFilePath}
+                    onScroll={handleDiffViewScroll}
                     renderHeaderPrefix={(fileDiff, fileKey, collapsed) => {
                       const filePath = resolveFileDiffPath(fileDiff);
                       return (
