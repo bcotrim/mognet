@@ -44,6 +44,9 @@ interface DiffCommentAnnotationGroup {
 
 type DiffCommentLineAnnotation = DiffLineAnnotation<DiffCommentAnnotationGroup>;
 export type AnnotatableCodeViewHandle = CodeViewHandle<DiffCommentAnnotationGroup>;
+type AnnotatableCodeViewScrollViewer = {
+  getTopForItem(id: string): number | undefined;
+};
 const EMPTY_REVIEW_COMMENTS: ReadonlyArray<ReviewCommentContext> = [];
 const WORKER_POOL_STUCK_FALLBACK_MS = 3000;
 
@@ -95,6 +98,7 @@ interface AnnotatableCodeViewProps {
   options: NonNullable<CodeViewProps<DiffCommentAnnotationGroup>["options"]>;
   viewerRef?: Ref<AnnotatableCodeViewHandle>;
   className?: string;
+  onScroll?: (scrollTop: number, viewer: AnnotatableCodeViewScrollViewer) => void;
   renderHeaderPrefix: (
     fileDiff: FileDiffMetadata,
     fileKey: string,
@@ -121,6 +125,7 @@ export function AnnotatableCodeView({
   options,
   viewerRef,
   className,
+  onScroll,
   renderHeaderPrefix,
 }: AnnotatableCodeViewProps) {
   const workerPool = useWorkerPool();
@@ -420,6 +425,7 @@ export function AnnotatableCodeView({
       key={disableWorkerPool ? "code-view-local-renderer" : "code-view-worker-renderer"}
       {...(viewerRef ? { ref: viewerRef } : {})}
       {...(className ? { className } : {})}
+      {...(onScroll ? { onScroll } : {})}
       disableWorkerPool={disableWorkerPool}
       items={items}
       selectedLines={selectedLines}
