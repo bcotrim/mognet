@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildTurnDiffTree, summarizeTurnDiffStats } from "./turnDiffTree";
+import {
+  buildTurnDiffTree,
+  summarizeTurnDiffStats,
+  sumTurnDiffTreeFileValues,
+} from "./turnDiffTree";
 
 describe("summarizeTurnDiffStats", () => {
   it("sums only files with numeric additions/deletions", () => {
@@ -164,5 +168,20 @@ describe("buildTurnDiffTree", () => {
     );
     expect(directoryNodes.map((node) => node.name).toSorted()).toEqual([" a", "a"]);
     expect(directoryNodes.map((node) => node.path).toSorted()).toEqual([" a", "a"]);
+  });
+});
+
+describe("sumTurnDiffTreeFileValues", () => {
+  it("sums values across files in a directory node", () => {
+    const tree = buildTurnDiffTree([
+      { path: "src/index.ts", kind: "modified", additions: 2, deletions: 1 },
+      { path: "src/components/Button.tsx", kind: "modified", additions: 4, deletions: 2 },
+      { path: "README.md", kind: "modified", additions: 1, deletions: 0 },
+    ]);
+
+    expect(sumTurnDiffTreeFileValues(tree[0]!, new Map([["src/components/Button.tsx", 2]]))).toBe(
+      2,
+    );
+    expect(sumTurnDiffTreeFileValues(tree[1]!, new Map([["README.md", 1]]))).toBe(1);
   });
 });

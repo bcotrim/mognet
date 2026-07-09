@@ -4,6 +4,7 @@ import { type TurnDiffFileChange } from "../../types";
 import {
   buildTurnDiffTree,
   summarizeTurnDiffStats,
+  sumTurnDiffTreeFileValues,
   type TurnDiffTreeNode,
 } from "../../lib/turnDiffTree";
 import { ChevronRightIcon, FolderIcon, FolderClosedIcon } from "lucide-react";
@@ -11,8 +12,10 @@ import { cn } from "~/lib/utils";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { Button } from "../ui/button";
+import { InlineCommentCountBadge } from "../InlineCommentCountBadge";
 
 const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
+const EMPTY_INLINE_COMMENT_COUNTS: ReadonlyMap<string, number> = new Map();
 
 export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   turnId: TurnId;
@@ -85,9 +88,17 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
   files: ReadonlyArray<TurnDiffFileChange>;
   allDirectoriesExpanded: boolean;
   resolvedTheme: "light" | "dark";
+  inlineCommentCountByFilePath?: ReadonlyMap<string, number>;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
-  const { files, allDirectoriesExpanded, onOpenTurnDiff, resolvedTheme, turnId } = props;
+  const {
+    files,
+    allDirectoriesExpanded,
+    inlineCommentCountByFilePath = EMPTY_INLINE_COMMENT_COUNTS,
+    onOpenTurnDiff,
+    resolvedTheme,
+    turnId,
+  } = props;
   const treeNodes = useMemo(() => buildTurnDiffTree(files), [files]);
   const directoryPathsKey = useMemo(
     () => collectDirectoryPaths(treeNodes).join("\u0000"),
@@ -127,6 +138,8 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
     const leftPadding = 8 + depth * 14;
     if (node.kind === "directory") {
       const isExpanded = expandedDirectories[node.path] ?? allDirectoriesExpanded;
+      const inlineCommentCount = sumTurnDiffTreeFileValues(node, inlineCommentCountByFilePath);
+      const showInlineCommentCount = !isExpanded && inlineCommentCount > 0;
       return (
         <div key={`dir:${node.path}`}>
           <button
@@ -151,9 +164,17 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
             <span className="truncate font-mono text-[11px] text-muted-foreground/90 group-hover:text-foreground/90">
               {node.name}
             </span>
-            {hasNonZeroStat(node.stat) && (
-              <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">
-                <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+            {(showInlineCommentCount || hasNonZeroStat(node.stat)) && (
+              <span className="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[10px] tabular-nums">
+                <InlineCommentCountBadge
+                  count={showInlineCommentCount ? inlineCommentCount : 0}
+                  label={`${inlineCommentCount} inline comment${
+                    inlineCommentCount === 1 ? "" : "s"
+                  } in ${node.path}`}
+                />
+                {hasNonZeroStat(node.stat) && (
+                  <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+                )}
               </span>
             )}
           </button>
@@ -165,6 +186,7 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
         </div>
       );
     }
+    const inlineCommentCount = inlineCommentCountByFilePath.get(node.path) ?? 0;
 
     return (
       <button
@@ -186,9 +208,17 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
         <span className="truncate font-mono text-[11px] text-muted-foreground/80 group-hover:text-foreground/90">
           {node.name}
         </span>
-        {node.stat && (
-          <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">
-            <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+        {(inlineCommentCount > 0 || node.stat) && (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[10px] tabular-nums">
+            <InlineCommentCountBadge
+              count={inlineCommentCount}
+              label={`${inlineCommentCount} inline comment${
+                inlineCommentCount === 1 ? "" : "s"
+              } in ${node.path}`}
+            />
+            {node.stat && (
+              <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+            )}
           </span>
         )}
       </button>
