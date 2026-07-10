@@ -139,10 +139,6 @@ function resolveVisibleDiffFileKey(
   return activeFileKey;
 }
 
-function collectTourStepFilePaths(step: InteractiveReviewTourStep): string[] {
-  return Array.from(new Set([...step.files, ...step.anchors.map((anchor) => anchor.filePath)]));
-}
-
 function formatTourAnchorRange(anchor: InteractiveReviewTourAnchor): string {
   if (anchor.rangeLabel) return anchor.rangeLabel;
   if (anchor.startLine === null) return "";
@@ -315,7 +311,7 @@ export default function DiffPanel({
   }));
   const [navigatedFileKey, setNavigatedFileKey] = useState<string | null>(null);
   const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null);
-  const [isTourPanelCollapsed, setTourPanelCollapsed] = useState(false);
+  const [isTourPanelCollapsed, setTourPanelCollapsed] = useState(true);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
 
   const routeThreadRef = useParams({
@@ -347,10 +343,6 @@ export default function DiffPanel({
   const tourSteps = interactiveReviewTour?.steps ?? [];
   const activeTourStep =
     tourSteps.find((step) => step.id === activeTourStepId) ?? tourSteps[0] ?? null;
-  const activeTourStepFilePaths = useMemo(
-    () => (activeTourStep ? collectTourStepFilePaths(activeTourStep) : []),
-    [activeTourStep],
-  );
   const activeTourStepCodeNotesByFilePath = useMemo(() => {
     if (!activeTourStep || activeTourStep.anchors.length === 0) return EMPTY_TOUR_CODE_NOTES;
     const notesByFilePath = new Map<string, InteractiveReviewTourAnchor[]>();
@@ -400,7 +392,7 @@ export default function DiffPanel({
 
   useEffect(() => {
     setActiveTourStepId(interactiveReviewTour?.steps[0]?.id ?? null);
-    setTourPanelCollapsed(false);
+    setTourPanelCollapsed(true);
   }, [interactiveReviewTour?.sourceMessageId, interactiveReviewTour?.steps]);
 
   const selectedTurnId = diffSelection.kind === "turn" ? diffSelection.turnId : null;
@@ -657,22 +649,7 @@ export default function DiffPanel({
       }),
     [collapsedDiffFileKeys, renderableFiles],
   );
-  const codeViewFiles = useMemo<DiffCodeViewFile[]>(() => {
-    if (!activeTourStep || activeTourStepFilePaths.length === 0) {
-      return allCodeViewFiles;
-    }
-    const filePathSet = new Set(activeTourStepFilePaths);
-    const scopedFiles = allCodeViewFiles.filter((file) => filePathSet.has(file.filePath));
-    if (scopedFiles.length !== filePathSet.size) return allCodeViewFiles;
-    const order = new Map(activeTourStepFilePaths.map((filePath, index) => [filePath, index]));
-    return scopedFiles
-      .toSorted(
-        (left, right) =>
-          (order.get(left.filePath) ?? Number.MAX_SAFE_INTEGER) -
-          (order.get(right.filePath) ?? Number.MAX_SAFE_INTEGER),
-      )
-      .map((file) => ({ ...file, collapsed: false }));
-  }, [activeTourStep, activeTourStepFilePaths, allCodeViewFiles]);
+  const codeViewFiles = allCodeViewFiles;
   const reviewFileContextByPath = EMPTY_REVIEW_FILE_CONTEXT;
   const reviewFindingsByFilePath = EMPTY_REVIEW_FINDINGS;
   const selectedFileKey = selectedFilePath
@@ -756,6 +733,13 @@ export default function DiffPanel({
     },
     [allCodeViewFiles, codeViewFiles],
   );
+
+  useEffect(() => {
+    const anchor = activeTourStep?.anchors[0];
+    if (!anchor) return;
+    const timeout = window.setTimeout(() => scrollToDiffAnchor(anchor), 0);
+    return () => window.clearTimeout(timeout);
+  }, [activeTourStep?.id, scrollToDiffAnchor]);
 
   const openDiffFile = useCallback(
     (filePath: string) => {
@@ -1080,10 +1064,12 @@ export default function DiffPanel({
             )}
             {interactiveReviewTour && activeTourStep ? (
               <InteractiveReviewTourPanel
+                variant={renderablePatch?.kind === "files" ? "compact" : "fallback"}
                 tour={interactiveReviewTour}
                 activeStep={activeTourStep}
                 activeStepIndex={tourSteps.findIndex((step) => step.id === activeTourStep.id)}
                 onSelectStep={setActiveTourStepId}
+                onSelectAnchor={scrollToDiffAnchor}
                 onAskStep={onAskInteractiveReviewStep}
                 collapsed={isTourPanelCollapsed}
                 onCollapsedChange={setTourPanelCollapsed}
@@ -1118,10 +1104,36 @@ export default function DiffPanel({
               <div
                 className={cn(
                   "diff-panel-file-layout",
-                  showDiffFileNavigator && "diff-panel-file-layout-with-nav",
+                  interactiveReviewTour && activeTourStep
+                    ? "diff-panel-file-layout-with-tour"
+                    : showDiffFileNavigator && "diff-panel-file-layout-with-nav",
                 )}
               >
-                {showDiffFileNavigator ? (
+                {interactiveReviewTour && activeTourStep ? (
+                  <div className="interactive-review-tour-rail">
+                    <InteractiveReviewTourPanel
+                      variant="sidebar"
+                      tour={interactiveReviewTour}
+                      activeStep={activeTourStep}
+                      activeStepIndex={tourSteps.findIndex((step) => step.id === activeTourStep.id)}
+                      onSelectStep={setActiveTourStepId}
+                      onSelectAnchor={scrollToDiffAnchor}
+                      onAskStep={onAskInteractiveReviewStep}
+                      collapsed={false}
+                      onCollapsedChange={setTourPanelCollapsed}
+                    />
+                    <DiffFileNavigator
+                      activeFileKey={activeNavigatorFileKey}
+                      files={codeViewFiles}
+                      codeNotesByFilePath={activeTourStepCodeNotesByFilePath}
+                      inlineCommentCountByFilePath={inlineCommentCountByFilePath}
+                      reviewFileContextByPath={reviewFileContextByPath}
+                      resolvedTheme={resolvedTheme}
+                      onSelectFile={scrollToDiffFile}
+                      onSelectCodeNote={scrollToDiffAnchor}
+                    />
+                  </div>
+                ) : showDiffFileNavigator ? (
                   <DiffFileNavigator
                     activeFileKey={activeNavigatorFileKey}
                     files={codeViewFiles}
@@ -1229,32 +1241,55 @@ export default function DiffPanel({
 }
 
 function InteractiveReviewTourPanel({
+  variant,
   tour,
   activeStep,
   activeStepIndex,
   onSelectStep,
+  onSelectAnchor,
   onAskStep,
   collapsed,
   onCollapsedChange,
 }: {
+  variant: "compact" | "fallback" | "sidebar";
   tour: InteractiveReviewTour;
   activeStep: InteractiveReviewTourStep;
   activeStepIndex: number;
   onSelectStep: (stepId: string) => void;
+  onSelectAnchor: (anchor: InteractiveReviewTourAnchor) => void;
   onAskStep: ((step: InteractiveReviewTourStep, text: string) => void) | undefined;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
 }) {
+  const isSidebar = variant === "sidebar";
   const safeStepIndex = Math.max(0, activeStepIndex);
   const previousStep = tour.steps[safeStepIndex - 1] ?? null;
   const nextStep = tour.steps[safeStepIndex + 1] ?? null;
   const [questionDraft, setQuestionDraft] = useState("");
   const [questionOpen, setQuestionOpen] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const activeStepButtonRef = useRef<HTMLButtonElement>(null);
+  const promptCount = activeStep.questions.length + activeStep.alternatives.length;
 
   useEffect(() => {
     setQuestionDraft("");
     setQuestionOpen(false);
+    setPromptsOpen(false);
   }, [activeStep.id]);
+
+  useEffect(() => {
+    if (!outlineOpen) return;
+    activeStepButtonRef.current?.scrollIntoView({
+      behavior: "auto",
+      block: "nearest",
+    });
+  }, [activeStep.id, outlineOpen]);
+
+  const selectStep = (stepId: string) => {
+    setOutlineOpen(false);
+    onSelectStep(stepId);
+  };
 
   const submitQuestion = () => {
     const text = questionDraft.trim();
@@ -1265,133 +1300,64 @@ function InteractiveReviewTourPanel({
   };
 
   return (
-    <div className="shrink-0 border-b border-border bg-background">
-      <div className="flex min-w-0 items-start gap-3 px-3 py-3">
-        <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/45 text-muted-foreground">
+    <section
+      className={cn(
+        "interactive-review-tour min-h-0 bg-background",
+        variant === "sidebar"
+          ? "interactive-review-tour-sidebar relative h-full flex-col border-r border-border"
+          : variant === "compact"
+            ? "interactive-review-tour-compact shrink-0 flex-col border-b border-border"
+            : "interactive-review-tour-fallback shrink-0 flex-col border-b border-border",
+      )}
+      aria-label="Interactive review tour"
+    >
+      <header className="flex h-11 min-w-0 items-center gap-2.5 border-b border-border/60 px-3">
+        <div className="flex size-6 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary">
           <BookOpenTextIcon className="size-3.5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="min-w-0 space-y-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                Step {safeStepIndex + 1} of {tour.steps.length}
-              </span>
-              <span className="text-[10px] text-muted-foreground/70">•</span>
-              <span className="rounded-sm border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
-                {activeStep.kind}
-              </span>
-              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                {tour.title}
-              </span>
-            </div>
-            <h3
-              className="truncate text-sm leading-5 font-semibold text-foreground"
-              title={activeStep.title}
-            >
-              {activeStep.title}
-            </h3>
-          </div>
-          <div
-            aria-hidden={collapsed}
-            className={cn(
-              "grid min-w-0 overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-200 ease-out motion-reduce:transition-none",
-              collapsed ? "mt-0 grid-rows-[0fr] opacity-0" : "mt-2 grid-rows-[1fr] opacity-100",
-            )}
+          <p className="text-[9px] font-semibold tracking-[0.11em] text-primary uppercase">
+            {isSidebar ? "Review notes" : "Review note"}
+          </p>
+          <p
+            className="truncate text-xs font-medium text-foreground/85"
+            title={isSidebar ? tour.title : activeStep.title}
           >
-            <div className={cn("min-h-0 overflow-hidden", collapsed && "pointer-events-none")}>
-              <div className="grid min-w-0 gap-3">
-                <div className="min-w-0 space-y-1.5">
-                  <p className="text-sm leading-relaxed text-foreground/85">{activeStep.body}</p>
-                  {activeStep.whyThisMatters ? (
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      <span className="font-medium text-foreground/80">Why it matters: </span>
-                      {activeStep.whyThisMatters}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-              {activeStep.questions.length > 0 || activeStep.alternatives.length > 0 ? (
-                <div className="interactive-review-tour-discussion grid gap-2 border-t border-border/60 pt-2 text-xs">
-                  {activeStep.questions.length > 0 ? (
-                    <div>
-                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                        Questions
-                      </p>
-                      <ul className="space-y-1 text-muted-foreground">
-                        {activeStep.questions.map((question) => (
-                          <li key={question}>{question}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {activeStep.alternatives.length > 0 ? (
-                    <div>
-                      <p className="mb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                        Alternatives
-                      </p>
-                      <ul className="space-y-1 text-muted-foreground">
-                        {activeStep.alternatives.map((alternative) => (
-                          <li key={alternative}>{alternative}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {questionOpen && onAskStep ? (
-                <div className="mt-3 rounded-md border border-border/70 bg-muted/20 p-2.5">
-                  <div className="mb-2 flex items-center gap-2 text-xs font-medium text-foreground">
-                    <MessageSquareIcon className="size-3.5 text-muted-foreground" />
-                    <span>Ask about this step</span>
-                  </div>
-                  <Textarea
-                    autoFocus
-                    size="sm"
-                    value={questionDraft}
-                    placeholder="Type a question"
-                    aria-label="Question about this review step"
-                    onChange={(event) => setQuestionDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        setQuestionDraft("");
-                        setQuestionOpen(false);
-                      }
-                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                        event.preventDefault();
-                        submitQuestion();
-                      }
-                    }}
-                  />
-                  <div className="mt-2 flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setQuestionDraft("");
-                        setQuestionOpen(false);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button size="sm" disabled={!questionDraft.trim()} onClick={submitQuestion}>
-                      Add to chat
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
+            {isSidebar ? tour.title : activeStep.title}
+          </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                  outlineOpen && "bg-muted text-foreground",
+                )}
+                aria-expanded={outlineOpen}
+                aria-label={outlineOpen ? "Hide tour outline" : "Show tour outline"}
+                onClick={() => {
+                  if (!isSidebar) onCollapsedChange(false);
+                  setOutlineOpen((open) => !open);
+                }}
+              >
+                {isSidebar ? <Rows3Icon className="size-3.5" /> : null}
+                {safeStepIndex + 1}/{tour.steps.length}
+              </button>
+            }
+          />
+          <TooltipPopup>{outlineOpen ? "Hide tour outline" : "Show all steps"}</TooltipPopup>
+        </Tooltip>
+        {!isSidebar ? (
           <Tooltip>
             <TooltipTrigger
               render={
                 <button
                   type="button"
-                  className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   aria-expanded={!collapsed}
-                  aria-label={collapsed ? "Expand walkthrough" : "Collapse walkthrough"}
+                  aria-label={collapsed ? "Expand review note" : "Collapse review note"}
                   onClick={() => onCollapsedChange(!collapsed)}
                 >
                   <ChevronDownIcon
@@ -1400,67 +1366,286 @@ function InteractiveReviewTourPanel({
                 </button>
               }
             />
-            <TooltipPopup>{collapsed ? "Expand walkthrough" : "Collapse walkthrough"}</TooltipPopup>
+            <TooltipPopup>{collapsed ? "Show review note" : "Hide review note"}</TooltipPopup>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+        ) : null}
+      </header>
+
+      {isSidebar || !collapsed ? (
+        <div
+          className={cn(
+            "min-h-0 min-w-0",
+            isSidebar
+              ? "flex flex-1 flex-col overflow-hidden"
+              : "max-h-[min(26rem,50vh)] overflow-y-auto overscroll-contain",
+          )}
+        >
+          {outlineOpen ? (
+            <nav
+              className="m-2 mb-0 max-h-[min(22rem,45vh)] overflow-y-auto rounded-md border border-border/70 bg-muted/15 p-1"
+              aria-label="Review tour steps"
+            >
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="text-[9px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
+                  Tour outline
+                </span>
+                <span className="text-[9px] text-muted-foreground/70">
+                  {tour.steps.length} notes
+                </span>
+              </div>
+              {tour.steps.map((step, index) => {
+                const isActive = step.id === activeStep.id;
+                return (
+                  <button
+                    ref={isActive ? activeStepButtonRef : undefined}
+                    key={step.id}
+                    type="button"
+                    className={cn(
+                      "flex min-h-8 w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+                      isActive
+                        ? "bg-primary/10 text-foreground"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    )}
+                    aria-current={isActive ? "step" : undefined}
+                    onClick={() => selectStep(step.id)}
+                  >
+                    <span
+                      className={cn(
+                        "flex size-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-semibold tabular-nums",
+                        isActive
+                          ? "border-primary/45 bg-primary text-primary-foreground"
+                          : "border-border bg-background text-muted-foreground",
+                      )}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{step.title}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          ) : null}
+
+          <div className={cn("px-3 py-3", isSidebar && "min-h-0 flex-1 overflow-y-auto pb-14")}>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="rounded-sm border border-primary/20 bg-primary/8 px-1.5 py-0.5 text-[9px] font-semibold tracking-[0.08em] text-primary uppercase">
+                {activeStep.kind}
+              </span>
+              <h3 className="min-w-0 flex-1 text-sm leading-5 font-semibold text-foreground">
+                {activeStep.title}
+              </h3>
+            </div>
+
+            {activeStep.anchors.length > 0 || activeStep.files.length > 0 ? (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[9px] font-semibold tracking-[0.09em] text-muted-foreground uppercase">
+                  In the code
+                </p>
+                {activeStep.anchors.map((anchor) => {
+                  const range = formatTourAnchorRange(anchor);
+                  return (
+                    <button
+                      key={`${anchor.filePath}:${anchor.startLine ?? ""}:${anchor.endLine ?? ""}:${
+                        anchor.note ?? ""
+                      }`}
+                      type="button"
+                      className="block w-full rounded-md border border-border/70 bg-muted/15 px-2.5 py-2 text-left transition-colors hover:border-primary/25 hover:bg-primary/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                      onClick={() => onSelectAnchor(anchor)}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-foreground/80">
+                        <span className="min-w-0 flex-1 truncate">{anchor.filePath}</span>
+                        {range ? <span className="shrink-0 text-primary/80">L{range}</span> : null}
+                      </span>
+                      {anchor.note ? (
+                        <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">
+                          {anchor.note}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+                {activeStep.files
+                  .filter(
+                    (filePath) =>
+                      !activeStep.anchors.some((anchor) => anchor.filePath === filePath),
+                  )
+                  .map((filePath) => (
+                    <span
+                      key={filePath}
+                      className="block truncate rounded-md border border-border/60 bg-muted/15 px-2.5 py-2 font-mono text-[10px] text-muted-foreground"
+                      title={filePath}
+                    >
+                      {filePath}
+                    </span>
+                  ))}
+              </div>
+            ) : null}
+
+            <div className="mt-3 space-y-3">
+              <div className="min-w-0 space-y-2">
+                <p className="text-xs leading-relaxed text-foreground/85">{activeStep.body}</p>
+                {activeStep.whyThisMatters ? (
+                  <p className="border-l-2 border-primary/40 pl-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="font-medium text-foreground/80">Why it matters. </span>
+                    {activeStep.whyThisMatters}
+                  </p>
+                ) : null}
+              </div>
+
+              {promptCount > 0 ? (
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    className="flex h-8 w-full items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-2.5 text-left text-xs text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                    aria-expanded={promptsOpen}
+                    onClick={() => setPromptsOpen((open) => !open)}
+                  >
+                    <MessageSquareIcon className="size-3.5 text-primary" />
+                    <span className="font-medium">Reviewer prompts</span>
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      {promptCount}
+                    </span>
+                    <ChevronDownIcon
+                      className={cn(
+                        "ml-auto size-3.5 text-muted-foreground transition-transform",
+                        promptsOpen && "rotate-180",
+                      )}
+                    />
+                  </button>
+                  {promptsOpen ? (
+                    <div className="mt-2 space-y-2 text-[11px]">
+                      {activeStep.questions.length > 0 ? (
+                        <div className="rounded-md border border-border/60 bg-muted/10 p-2.5">
+                          <p className="mb-1.5 text-[9px] font-semibold tracking-[0.09em] text-primary uppercase">
+                            Questions
+                          </p>
+                          <ul className="space-y-1.5 leading-relaxed text-muted-foreground">
+                            {activeStep.questions.map((question) => (
+                              <li key={question} className="flex gap-2">
+                                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary/70" />
+                                <span>{question}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {activeStep.alternatives.length > 0 ? (
+                        <div className="rounded-md border border-border/60 bg-muted/10 p-2.5">
+                          <p className="mb-1.5 text-[9px] font-semibold tracking-[0.09em] text-muted-foreground uppercase">
+                            Alternatives
+                          </p>
+                          <ul className="space-y-1.5 leading-relaxed text-muted-foreground">
+                            {activeStep.alternatives.map((alternative) => (
+                              <li key={alternative} className="flex gap-2">
+                                <ArrowRightIcon className="mt-0.5 size-3 shrink-0 text-muted-foreground/70" />
+                                <span>{alternative}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {questionOpen && onAskStep ? (
+              <div className="mt-3 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium text-foreground">
+                  <MessageSquareIcon className="size-3.5 text-primary" />
+                  <span>Ask about this step</span>
+                </div>
+                <Textarea
+                  autoFocus
+                  size="sm"
+                  value={questionDraft}
+                  placeholder="What would you like to dig into?"
+                  aria-label="Question about this review step"
+                  onChange={(event) => setQuestionDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setQuestionDraft("");
+                      setQuestionOpen(false);
+                    }
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      submitQuestion();
+                    }
+                  }}
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-muted-foreground">⌘ Enter to add to chat</span>
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        setQuestionDraft("");
+                        setQuestionOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button size="xs" disabled={!questionDraft.trim()} onClick={submitQuestion}>
+                      Add to chat
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              className={cn(
+                "mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5",
+                isSidebar &&
+                  "absolute right-0 bottom-0 left-0 z-10 mt-0 bg-background/95 px-3 py-2 backdrop-blur",
+              )}
+            >
+              {onAskStep ? (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Ask about this review step"
+                  onClick={() => setQuestionOpen((open) => !open)}
+                >
+                  <MessageSquareIcon />
+                  Ask
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div className="ml-auto flex min-w-0 items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="xs"
                   disabled={!previousStep}
                   aria-label="Previous tour step"
                   onClick={() => {
-                    if (previousStep) onSelectStep(previousStep.id);
+                    if (previousStep) selectStep(previousStep.id);
                   }}
                 >
-                  <ChevronRightIcon className="size-3.5 rotate-180" />
-                </button>
-              }
-            />
-            <TooltipPopup>Previous step</TooltipPopup>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                  <ChevronRightIcon className="rotate-180" />
+                  Back
+                </Button>
+                <Button
+                  size="xs"
                   disabled={!nextStep}
                   aria-label="Next tour step"
                   onClick={() => {
-                    if (nextStep) onSelectStep(nextStep.id);
+                    if (nextStep) selectStep(nextStep.id);
                   }}
                 >
-                  <ChevronRightIcon className="size-3.5" />
-                </button>
-              }
-            />
-            <TooltipPopup>Next step</TooltipPopup>
-          </Tooltip>
-          {onAskStep ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-muted"
-                    onClick={() => {
-                      onCollapsedChange(false);
-                      setQuestionOpen(true);
-                    }}
-                  >
-                    <MessageSquareIcon className="size-3.5" />
-                    <span>Ask</span>
-                  </button>
-                }
-              />
-              <TooltipPopup>Ask about this step in chat</TooltipPopup>
-            </Tooltip>
-          ) : null}
+                  {nextStep ? "Next" : "Done"}
+                  {nextStep ? <ArrowRightIcon /> : <CheckIcon />}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      ) : null}
+    </section>
   );
 }
 

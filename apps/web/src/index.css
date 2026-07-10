@@ -802,6 +802,55 @@ label:has(> select#reasoning-effort) select {
   background: color-mix(in srgb, var(--background) 96%, var(--card));
 }
 
+.interactive-review-tour-compact,
+.interactive-review-tour-fallback {
+  display: flex;
+}
+
+.interactive-review-tour-sidebar {
+  display: none;
+}
+
+.interactive-review-tour-rail {
+  display: none;
+}
+
+@container (min-width: 60rem) {
+  .diff-panel-file-layout-with-tour {
+    grid-template-columns: minmax(19rem, 21rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .interactive-review-tour-compact {
+    display: none;
+  }
+
+  .interactive-review-tour-sidebar {
+    display: flex;
+  }
+
+  .interactive-review-tour-rail {
+    display: grid;
+    grid-template-rows: minmax(16rem, 1fr) minmax(10rem, 0.48fr);
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+
+  .interactive-review-tour-rail .interactive-review-tour-sidebar {
+    border-right: 0;
+  }
+
+  .interactive-review-tour-rail .diff-panel-file-navigator {
+    display: block;
+    min-height: 0;
+    max-height: none;
+    border-top: 1px solid var(--border);
+    border-right: 0;
+  }
+}
+
 @container (min-width: 64rem) {
   .diff-panel-file-layout-with-nav {
     grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
@@ -812,21 +861,6 @@ label:has(> select#reasoning-effort) select {
     display: block;
     max-height: none;
     border-right: 1px solid var(--border);
-  }
-}
-
-.interactive-review-tour-body,
-.interactive-review-tour-discussion {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-@container (min-width: 54rem) {
-  .interactive-review-tour-body {
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.55fr);
-  }
-
-  .interactive-review-tour-discussion {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
