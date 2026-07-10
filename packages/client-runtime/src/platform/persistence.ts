@@ -2,7 +2,9 @@ import {
   type EnvironmentId,
   type OrchestrationShellSnapshot,
   type OrchestrationThreadDetailSnapshot,
+  type ServerConfig,
   type ThreadId,
+  type VcsListRefsResult,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -24,6 +26,10 @@ export class ConnectionPersistenceError extends Schema.TaggedErrorClass<Connecti
       "load-thread",
       "save-thread",
       "remove-thread",
+      "load-server-config",
+      "save-server-config",
+      "load-vcs-refs",
+      "save-vcs-refs",
       "clear-environment",
     ]),
     message: Schema.String,
@@ -71,6 +77,24 @@ export class EnvironmentCacheStore extends Context.Service<
     readonly removeThread: (
       environmentId: EnvironmentId,
       threadId: ThreadId,
+    ) => Effect.Effect<void, ConnectionPersistenceError>;
+    // Includes provider metadata so offline task creation can offer the last seen models.
+    readonly loadServerConfig: (
+      environmentId: EnvironmentId,
+    ) => Effect.Effect<Option.Option<ServerConfig>, ConnectionPersistenceError>;
+    readonly saveServerConfig: (
+      environmentId: EnvironmentId,
+      config: ServerConfig,
+    ) => Effect.Effect<void, ConnectionPersistenceError>;
+    // Query-specific lists stay live-only because they are incomplete.
+    readonly loadVcsRefs: (
+      environmentId: EnvironmentId,
+      cwd: string,
+    ) => Effect.Effect<Option.Option<VcsListRefsResult>, ConnectionPersistenceError>;
+    readonly saveVcsRefs: (
+      environmentId: EnvironmentId,
+      cwd: string,
+      refs: VcsListRefsResult,
     ) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly clear: (
       environmentId: EnvironmentId,
