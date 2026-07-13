@@ -1299,10 +1299,58 @@ function InteractiveReviewTourPanel({
     setQuestionOpen(false);
   };
 
+  const footer = (
+    <div
+      className={cn(
+        "flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border/60",
+        isSidebar ? "shrink-0 bg-background px-3 py-2" : "mt-3 pt-2.5",
+      )}
+    >
+      {onAskStep ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          aria-label="Ask about this review step"
+          onClick={() => setQuestionOpen((open) => !open)}
+        >
+          <MessageSquareIcon />
+          Ask
+        </Button>
+      ) : (
+        <span />
+      )}
+      <div className="ml-auto flex min-w-0 items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={!previousStep}
+          aria-label="Previous tour step"
+          onClick={() => {
+            if (previousStep) selectStep(previousStep.id);
+          }}
+        >
+          <ChevronRightIcon className="rotate-180" />
+          Back
+        </Button>
+        <Button
+          size="xs"
+          disabled={!nextStep}
+          aria-label="Next tour step"
+          onClick={() => {
+            if (nextStep) selectStep(nextStep.id);
+          }}
+        >
+          {nextStep ? "Next" : "Done"}
+          {nextStep ? <ArrowRightIcon /> : <CheckIcon />}
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <section
       className={cn(
-        "interactive-review-tour min-h-0 bg-background",
+        "interactive-review-tour min-h-0 w-full min-w-0 bg-background",
         variant === "sidebar"
           ? "interactive-review-tour-sidebar relative h-full flex-col border-r border-border"
           : variant === "compact"
@@ -1426,7 +1474,12 @@ function InteractiveReviewTourPanel({
             </nav>
           ) : null}
 
-          <div className={cn("px-3 py-3", isSidebar && "min-h-0 flex-1 overflow-y-auto pb-14")}>
+          <div
+            className={cn(
+              "min-w-0 px-3 py-3",
+              isSidebar && "min-h-0 flex-1 overflow-x-hidden overflow-y-auto",
+            )}
+          >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="rounded-sm border border-primary/20 bg-primary/8 px-1.5 py-0.5 text-[9px] font-semibold tracking-[0.08em] text-primary uppercase">
                 {activeStep.kind}
@@ -1596,53 +1649,9 @@ function InteractiveReviewTourPanel({
               </div>
             ) : null}
 
-            <div
-              className={cn(
-                "mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5",
-                isSidebar &&
-                  "absolute right-0 bottom-0 left-0 z-10 mt-0 bg-background/95 px-3 py-2 backdrop-blur",
-              )}
-            >
-              {onAskStep ? (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  aria-label="Ask about this review step"
-                  onClick={() => setQuestionOpen((open) => !open)}
-                >
-                  <MessageSquareIcon />
-                  Ask
-                </Button>
-              ) : (
-                <span />
-              )}
-              <div className="ml-auto flex min-w-0 items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="xs"
-                  disabled={!previousStep}
-                  aria-label="Previous tour step"
-                  onClick={() => {
-                    if (previousStep) selectStep(previousStep.id);
-                  }}
-                >
-                  <ChevronRightIcon className="rotate-180" />
-                  Back
-                </Button>
-                <Button
-                  size="xs"
-                  disabled={!nextStep}
-                  aria-label="Next tour step"
-                  onClick={() => {
-                    if (nextStep) selectStep(nextStep.id);
-                  }}
-                >
-                  {nextStep ? "Next" : "Done"}
-                  {nextStep ? <ArrowRightIcon /> : <CheckIcon />}
-                </Button>
-              </div>
-            </div>
+            {!isSidebar ? footer : null}
           </div>
+          {isSidebar ? footer : null}
         </div>
       ) : null}
     </section>
