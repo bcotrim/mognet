@@ -296,10 +296,19 @@ describe("OrchestrationEngine", () => {
         createdAt,
       }),
     );
+    await system.run(
+      engine.dispatch({
+        type: "project.meta.update",
+        commandId: CommandId.make("cmd-project-1-default-branch"),
+        projectId: asProjectId("project-1"),
+        defaultBranch: "develop",
+      }),
+    );
 
     const readModelA = await system.readModel();
     const readModelB = await system.readModel();
     expect(readModelB).toEqual(readModelA);
+    expect(readModelA.projects[0]?.defaultBranch).toBe("develop");
     await system.dispose();
   });
 

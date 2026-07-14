@@ -28,6 +28,7 @@ const asMessageId = (value: string): MessageId => MessageId.make(value);
 const asEventId = (value: string): EventId => EventId.make(value);
 const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.make(value);
 const PROJECT_DEFAULTS = {
+  defaultBranch: null,
   defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
   newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
   textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,

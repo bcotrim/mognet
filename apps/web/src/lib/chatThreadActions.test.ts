@@ -130,7 +130,7 @@ describe("chatThreadActions", () => {
           branch: "feature/current",
           worktreePath: null,
         },
-        getNewThreadDefaults: () => ({ envMode: "worktree", startFromOrigin: true }),
+        getNewThreadDefaults: () => ({ branch: null, envMode: "worktree", startFromOrigin: true }),
         handleNewThread,
       }),
     );
@@ -138,6 +138,33 @@ describe("chatThreadActions", () => {
     expect(handleNewThread).toHaveBeenCalledWith(scopeProjectRef(ENVIRONMENT_ID, PROJECT_ID), {
       envMode: "worktree",
       startFromOrigin: true,
+    });
+  });
+
+  it("lets a project default branch override active thread branch context", async () => {
+    const handleNewThread = vi.fn<ChatThreadActionContext["handleNewThread"]>(async () => {});
+
+    await startNewThreadFromContext(
+      createContext({
+        activeThread: {
+          environmentId: ENVIRONMENT_ID,
+          projectId: PROJECT_ID,
+          branch: "feature/current",
+          worktreePath: null,
+        },
+        getNewThreadDefaults: () => ({
+          branch: "develop",
+          envMode: "local",
+          startFromOrigin: false,
+        }),
+        handleNewThread,
+      }),
+    );
+
+    expect(handleNewThread).toHaveBeenCalledWith(scopeProjectRef(ENVIRONMENT_ID, PROJECT_ID), {
+      branch: "develop",
+      envMode: "local",
+      startFromOrigin: false,
     });
   });
 
@@ -152,10 +179,10 @@ describe("chatThreadActions", () => {
           branch: "feature/current",
           worktreePath: null,
         },
-        getNewThreadDefaults: (environmentId) =>
-          environmentId === OTHER_ENVIRONMENT_ID
-            ? { envMode: "worktree", startFromOrigin: true }
-            : { envMode: "local", startFromOrigin: false },
+        getNewThreadDefaults: (projectRef) =>
+          projectRef.environmentId === OTHER_ENVIRONMENT_ID
+            ? { branch: null, envMode: "worktree", startFromOrigin: true }
+            : { branch: null, envMode: "local", startFromOrigin: false },
         handleNewThread,
       }),
       scopeProjectRef(OTHER_ENVIRONMENT_ID, FALLBACK_PROJECT_ID),

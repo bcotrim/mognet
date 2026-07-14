@@ -129,6 +129,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           title: command.title,
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
+          defaultBranch: command.defaultBranch ?? null,
           defaultThreadEnvMode: command.defaultThreadEnvMode ?? DEFAULT_PROJECT_THREAD_ENV_MODE,
           newWorktreesStartFromOrigin:
             command.newWorktreesStartFromOrigin ?? DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
@@ -163,6 +164,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.defaultModelSelection !== undefined
             ? { defaultModelSelection: command.defaultModelSelection }
             : {}),
+          ...(command.defaultBranch !== undefined ? { defaultBranch: command.defaultBranch } : {}),
           ...(command.defaultThreadEnvMode !== undefined
             ? { defaultThreadEnvMode: command.defaultThreadEnvMode }
             : {}),

@@ -211,6 +211,7 @@ export function projectEvent(
             title: payload.title,
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
+            defaultBranch: payload.defaultBranch ?? null,
             defaultThreadEnvMode: payload.defaultThreadEnvMode ?? DEFAULT_PROJECT_THREAD_ENV_MODE,
             newWorktreesStartFromOrigin:
               payload.newWorktreesStartFromOrigin ??
@@ -249,6 +250,9 @@ export function projectEvent(
                     : {}),
                   ...(payload.defaultModelSelection !== undefined
                     ? { defaultModelSelection: payload.defaultModelSelection }
+                    : {}),
+                  ...(payload.defaultBranch !== undefined
+                    ? { defaultBranch: payload.defaultBranch }
                     : {}),
                   ...(payload.defaultThreadEnvMode !== undefined
                     ? { defaultThreadEnvMode: payload.defaultThreadEnvMode }

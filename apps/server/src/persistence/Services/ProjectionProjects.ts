@@ -27,6 +27,7 @@ export const ProjectionProject = Schema.Struct({
   title: Schema.String,
   workspaceRoot: Schema.String,
   defaultModelSelection: Schema.NullOr(ModelSelection),
+  defaultBranch: Schema.NullOr(Schema.String),
   defaultThreadEnvMode: ProjectDefaultThreadEnvMode,
   newWorktreesStartFromOrigin: Schema.Boolean,
   textGenerationModelSelection: ModelSelection,

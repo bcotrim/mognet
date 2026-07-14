@@ -29,6 +29,7 @@ interface NewThreadHandler {
 type NewThreadOptions = NonNullable<Parameters<NewThreadHandler>[1]>;
 
 export interface NewThreadDefaults {
+  readonly branch: string | null;
   readonly envMode: DraftThreadEnvMode;
   readonly startFromOrigin: boolean;
 }
@@ -38,7 +39,7 @@ export interface ChatThreadActionContext {
   readonly activeThread: ThreadContextLike | undefined;
   readonly defaultProjectRef: ScopedProjectRef | null;
   readonly handleNewThread: NewThreadHandler;
-  readonly getNewThreadDefaults?: (environmentId: EnvironmentId) => NewThreadDefaults;
+  readonly getNewThreadDefaults?: (projectRef: ScopedProjectRef) => NewThreadDefaults;
 }
 
 export function resolveNewDraftStartFromOrigin(input: {
@@ -76,12 +77,13 @@ function resolveDefaultThreadOptions(
   context: ChatThreadActionContext,
   projectRef: ScopedProjectRef,
 ): NewThreadOptions | null {
-  const defaults = context.getNewThreadDefaults?.(projectRef.environmentId) ?? null;
+  const defaults = context.getNewThreadDefaults?.(projectRef) ?? null;
   if (!defaults) {
     return null;
   }
 
   return {
+    ...(defaults.branch !== null ? { branch: defaults.branch } : {}),
     envMode: defaults.envMode,
     startFromOrigin: defaults.startFromOrigin,
   };
@@ -92,7 +94,7 @@ function buildContextualThreadOptions(
   projectRef: ScopedProjectRef,
 ): NewThreadOptions {
   const defaultOptions = resolveDefaultThreadOptions(context, projectRef);
-  if (defaultOptions?.envMode === "worktree") {
+  if (defaultOptions?.envMode === "worktree" || defaultOptions?.branch !== undefined) {
     return defaultOptions;
   }
 
