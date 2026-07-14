@@ -36,6 +36,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { modelSelectionsEqual } from "../ChatView.logic";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
+import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -252,6 +253,7 @@ type ProjectSettingsPatch = Partial<
   Pick<
     EnvironmentProject,
     | "defaultModelSelection"
+    | "defaultBranch"
     | "defaultThreadEnvMode"
     | "newWorktreesStartFromOrigin"
     | "textGenerationModelSelection"
@@ -264,6 +266,7 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
   const serverConfigs = useServerConfigs();
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const [optimisticPatch, setOptimisticPatch] = useState<ProjectSettingsPatch>({});
+  const [defaultBranchDraft, setDefaultBranchDraft] = useState(project.defaultBranch ?? "");
   const providers = serverConfigs.get(project.environmentId)?.providers ?? [];
   const projectSettings = { ...project, ...optimisticPatch };
 
@@ -271,12 +274,17 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
     setOptimisticPatch({});
   }, [
     project.defaultModelSelection,
+    project.defaultBranch,
     project.defaultThreadEnvMode,
     project.environmentId,
     project.id,
     project.newWorktreesStartFromOrigin,
     project.textGenerationModelSelection,
   ]);
+
+  useEffect(() => {
+    setDefaultBranchDraft(project.defaultBranch ?? "");
+  }, [project.defaultBranch, project.environmentId, project.id]);
 
   const instanceEntries = useMemo(
     () =>
@@ -338,6 +346,15 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
     [persistProjectPatch],
   );
 
+  const persistDefaultBranch = useCallback(() => {
+    const defaultBranch = defaultBranchDraft.trim() || null;
+    if (defaultBranch === projectSettings.defaultBranch) {
+      return;
+    }
+    setDefaultBranchDraft(defaultBranch ?? "");
+    void persistProjectPatch({ defaultBranch });
+  }, [defaultBranchDraft, persistProjectPatch, projectSettings.defaultBranch]);
+
   const handleStartFromOriginChange = useCallback(
     (checked: boolean) => {
       void persistProjectPatch({ newWorktreesStartFromOrigin: checked });
@@ -374,6 +391,26 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
               </SelectItem>
             </SelectPopup>
           </Select>
+        }
+      />
+
+      <SettingsRow
+        title="Default branch"
+        description="Use this branch when starting new threads instead of inheriting the current thread branch."
+        control={
+          <Input
+            className="w-full sm:w-56"
+            value={defaultBranchDraft}
+            placeholder="Inherit current branch"
+            aria-label="Project default branch"
+            onValueChange={setDefaultBranchDraft}
+            onBlur={persistDefaultBranch}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+          />
         }
       />
 

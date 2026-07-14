@@ -265,6 +265,26 @@ describe("resolveSidebarNewThreadEnvMode", () => {
 });
 
 describe("resolveSidebarNewThreadSeedContext", () => {
+  it("uses the project default branch instead of active thread context", () => {
+    expect(
+      resolveSidebarNewThreadSeedContext({
+        projectId: "project-1",
+        defaultBranch: "develop",
+        defaultEnvMode: "local",
+        defaultStartFromOrigin: false,
+        activeThread: {
+          projectId: "project-1",
+          branch: "feature/current",
+          worktreePath: null,
+        },
+        activeDraftThread: null,
+      }),
+    ).toEqual({
+      branch: "develop",
+      envMode: "local",
+    });
+  });
+
   it("prefers the default worktree mode over active thread context", () => {
     expect(
       resolveSidebarNewThreadSeedContext({

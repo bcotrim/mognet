@@ -499,6 +499,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             title: event.payload.title,
             workspaceRoot: event.payload.workspaceRoot,
             defaultModelSelection: event.payload.defaultModelSelection,
+            defaultBranch: event.payload.defaultBranch ?? null,
             defaultThreadEnvMode:
               event.payload.defaultThreadEnvMode ?? DEFAULT_PROJECT_THREAD_ENV_MODE,
             newWorktreesStartFromOrigin:
@@ -529,6 +530,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               : {}),
             ...(event.payload.defaultModelSelection !== undefined
               ? { defaultModelSelection: event.payload.defaultModelSelection }
+              : {}),
+            ...(event.payload.defaultBranch !== undefined
+              ? { defaultBranch: event.payload.defaultBranch }
               : {}),
             ...(event.payload.defaultThreadEnvMode !== undefined
               ? { defaultThreadEnvMode: event.payload.defaultThreadEnvMode }

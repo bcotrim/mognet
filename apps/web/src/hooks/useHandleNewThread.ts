@@ -35,9 +35,11 @@ import { useClientSettings } from "./useSettings";
 
 export function resolveNewThreadDefaults(
   settings: Pick<ServerSettings, "defaultThreadEnvMode" | "newWorktreesStartFromOrigin">,
+  defaultBranch: string | null = null,
 ) {
   const envMode = settings.defaultThreadEnvMode;
   return {
+    branch: defaultBranch,
     envMode,
     startFromOrigin: resolveNewDraftStartFromOrigin({
       envMode,
@@ -187,11 +189,13 @@ export function useNewThreadHandler() {
       const newWorktreesStartFromOrigin =
         project?.newWorktreesStartFromOrigin ?? environmentSettings.newWorktreesStartFromOrigin;
       const initialEnvMode = options?.envMode ?? defaultThreadEnvMode;
+      const initialBranch =
+        options?.branch !== undefined ? options.branch : (project?.defaultBranch ?? null);
       return (async () => {
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
           threadId,
           createdAt,
-          branch: options?.branch ?? null,
+          branch: initialBranch,
           worktreePath: options?.worktreePath ?? null,
           envMode: initialEnvMode,
           startFromOrigin:
@@ -279,11 +283,18 @@ export function useHandleNewThread() {
     ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
     : null;
   const getNewThreadDefaults = useCallback(
-    (environmentId: EnvironmentId) =>
-      resolveNewThreadDefaults(
-        serverConfigs.get(environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS,
-      ),
-    [serverConfigs],
+    (projectRef: ScopedProjectRef) => {
+      const project = projects.find(
+        (candidate) =>
+          candidate.environmentId === projectRef.environmentId &&
+          candidate.id === projectRef.projectId,
+      );
+      return resolveNewThreadDefaults(
+        serverConfigs.get(projectRef.environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS,
+        project?.defaultBranch ?? null,
+      );
+    },
+    [projects, serverConfigs],
   );
 
   return {

@@ -15,6 +15,7 @@ describe("resolveNewThreadDefaults", () => {
         newWorktreesStartFromOrigin: true,
       }),
     ).toEqual({
+      branch: null,
       envMode: "worktree",
       startFromOrigin: true,
     });
@@ -26,6 +27,22 @@ describe("resolveNewThreadDefaults", () => {
         newWorktreesStartFromOrigin: true,
       }),
     ).toEqual({
+      branch: null,
+      envMode: "local",
+      startFromOrigin: false,
+    });
+
+    expect(
+      resolveNewThreadDefaults(
+        {
+          ...DEFAULT_SERVER_SETTINGS,
+          defaultThreadEnvMode: "local",
+          newWorktreesStartFromOrigin: false,
+        },
+        "develop",
+      ),
+    ).toEqual({
+      branch: "develop",
       envMode: "local",
       startFromOrigin: false,
     });

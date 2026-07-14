@@ -1940,6 +1940,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             : null;
       const seedContext = resolveSidebarNewThreadSeedContext({
         projectId: member.id,
+        defaultBranch: member.defaultBranch ?? null,
         defaultEnvMode: resolveSidebarNewThreadEnvMode({
           defaultEnvMode: defaultThreadEnvMode,
         }),
