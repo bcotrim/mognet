@@ -120,6 +120,7 @@ export function QuoteReplySelector({
   const [message, setMessage] = useState("");
 
   const clearSelection = useCallback(() => {
+    window.getSelection()?.removeAllRanges();
     selectedRangeRef.current = null;
     setSelection(null);
     setMessage("");
@@ -230,8 +231,15 @@ export function QuoteReplySelector({
         clearSelection();
       }
     };
+    const handleScroll = (event: Event) => {
+      const popover = popoverRef.current;
+      if (popover && event.target instanceof Node && popover.contains(event.target)) {
+        return;
+      }
+      clearSelection();
+    };
 
-    document.addEventListener("scroll", queueUpdate, true);
+    document.addEventListener("scroll", handleScroll, true);
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", queueUpdate);
@@ -239,7 +247,7 @@ export function QuoteReplySelector({
       if (frame !== null) {
         window.cancelAnimationFrame(frame);
       }
-      document.removeEventListener("scroll", queueUpdate, true);
+      document.removeEventListener("scroll", handleScroll, true);
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", queueUpdate);
@@ -261,7 +269,6 @@ export function QuoteReplySelector({
         ...(rangeLabel ? { rangeLabel } : {}),
       }),
     );
-    window.getSelection()?.removeAllRanges();
     clearSelection();
   }, [
     addReviewComment,
