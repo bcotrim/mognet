@@ -112,6 +112,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
         metadata: {},
         payload: {
           projectId: asProjectId("project-existing"),
+          kind: "workspace",
           title: "Project",
           workspaceRoot: "/tmp/project",
           defaultModelSelection: null,
@@ -158,6 +159,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
         metadata: {},
         payload: {
           projectId: asProjectId("project-first"),
+          kind: "workspace",
           title: "First",
           workspaceRoot: "/tmp/project-first",
           defaultModelSelection: null,
@@ -179,6 +181,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
         metadata: {},
         payload: {
           projectId: asProjectId("project-second"),
+          kind: "workspace",
           title: "Second",
           workspaceRoot: "/tmp/project-second",
           defaultModelSelection: null,
