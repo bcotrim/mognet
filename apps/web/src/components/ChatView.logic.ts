@@ -86,6 +86,16 @@ export function shouldWriteThreadErrorToCurrentServerThread(input: {
   );
 }
 
+export function resolveThreadError(input: {
+  localError: string | null | undefined;
+  serverError: string | null | undefined;
+  dismissedServerError: string | null | undefined;
+}): string | null {
+  if (input.localError) return input.localError;
+  if (!input.serverError || input.serverError === input.dismissedServerError) return null;
+  return input.serverError;
+}
+
 export function buildThreadTurnInterruptInput(thread: Pick<Thread, "id" | "session">): {
   threadId: ThreadId;
   turnId?: TurnId;

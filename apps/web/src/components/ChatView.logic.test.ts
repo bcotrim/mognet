@@ -13,6 +13,7 @@ import {
   hasServerAcknowledgedLocalDispatch,
   modelSelectionsEqual,
   reconcileRetainedMountedThreadIds,
+  resolveThreadError,
   resolveSendEnvMode,
   shouldIncludeTurnStartBootstrap,
   shouldWriteThreadErrorToCurrentServerThread,
@@ -125,6 +126,38 @@ describe("modelSelectionsEqual", () => {
         { instanceId: ProviderInstanceId.make("claudeAgent"), model: "claude-opus-4-6" },
       ),
     ).toBe(false);
+  });
+});
+
+describe("resolveThreadError", () => {
+  it("keeps a dismissed server error hidden", () => {
+    expect(
+      resolveThreadError({
+        localError: null,
+        serverError: "Message failed",
+        dismissedServerError: "Message failed",
+      }),
+    ).toBeNull();
+  });
+
+  it("shows a new server error after dismissing the previous one", () => {
+    expect(
+      resolveThreadError({
+        localError: null,
+        serverError: "A newer failure",
+        dismissedServerError: "Message failed",
+      }),
+    ).toBe("A newer failure");
+  });
+
+  it("prefers a local error over the server error", () => {
+    expect(
+      resolveThreadError({
+        localError: "Local failure",
+        serverError: "Message failed",
+        dismissedServerError: "Message failed",
+      }),
+    ).toBe("Local failure");
   });
 });
 
