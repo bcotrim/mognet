@@ -236,6 +236,7 @@ import {
   cloneComposerImageForRetry,
   deriveLockedProvider,
   readFileAsDataUrl,
+  resolveThreadError,
   resolveSendEnvMode,
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
@@ -775,6 +776,9 @@ function ChatViewContent(props: ChatViewProps) {
   const [localServerErrorsByThreadKey, setLocalServerErrorsByThreadKey] = useState<
     Record<string, string | null>
   >({});
+  const [dismissedServerErrorsByThreadKey, setDismissedServerErrorsByThreadKey] = useState<
+    Record<string, string | null>
+  >({});
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
@@ -873,8 +877,13 @@ function ChatViewContent(props: ChatViewProps) {
     () => resolveScheduledThreadOrigin({ thread: activeThread, scheduledTasks }),
     [activeThread, scheduledTasks],
   );
+  const serverThreadError = serverThread?.session?.lastError ?? null;
   const threadError = isServerThread
-    ? (localServerError ?? serverThread?.session?.lastError ?? null)
+    ? resolveThreadError({
+        localError: localServerError,
+        serverError: serverThreadError,
+        dismissedServerError: dismissedServerErrorsByThreadKey[routeThreadKey],
+      })
     : localDraftError;
   const runtimeMode = composerRuntimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
@@ -1901,6 +1910,12 @@ function ChatViewContent(props: ChatViewProps) {
         serverThread.environmentId === routeThreadRef.environmentId &&
         serverThread.id === targetThreadId
       ) {
+        setDismissedServerErrorsByThreadKey((existing) => {
+          if (!(routeThreadKey in existing)) return existing;
+          const next = { ...existing };
+          delete next[routeThreadKey];
+          return next;
+        });
         setLocalServerErrorsByThreadKey((existing) => {
           if ((existing[routeThreadKey] ?? null) === nextError) {
             return existing;
@@ -1925,6 +1940,22 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [draftId, routeThreadKey, routeThreadRef, serverThread],
   );
+
+  const dismissThreadError = useCallback(() => {
+    if (!activeThread) return;
+    if (!isServerThread) {
+      setThreadError(activeThread.id, null);
+      return;
+    }
+    setLocalServerErrorsByThreadKey((existing) => ({
+      ...existing,
+      [routeThreadKey]: null,
+    }));
+    setDismissedServerErrorsByThreadKey((existing) => ({
+      ...existing,
+      [routeThreadKey]: serverThreadError,
+    }));
+  }, [activeThread, isServerThread, routeThreadKey, serverThreadError, setThreadError]);
 
   const focusComposer = useCallback(() => {
     composerRef.current?.focusAtEnd();
@@ -4632,10 +4663,7 @@ function ChatViewContent(props: ChatViewProps) {
 
         {/* Error banner */}
         <ProviderStatusBanner status={activeProviderStatus} />
-        <ThreadErrorBanner
-          error={threadError}
-          onDismiss={() => setThreadError(activeThread.id, null)}
-        />
+        <ThreadErrorBanner error={threadError} onDismiss={dismissThreadError} />
         {/* Main content area with optional plan sidebar */}
         <div className="flex min-h-0 min-w-0 flex-1">
           {/* Chat column */}
