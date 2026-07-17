@@ -50,6 +50,7 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  interactionSounds: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   defaultEditor: Schema.NullOr(EditorId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   defaultTerminal: Schema.NullOr(ExternalTerminalId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
@@ -550,6 +551,7 @@ export const ClientSettingsPatch = Schema.Struct({
   defaultEditor: Schema.optionalKey(Schema.NullOr(EditorId)),
   defaultTerminal: Schema.optionalKey(Schema.NullOr(ExternalTerminalId)),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  interactionSounds: Schema.optionalKey(Schema.Boolean),
   favorites: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({

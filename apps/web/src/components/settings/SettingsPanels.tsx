@@ -367,6 +367,9 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Visible chats"]
         : []),
       ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
+      ...(settings.interactionSounds !== DEFAULT_UNIFIED_SETTINGS.interactionSounds
+        ? ["Interaction sounds"]
+        : []),
       ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
         ? ["Diff whitespace changes"]
         : []),
@@ -406,6 +409,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.diffIgnoreWhitespace,
       settings.automaticGitFetchInterval,
       settings.enableAssistantStreaming,
+      settings.interactionSounds,
       settings.sidebarChatPreviewCount,
       settings.sidebarThreadPreviewCount,
       settings.timestampFormat,
@@ -428,6 +432,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     updateSettings({
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
+      interactionSounds: DEFAULT_UNIFIED_SETTINGS.interactionSounds,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       defaultEditor: DEFAULT_UNIFIED_SETTINGS.defaultEditor,
       defaultTerminal: DEFAULT_UNIFIED_SETTINGS.defaultTerminal,
@@ -504,6 +509,30 @@ export function GeneralSettingsPanel() {
                 ))}
               </SelectPopup>
             </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Interaction sounds"
+          description="Play subtle audio feedback for buttons, switches, and toggles."
+          resetAction={
+            settings.interactionSounds !== DEFAULT_UNIFIED_SETTINGS.interactionSounds ? (
+              <SettingResetButton
+                label="interaction sounds"
+                onClick={() =>
+                  updateSettings({
+                    interactionSounds: DEFAULT_UNIFIED_SETTINGS.interactionSounds,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.interactionSounds}
+              onCheckedChange={(checked) => updateSettings({ interactionSounds: Boolean(checked) })}
+              aria-label="Play interaction sounds"
+            />
           }
         />
 

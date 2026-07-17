@@ -31,6 +31,13 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
+describe("ClientSettings interaction sounds", () => {
+  it("defaults interaction sounds on and accepts a muted preference", () => {
+    expect(decodeClientSettings({}).interactionSounds).toBe(true);
+    expect(decodeClientSettings({ interactionSounds: false }).interactionSounds).toBe(false);
+  });
+});
+
 describe("ClientSettings open-with defaults", () => {
   it("defaults editor and terminal preferences to automatic", () => {
     const decoded = decodeClientSettings({});

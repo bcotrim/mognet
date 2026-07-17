@@ -20,6 +20,7 @@ const clientSettings: ClientSettings = {
   defaultTerminal: null,
   dismissedProviderUpdateNotificationKeys: [],
   diffIgnoreWhitespace: true,
+  interactionSounds: false,
   favorites: [],
   providerModelPreferences: {},
   sidebarProjectGroupingMode: "repository_path",

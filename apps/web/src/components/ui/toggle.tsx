@@ -2,6 +2,7 @@
 
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
 import { cva, type VariantProps } from "class-variance-authority";
+import { play } from "cuelume";
 
 import { cn } from "~/lib/utils";
 
@@ -32,6 +33,7 @@ const toggleVariants = cva(
 
 function Toggle({
   className,
+  onPressedChange,
   variant,
   size,
   ...props
@@ -40,6 +42,10 @@ function Toggle({
     <TogglePrimitive
       className={cn(toggleVariants({ className, size, variant }))}
       data-slot="toggle"
+      onPressedChange={(pressed, eventDetails) => {
+        play("toggle");
+        onPressedChange?.(pressed, eventDetails);
+      }}
       {...props}
     />
   );
