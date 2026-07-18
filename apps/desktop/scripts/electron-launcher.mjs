@@ -20,7 +20,7 @@ export const APP_BUNDLE_ID = isDevelopment
   ? `app.mognet.desktop.dev.${devBundleIdSuffix || "local"}`
   : "app.mognet.desktop";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["mognet-dev"] : ["mognet"];
-const LAUNCHER_VERSION = 13;
+const LAUNCHER_VERSION = 15;
 const DEVELOPMENT_LAUNCHER_ENV_FILE_NAME = "dev-launcher-env.sh";
 const defaultIconPath = NodePath.join(desktopDir, "resources", "icon.icns");
 const developmentMacIconPngPath = NodePath.join(
@@ -277,11 +277,12 @@ function ensureDevelopmentIconIcns(runtimeDir) {
   }
 }
 
-function patchMainBundleInfoPlist(appBundlePath, iconPath) {
+function patchMainBundleInfoPlist(appBundlePath, iconPath, executableName) {
   const infoPlistPath = NodePath.join(appBundlePath, "Contents", "Info.plist");
   setPlistString(infoPlistPath, "CFBundleDisplayName", APP_DISPLAY_NAME);
   setPlistString(infoPlistPath, "CFBundleName", APP_DISPLAY_NAME);
   setPlistString(infoPlistPath, "CFBundleIdentifier", APP_BUNDLE_ID);
+  setPlistString(infoPlistPath, "CFBundleExecutable", executableName);
   setPlistString(infoPlistPath, "CFBundleIconFile", "icon.icns");
   setPlistJson(infoPlistPath, "CFBundleURLTypes", [
     {
@@ -334,11 +335,25 @@ function readJson(path) {
   }
 }
 
+export function resolveMacLauncherPaths(appBundlePath, displayName = APP_DISPLAY_NAME) {
+  const executableDir = NodePath.join(appBundlePath, "Contents", "MacOS");
+  const launcherExecutableName = `${displayName} Launcher`;
+  return {
+    launcherExecutableName,
+    launcherBinaryPath: NodePath.join(executableDir, launcherExecutableName),
+    runtimeElectronBinaryPath: NodePath.join(executableDir, "Electron"),
+  };
+}
+
 function buildMacLauncher(electronBinaryPath) {
   const sourceAppBundlePath = NodePath.resolve(NodePath.dirname(electronBinaryPath), "../..");
   const runtimeDir = NodePath.join(desktopDir, ".electron-runtime");
   const targetAppBundlePath = NodePath.join(runtimeDir, `${APP_DISPLAY_NAME}.app`);
-  const targetBinaryPath = NodePath.join(targetAppBundlePath, "Contents", "MacOS", "Electron");
+  const developmentPaths = resolveMacLauncherPaths(targetAppBundlePath);
+  const runtimeElectronBinaryPath = developmentPaths.runtimeElectronBinaryPath;
+  const launcherBinaryPath = isDevelopment
+    ? developmentPaths.launcherBinaryPath
+    : runtimeElectronBinaryPath;
   const iconPath = isDevelopment ? ensureDevelopmentIconIcns(runtimeDir) : defaultIconPath;
   const metadataPath = NodePath.join(runtimeDir, "metadata.json");
   const developmentLauncherEnvironmentFilePath = NodePath.join(
@@ -363,13 +378,14 @@ function buildMacLauncher(electronBinaryPath) {
 
   const currentMetadata = readJson(metadataPath);
   if (
-    NodeFS.existsSync(targetBinaryPath) &&
+    NodeFS.existsSync(launcherBinaryPath) &&
+    (!isDevelopment || NodeFS.existsSync(runtimeElectronBinaryPath)) &&
     currentMetadata &&
     JSON.stringify(currentMetadata) === JSON.stringify(expectedMetadata)
   ) {
     ensureMacLauncherBundleSigned(targetAppBundlePath);
     registerMacLauncherBundle(targetAppBundlePath);
-    return targetBinaryPath;
+    return launcherBinaryPath;
   }
 
   NodeFS.rmSync(targetAppBundlePath, { recursive: true, force: true });
@@ -381,12 +397,21 @@ function buildMacLauncher(electronBinaryPath) {
     recursive: true,
     verbatimSymlinks: true,
   });
-  patchMainBundleInfoPlist(targetAppBundlePath, iconPath);
+  patchMainBundleInfoPlist(
+    targetAppBundlePath,
+    iconPath,
+    isDevelopment ? developmentPaths.launcherExecutableName : "Electron",
+  );
   patchHelperBundleInfoPlists(targetAppBundlePath);
   if (isDevelopment) {
+    // Keep Electron's native executable inside the branded bundle. Launching the
+    // node_modules copy makes macOS associate the process (and Dock label) with
+    // Electron.app even though this bundle's Info.plist has the Mognet name.
+    // Its conventional executable name also keeps Electron's default-app runtime
+    // in development mode instead of making app.isPackaged report true.
     writeDevelopmentLauncherScript(
-      targetBinaryPath,
-      electronBinaryPath,
+      launcherBinaryPath,
+      runtimeElectronBinaryPath,
       developmentLauncherEnvironmentFilePath,
     );
   }
@@ -394,7 +419,7 @@ function buildMacLauncher(electronBinaryPath) {
   signMacLauncherBundle(targetAppBundlePath);
   registerMacLauncherBundle(targetAppBundlePath);
 
-  return targetBinaryPath;
+  return launcherBinaryPath;
 }
 
 function isLinuxSetuidSandboxConfigured(electronBinaryPath) {
