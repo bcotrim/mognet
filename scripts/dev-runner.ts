@@ -222,7 +222,7 @@ interface CreateDevRunnerEnvInput {
   readonly serverOffset: number;
   readonly webOffset: number;
   readonly t3Home: string | undefined;
-  readonly noBrowser: boolean | undefined;
+  readonly browser: boolean | undefined;
   readonly autoBootstrapProjectFromCwd: boolean | undefined;
   readonly logWebSocketEvents: boolean | undefined;
   readonly host: string | undefined;
@@ -236,7 +236,7 @@ export function createDevRunnerEnv({
   serverOffset,
   webOffset,
   t3Home,
-  noBrowser,
+  browser,
   autoBootstrapProjectFromCwd,
   logWebSocketEvents,
   host,
@@ -246,7 +246,8 @@ export function createDevRunnerEnv({
   return Effect.gen(function* () {
     const serverPort = port ?? BASE_SERVER_PORT + serverOffset;
     const webPort = BASE_WEB_PORT + webOffset;
-    const resolvedBaseDir = yield* resolveBaseDir(t3Home);
+    const configuredBaseDir = t3Home?.trim() || baseEnv.MOGNET_HOME?.trim() || undefined;
+    const resolvedBaseDir = yield* resolveBaseDir(configuredBaseDir);
     const isDesktopMode = mode === "dev:desktop";
 
     const output: NodeJS.ProcessEnv = {
@@ -255,8 +256,13 @@ export function createDevRunnerEnv({
       VITE_DEV_SERVER_URL:
         devUrl?.toString() ??
         `http://${isDesktopMode ? DESKTOP_DEV_LOOPBACK_HOST : "localhost"}:${webPort}`,
-      MOGNET_HOME: resolvedBaseDir,
     };
+
+    if (configuredBaseDir !== undefined) {
+      output.MOGNET_HOME = resolvedBaseDir;
+    } else {
+      delete output.MOGNET_HOME;
+    }
 
     if (!isDesktopMode) {
       output.MOGNET_PORT = String(serverPort);
@@ -275,10 +281,8 @@ export function createDevRunnerEnv({
       output.MOGNET_HOST = host;
     }
 
-    if (!isDesktopMode && noBrowser !== undefined) {
-      output.MOGNET_NO_BROWSER = noBrowser ? "1" : "0";
-    } else if (!isDesktopMode) {
-      delete output.MOGNET_NO_BROWSER;
+    if (!isDesktopMode) {
+      output.MOGNET_NO_BROWSER = browser === true ? "0" : "1";
     }
 
     if (autoBootstrapProjectFromCwd !== undefined) {
@@ -470,7 +474,7 @@ export function resolveModePortOffsets<R = NetService.NetService>({
 interface DevRunnerCliInput {
   readonly mode: DevMode;
   readonly t3Home: string | undefined;
-  readonly noBrowser: boolean | undefined;
+  readonly browser: boolean | undefined;
   readonly autoBootstrapProjectFromCwd: boolean | undefined;
   readonly logWebSocketEvents: boolean | undefined;
   readonly host: string | undefined;
@@ -508,7 +512,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       serverOffset,
       webOffset,
       t3Home: input.t3Home,
-      noBrowser: input.noBrowser,
+      browser: input.browser,
       autoBootstrapProjectFromCwd: input.autoBootstrapProjectFromCwd,
       logWebSocketEvents: input.logWebSocketEvents,
       host: input.host,
@@ -520,9 +524,10 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       serverOffset !== offset || webOffset !== offset
         ? ` selectedOffset(server=${serverOffset},web=${webOffset})`
         : "";
+    const baseDir = env.MOGNET_HOME ?? (yield* DEFAULT_MOGNET_HOME);
 
     yield* Effect.logInfo(
-      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.MOGNET_PORT)} webPort=${String(env.PORT)} baseDir=${String(env.MOGNET_HOME)}`,
+      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.MOGNET_PORT)} webPort=${String(env.PORT)} baseDir=${baseDir}`,
     );
 
     if (input.dryRun) {
@@ -587,12 +592,13 @@ const devRunnerCli = Command.make("dev-runner", {
     Argument.withDescription("Development mode to run."),
   ),
   t3Home: Flag.string("home-dir").pipe(
-    Flag.withDescription("Base directory for all Mognet data (env: MOGNET_HOME)."),
+    Flag.withDescription(
+      "Explicit Mognet data directory; runtime state is stored under userdata (env: MOGNET_HOME).",
+    ),
     Flag.withFallbackConfig(optionalStringConfig("MOGNET_HOME")),
   ),
-  noBrowser: Flag.boolean("no-browser").pipe(
-    Flag.withDescription("Browser auto-open toggle (env: MOGNET_NO_BROWSER)."),
-    Flag.withFallbackConfig(optionalBooleanConfig("MOGNET_NO_BROWSER")),
+  browser: Flag.boolean("browser").pipe(
+    Flag.withDescription("Open a browser automatically (disabled by default for web dev)."),
   ),
   autoBootstrapProjectFromCwd: Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
     Flag.withDescription("Auto-bootstrap toggle (env: MOGNET_AUTO_BOOTSTRAP_PROJECT_FROM_CWD)."),

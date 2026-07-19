@@ -53,16 +53,16 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.isDevelopment, true);
       assert.equal(environment.appDataDirectory, "/Users/alice/Library/Application Support");
       assert.equal(environment.baseDir, "/tmp/mognet");
-      assert.equal(environment.stateDir, "/tmp/mognet/dev");
-      assert.equal(environment.desktopSettingsPath, "/tmp/mognet/dev/desktop-settings.json");
-      assert.equal(environment.clientSettingsPath, "/tmp/mognet/dev/client-settings.json");
+      assert.equal(environment.stateDir, "/tmp/mognet/userdata");
+      assert.equal(environment.desktopSettingsPath, "/tmp/mognet/userdata/desktop-settings.json");
+      assert.equal(environment.clientSettingsPath, "/tmp/mognet/userdata/client-settings.json");
       assert.equal(
         environment.savedEnvironmentRegistryPath,
-        "/tmp/mognet/dev/saved-environments.json",
+        "/tmp/mognet/userdata/saved-environments.json",
       );
-      assert.equal(environment.serverSettingsPath, "/tmp/mognet/dev/settings.json");
-      assert.equal(environment.logDir, "/tmp/mognet/dev/logs");
-      assert.equal(environment.browserArtifactsDir, "/tmp/mognet/dev/browser-artifacts");
+      assert.equal(environment.serverSettingsPath, "/tmp/mognet/userdata/settings.json");
+      assert.equal(environment.logDir, "/tmp/mognet/userdata/logs");
+      assert.equal(environment.browserArtifactsDir, "/tmp/mognet/userdata/browser-artifacts");
       assert.equal(environment.rootDir, "/repo");
       assert.equal(environment.appRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
@@ -81,7 +81,7 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
-  it.effect("derives production state paths under userdata", () =>
+  it.effect("stores production state under userdata in an explicit home", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(
         {},
@@ -95,6 +95,19 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.logDir, "/tmp/mognet/userdata/logs");
       assert.equal(environment.browserArtifactsDir, "/tmp/mognet/userdata/browser-artifacts");
       assert.equal(environment.serverSettingsPath, "/tmp/mognet/userdata/settings.json");
+    }),
+  );
+
+  it.effect("keeps implicit development state separate from production state", () =>
+    Effect.gen(function* () {
+      const development = yield* makeEnvironment(
+        {},
+        { VITE_DEV_SERVER_URL: "http://localhost:5173" },
+      );
+      const production = yield* makeEnvironment();
+
+      assert.equal(development.stateDir, "/Users/alice/.mognet/dev");
+      assert.equal(production.stateDir, "/Users/alice/.mognet/userdata");
     }),
   );
 

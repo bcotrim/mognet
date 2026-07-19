@@ -3,13 +3,15 @@
 - `vp run dev` — Starts contracts, server, and web in watch mode.
 - `vp run dev:server` — Starts just the WebSocket server. The server process runs on Bun (`@effect/platform-bun` + `BunPtyAdapter`), but task running uses `vp run`.
 - `vp run dev:web` — Starts just the Vite dev server for the web app.
-- Dev commands default `MOGNET_HOME` to `~/.mognet` — the same shared home the desktop/production app uses. Override with `--home-dir` (see below) to keep dev state separate.
-- Override server CLI-equivalent flags from root dev commands with `--`, for example:
-  `vp run dev -- --home-dir ~/.mognet-2`
+- Dev commands implicitly use `~/.mognet/dev`, keeping development state separate from `~/.mognet/userdata`. An explicit `--home-dir <path>` stores state under `<path>/userdata`; the base directory remains available for caches, worktrees, and other shared data.
+- Web dev commands do not auto-open a browser. Open the one-time pairing URL printed by the server so the first browser navigation is authenticated. Pass `--browser` only when interactive auto-open is intentional.
+- Pass dev-runner flags directly after the root task name, for example:
+  `vp run dev --home-dir /tmp/mognet-dev`
 - `vp run start` — Runs the production server (serves built web app as static files).
 - `vp run build` — Builds contracts, web app, and server.
 - `vp run typecheck` — Strict TypeScript checks for all packages.
 - `vp run test` — Runs workspace tests.
+- `node apps/server/scripts/mognet-sqlite-state.ts <query|exec> --base-dir <path> ...` — Inspects or seeds an isolated Mognet SQLite database; writes create a private backup first.
 - `vp run dist:desktop:artifact -- --platform <mac|linux|win> --target <target> --arch <arch>` — Builds a desktop artifact for a specific platform/target/arch.
 - `vp run dist:desktop:dmg` — Builds a shareable macOS `.dmg` into `./release`.
 - `vp run dist:desktop:dmg:x64` — Builds an Intel macOS `.dmg`.
