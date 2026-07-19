@@ -132,6 +132,7 @@ import {
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { formatCompactRelativeTimeLabel } from "../timestampFormat";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
+import { SidebarStageBackdrop, resolveSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { Kbd } from "./ui/kbd";
 import {
   getArm64IntelBuildWarningDescription,
@@ -2901,34 +2902,56 @@ const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }: {
   isElectron: boolean;
 }) {
-  return isElectron ? (
-    <SidebarHeader className="@container/sidebar-header drag-region h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0">
-      <SidebarTrigger className="md:hidden" />
-      <SidebarBrand />
-    </SidebarHeader>
-  ) : (
-    <SidebarHeader className="@container/sidebar-header h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0">
-      <SidebarTrigger className="md:hidden" />
-      <SidebarBrand />
+  const stageLabel = useSidebarStageLabel();
+  const backdropVariant = resolveSidebarStageBackdropVariant(stageLabel);
+
+  return (
+    <SidebarHeader
+      className={cn(
+        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0",
+        isElectron && "drag-region",
+      )}
+    >
+      {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
+      <SidebarTrigger
+        className={cn(
+          "relative z-10 md:hidden",
+          backdropVariant && "hover:bg-white/15 [&_svg]:text-white/85! [&_svg]:hover:text-white!",
+        )}
+      />
+      <SidebarBrand onBackdrop={backdropVariant !== null} stageLabel={stageLabel} />
     </SidebarHeader>
   );
 });
 
-function SidebarBrand() {
-  const stageLabel = useSidebarStageLabel();
-
+function SidebarBrand({ stageLabel, onBackdrop }: { stageLabel: string; onBackdrop: boolean }) {
   return (
     <Link
       aria-label="Go to threads"
-      className="sidebar-brand ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md text-foreground outline-hidden ring-ring focus-visible:ring-2"
+      className={cn(
+        "sidebar-brand relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        onBackdrop ? "text-white" : "text-foreground",
+      )}
       to="/"
     >
-      <MognetBrandMark />
-      <span className="truncate text-sm font-medium tracking-normal text-muted-foreground">
+      <MognetBrandMark onBackdrop={onBackdrop} />
+      <span
+        className={cn(
+          "truncate text-sm font-medium tracking-normal",
+          onBackdrop ? "text-white/70" : "text-muted-foreground",
+        )}
+      >
         mognet
       </span>
       {stageLabel ? (
-        <span className="sidebar-brand-stage shrink-0 items-center whitespace-nowrap rounded-[5px] border border-border/70 bg-muted/50 px-1.5 py-0.5 font-mono text-[8px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+        <span
+          className={cn(
+            "sidebar-brand-stage shrink-0 items-center whitespace-nowrap rounded-[5px] border px-1.5 py-0.5 font-mono text-[8px] font-medium uppercase tracking-[0.08em]",
+            onBackdrop
+              ? "border-white/15 bg-white/15 text-white/80 backdrop-blur-sm"
+              : "border-border/70 bg-muted/50 text-muted-foreground/70",
+          )}
+        >
           {stageLabel}
         </span>
       ) : null}
@@ -2946,11 +2969,14 @@ function useSidebarStageLabel() {
   });
 }
 
-function MognetBrandMark() {
+function MognetBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className="shrink-0 font-mono text-[13px] font-medium leading-none tracking-normal text-primary"
+      className={cn(
+        "shrink-0 font-mono text-[13px] font-medium leading-none tracking-normal",
+        onBackdrop ? "text-white" : "text-primary",
+      )}
     >
       ~ $
     </span>
