@@ -1336,7 +1336,7 @@ it.layer(
 
   it.effect("strips AppImage runtime env from terminal sessions", () =>
     Effect.gen(function* () {
-      const appDir = "/tmp/.mount_T3Codeabc123";
+      const appDir = "/tmp/.mount_Mognetabc123";
       const { manager, ptyAdapter } = yield* createManager(5, {
         env: {
           APPIMAGE: "/home/user/Mognet.AppImage",

@@ -229,7 +229,6 @@ import {
   runMobileComposerTransition,
 } from "./chat/draftHeroTransition";
 import {
-  MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
   buildLocalDraftThread,
   buildThreadTurnInterruptInput,
@@ -2092,10 +2091,12 @@ function ChatViewContent(props: ChatViewProps) {
       setThreadError(activeThread.id, null);
       return;
     }
-    setLocalServerErrorsByThreadKey((existing) => ({
-      ...existing,
-      [routeThreadKey]: null,
-    }));
+    setLocalServerErrorsByThreadKey((existing) => {
+      if (!(routeThreadKey in existing)) return existing;
+      const next = { ...existing };
+      delete next[routeThreadKey];
+      return next;
+    });
     setDismissedServerErrorsByThreadKey((existing) => ({
       ...existing,
       [routeThreadKey]: serverThreadError,
@@ -5007,8 +5008,8 @@ function ChatViewContent(props: ChatViewProps) {
                         resolvedTheme={resolvedTheme}
                         settings={settings}
                         keybindings={keybindings}
-                        terminalOpen={Boolean(terminalUiState.terminalOpen)}
-                        gitCwd={gitCwd}
+                        terminalOpen={terminalPanelOpen}
+                        gitCwd={hasWorkspaceProject ? gitCwd : null}
                         promptRef={promptRef}
                         composerImagesRef={composerImagesRef}
                         composerTerminalContextsRef={composerTerminalContextsRef}
