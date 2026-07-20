@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 
 const PAIRING_TOKEN_PARAM = "token";
+const HOSTED_PAIRING_HOST_PARAM = "host";
+const HOSTED_PAIRING_LABEL_PARAM = "label";
 const SUPPORTED_REMOTE_BACKEND_PROTOCOLS = new Set(["http:", "https:", "ws:", "wss:"]);
 
 const readHashParams = (url: URL): URLSearchParams =>
@@ -30,7 +32,7 @@ export class RemotePairingUrlInvalidError extends Schema.TaggedErrorClass<Remote
 export class RemoteBackendUrlInvalidError extends Schema.TaggedErrorClass<RemoteBackendUrlInvalidError>()(
   "RemoteBackendUrlInvalidError",
   {
-    source: Schema.Literal("direct-host"),
+    source: Schema.Literals(["direct-host", "hosted-pairing-host"]),
     cause: Schema.optional(Schema.Defect()),
     protocol: Schema.optional(Schema.String),
   },
@@ -79,10 +81,10 @@ const normalizeRemoteBaseUrl = (
     throw new RemoteBackendUrlMissingError();
   }
 
-  const normalizedInput =
-    /^[a-zA-Z][a-zA-Z\d+-]*:\/\//.test(trimmed) || trimmed.startsWith("//")
-      ? trimmed
-      : `https://${trimmed}`;
+  const withoutLeadingSlashes = trimmed.replace(/^\/+/, "");
+  const normalizedInput = /^[a-zA-Z][a-zA-Z\d+-]*:\/\//.test(withoutLeadingSlashes)
+    ? withoutLeadingSlashes
+    : `https://${withoutLeadingSlashes}`;
   let url: URL;
   try {
     url = new URL(normalizedInput);
@@ -133,6 +135,12 @@ export interface ResolvedRemotePairingTarget {
   readonly wsBaseUrl: string;
 }
 
+export interface HostedPairingRequest {
+  readonly host: string;
+  readonly token: string;
+  readonly label: string;
+}
+
 export const getPairingTokenFromUrl = (url: URL): string | null => {
   const hashToken = readHashParams(url).get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
   if (hashToken.length > 0) {
@@ -161,6 +169,14 @@ export const setPairingTokenOnUrl = (url: URL, credential: string): URL => {
   return next;
 };
 
+export const readHostedPairingRequest = (url: URL): HostedPairingRequest | null => {
+  const host = url.searchParams.get(HOSTED_PAIRING_HOST_PARAM)?.trim() ?? "";
+  const token = getPairingTokenFromUrl(url)?.trim() ?? "";
+  const label = url.searchParams.get(HOSTED_PAIRING_LABEL_PARAM)?.trim() ?? "";
+
+  return host && token ? { host, token, label } : null;
+};
+
 export const resolveRemotePairingTarget = (input: {
   readonly pairingUrl?: string;
   readonly host?: string;
@@ -178,6 +194,18 @@ export const resolveRemotePairingTarget = (input: {
       throw new RemotePairingUrlInvalidError({
         protocol: url.protocol,
       });
+    }
+    const hostedPairingRequest = readHostedPairingRequest(url);
+    if (hostedPairingRequest) {
+      const hostedBackendUrl = normalizeRemoteBaseUrl(
+        hostedPairingRequest.host,
+        "hosted-pairing-host",
+      );
+      return {
+        credential: hostedPairingRequest.token,
+        httpBaseUrl: toHttpBaseUrl(hostedBackendUrl),
+        wsBaseUrl: toWsBaseUrl(hostedBackendUrl),
+      };
     }
     const credential = getPairingTokenFromUrl(url) ?? "";
     if (!credential) {
