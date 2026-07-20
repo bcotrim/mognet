@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mognet App Testing"
+  short_description: "Launch and seed isolated Mognet test environments"
+  default_prompt: "Use $test-mognet-app to launch an isolated Mognet development environment and test it in the browser."
