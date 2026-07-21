@@ -15,6 +15,7 @@ import {
   type ProviderInteractionMode,
   type RuntimeMode,
 } from "@t3tools/contracts";
+import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { nextProjectScriptId, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -493,6 +494,11 @@ const startThread = Effect.fn("MognetToolkit.startThread")(function* (
             "Worktree mode requires baseBranch when the current/source thread has no branch.",
         });
       }
+      const worktreeBranch = buildTemporaryWorktreeBranchName((byteLength) =>
+        String(threadId)
+          .replaceAll("-", "")
+          .slice(0, byteLength * 2),
+      );
       bootstrap = {
         createThread: {
           projectId: project.id,
@@ -507,6 +513,7 @@ const startThread = Effect.fn("MognetToolkit.startThread")(function* (
         prepareWorktree: {
           projectCwd: project.workspaceRoot,
           baseBranch,
+          branch: worktreeBranch,
           ...(input.startFromOrigin ? { startFromOrigin: true } : {}),
         },
         ...(runSetupScript ? { runSetupScript: true } : {}),

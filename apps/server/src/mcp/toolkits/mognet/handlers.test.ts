@@ -787,3 +787,43 @@ it.effect("delegates with source context in local workspace mode", () =>
     ).pipe(Effect.provide(testLayer(commands)));
   }),
 );
+
+it.effect("uses distinct worktree refs for consecutive delegations from the same base", () =>
+  Effect.gen(function* () {
+    const commands: OrchestrationCommand[] = [];
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const server = yield* McpServer.McpServer;
+
+        for (const prompt of ["Inspect the first task.", "Inspect the second task."]) {
+          const delegated = yield* server
+            .callTool({
+              name: "mognet_delegate_task",
+              arguments: {
+                prompt,
+                baseBranch: "main",
+                startFromOrigin: true,
+              },
+            })
+            .pipe(Effect.provideService(McpSchema.McpServerClient, client));
+          expect(delegated.isError).toBe(false);
+        }
+
+        expect(commands).toHaveLength(2);
+        const branches = commands.map((command) => {
+          expect(command.type).toBe("thread.turn.start");
+          if (command.type !== "thread.turn.start") return null;
+          expect(command.bootstrap?.prepareWorktree).toMatchObject({
+            baseBranch: "main",
+            startFromOrigin: true,
+          });
+          return command.bootstrap?.prepareWorktree?.branch ?? null;
+        });
+
+        expect(branches[0]).toMatch(/^mognet\/[0-9a-f]{8}$/);
+        expect(branches[1]).toMatch(/^mognet\/[0-9a-f]{8}$/);
+        expect(branches[0]).not.toBe(branches[1]);
+      }),
+    ).pipe(Effect.provide(testLayer(commands)));
+  }),
+);
