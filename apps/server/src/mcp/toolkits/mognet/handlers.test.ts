@@ -283,6 +283,7 @@ function testLayer(
   });
   const engine = OrchestrationEngine.OrchestrationEngineService.of({
     readEvents: () => Stream.empty,
+    latestSequence: Effect.succeed(0),
     dispatch: (command) =>
       Effect.sync(() => {
         capturedCommands.push(command);
