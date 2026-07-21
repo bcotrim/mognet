@@ -39,6 +39,7 @@ import { ServerConfig } from "../config.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
+const ERROR_STDERR_DETAIL_MAX_CHARS = 2_000;
 const OUTPUT_TRUNCATED_MARKER = "\n\n[truncated]";
 const PREPARED_COMMIT_PATCH_MAX_OUTPUT_BYTES = 49_000;
 const RANGE_COMMIT_SUMMARY_MAX_OUTPUT_BYTES = 19_000;
@@ -100,10 +101,21 @@ interface ExecuteGitOptions {
   timeoutMs?: number | undefined;
   allowNonZeroExit?: boolean | undefined;
   fallbackErrorDetail?: string | undefined;
+  includeStderrInErrorDetail?: boolean | undefined;
   env?: NodeJS.ProcessEnv | undefined;
   maxOutputBytes?: number | undefined;
   appendTruncationMarker?: boolean | undefined;
   progress?: GitVcsDriver.ExecuteGitProgress | undefined;
+}
+
+function gitFailureDetail(fallback: string, stderr: string): string {
+  const trimmed = stderr.trim();
+  if (trimmed.length === 0) return fallback;
+  const stderrDetail =
+    trimmed.length <= ERROR_STDERR_DETAIL_MAX_CHARS
+      ? trimmed
+      : `${trimmed.slice(0, ERROR_STDERR_DETAIL_MAX_CHARS)}...`;
+  return `${fallback}: ${stderrDetail}`;
 }
 
 function parseBranchAb(value: string): { ahead: number; behind: number } {
@@ -821,7 +833,13 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         return Effect.fail(
           new GitCommandError({
             ...gitCommandContext({ operation, cwd, args }),
-            detail: options.fallbackErrorDetail ?? "Git command exited with a non-zero status.",
+            detail:
+              options.includeStderrInErrorDetail === true
+                ? gitFailureDetail(
+                    options.fallbackErrorDetail ?? "Git command exited with a non-zero status.",
+                    result.stderr,
+                  )
+                : (options.fallbackErrorDetail ?? "Git command exited with a non-zero status."),
             ...(result.exitCode === null ? {} : { exitCode: result.exitCode }),
             stdoutLength: result.stdout.length,
             stderrLength: result.stderr.length,
@@ -2279,6 +2297,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
 
     yield* executeGit("GitVcsDriver.createWorktree", input.cwd, args, {
       fallbackErrorDetail: "git worktree add failed",
+      includeStderrInErrorDetail: true,
     });
 
     if (input.newRefName && input.baseRefName) {
