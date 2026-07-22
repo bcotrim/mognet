@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  DEFAULT_MODEL,
   DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
   DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
   DEFAULT_PROJECT_THREAD_ENV_MODE,
@@ -150,7 +151,7 @@ describe("add project shared logic", () => {
       createWorkspaceRootIfMissing: true,
       defaultModelSelection: {
         instanceId: "codex",
-        model: "gpt-5.4",
+        model: DEFAULT_MODEL,
       },
     });
   });

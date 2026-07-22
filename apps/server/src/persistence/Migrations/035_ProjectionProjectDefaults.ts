@@ -11,11 +11,11 @@ export default Effect.gen(function* () {
 
   yield* sql`
     ALTER TABLE projection_projects
-    ADD COLUMN new_worktrees_start_from_origin INTEGER NOT NULL DEFAULT 0
+    ADD COLUMN new_worktrees_start_from_origin INTEGER NOT NULL DEFAULT 1
   `.pipe(Effect.catch(() => Effect.void));
 
   yield* sql`
     ALTER TABLE projection_projects
-    ADD COLUMN text_generation_model_selection_json TEXT NOT NULL DEFAULT '{"instanceId":"codex","model":"gpt-5.4-mini"}'
+    ADD COLUMN text_generation_model_selection_json TEXT NOT NULL DEFAULT '{"instanceId":"codex","model":"gpt-5.6-luna"}'
   `.pipe(Effect.catch(() => Effect.void));
 });

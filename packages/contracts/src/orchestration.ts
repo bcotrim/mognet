@@ -223,7 +223,7 @@ export const STANDALONE_CHAT_PROJECT_ID = ProjectId.make("mognet-chat");
 export const ProjectDefaultThreadEnvMode = Schema.Literals(["local", "worktree"]);
 export type ProjectDefaultThreadEnvMode = typeof ProjectDefaultThreadEnvMode.Type;
 export const DEFAULT_PROJECT_THREAD_ENV_MODE: ProjectDefaultThreadEnvMode = "local";
-export const DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN = false;
+export const DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN = true;
 export const DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION: ModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
