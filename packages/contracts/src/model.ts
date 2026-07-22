@@ -133,8 +133,13 @@ const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 
-export const DEFAULT_MODEL = "gpt-5.4";
-export const DEFAULT_GIT_TEXT_GENERATION_MODEL = "gpt-5.4-mini";
+export const DEFAULT_MODEL = "gpt-5.6-sol";
+
+export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+];
+export const DEFAULT_GIT_TEXT_GENERATION_MODEL = "gpt-5.6-luna";
 
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
   [CODEX_DRIVER_KIND]: DEFAULT_MODEL,
