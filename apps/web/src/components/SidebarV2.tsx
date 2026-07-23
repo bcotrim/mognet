@@ -22,7 +22,6 @@ import {
   GitBranchIcon,
   MessageSquareIcon,
   PlusIcon,
-  SearchIcon,
   ServerIcon,
   SquarePenIcon,
   Trash2Icon,
@@ -83,6 +82,7 @@ import { cn } from "~/lib/utils";
 import {
   firstValidTimestampMs,
   hasUnseenCompletion,
+  isSidebarV2ProjectThread,
   isTrailingDoubleClick,
   resolveAdjacentThreadId,
   resolveSidebarV2Status,
@@ -97,13 +97,12 @@ import { getTriggerDisplayModelLabel } from "./chat/providerIconUtils";
 import { deriveProviderInstanceEntries, type ProviderInstanceEntry } from "../providerInstances";
 import { primaryServerProvidersAtom } from "../state/server";
 import { stackedThreadToast, toastManager } from "./ui/toast";
-import { CommandDialogTrigger } from "./ui/command";
-import { Kbd } from "./ui/kbd";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./ui/menu";
-import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
+import { SidebarContent, SidebarGroup, SidebarSeparator, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { SIDEBAR_SECTION_ACTIONS_CLASS, SidebarPrimaryNavigation } from "./Sidebar";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -924,7 +923,7 @@ export default function SidebarV2() {
     const now = `${nowMinute}:00.000Z`;
     const visible = threads.filter(
       (thread) =>
-        thread.archivedAt === null &&
+        isSidebarV2ProjectThread(thread) &&
         (scopedProject === null ||
           (thread.environmentId === scopedProject.environmentId &&
             thread.projectId === scopedProject.id)),
@@ -1493,7 +1492,6 @@ export default function SidebarV2() {
     openCommandPalette({ open: "new-thread-in" });
   }, [isMobile, newThreadContext, projects.length, setOpenMobile]);
 
-  const commandPaletteShortcutLabel = shortcutLabelForCommand(keybindings, "commandPalette.toggle");
   // Same resolution as v1: prefer the local-thread binding, fall back to
   // chat.new, no platform gating — web users have working shortcuts too.
   const newThreadShortcutLabel =
@@ -1503,152 +1501,120 @@ export default function SidebarV2() {
     <>
       <SidebarChromeHeader isElectron={isElectron} />
       <SidebarContent className="gap-0">
-        <SidebarGroup className="px-2 pb-2 pt-3">
-          <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <CommandDialogTrigger
-                render={
-                  <SidebarMenuButton
-                    size="sm"
-                    type="button"
-                    aria-label="Search threads and commands"
-                    className="h-8 gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-                    data-testid="command-palette-trigger"
-                  />
-                }
-              >
-                <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-                <div className="flex-1 truncate text-left">Search</div>
-                {commandPaletteShortcutLabel ? (
-                  <Kbd className="h-4 min-w-0 rounded-sm bg-sidebar-control-surface px-1.5 text-[10px] text-sidebar-muted-foreground ring-1 ring-sidebar-border">
-                    {commandPaletteShortcutLabel}
-                  </Kbd>
-                ) : null}
-              </CommandDialogTrigger>
-            </div>
-            <div className="shrink-0">
+        <SidebarPrimaryNavigation routeThreadKey={routeThreadKey} />
+        <SidebarGroup className="min-h-0 flex-1 px-2 py-2">
+          <div className="group/sidebar-section mb-1 flex items-center justify-between pl-2 pr-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+              Threads
+            </span>
+            <div className={cn("flex items-center gap-1", SIDEBAR_SECTION_ACTIONS_CLASS)}>
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <SidebarMenuButton
-                      size="sm"
+                    <button
                       type="button"
-                      className="relative size-8 justify-center rounded-md border-0 bg-transparent p-0 text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                      className="inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-[calc(--spacing(1)-1px)] text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
                       onClick={handleNewThreadClick}
                       disabled={projects.length === 0}
                       aria-label="New thread"
                     />
                   }
                 >
-                  <SquarePenIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-                  <span
-                    className="pointer-events-none absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
-                    aria-hidden="true"
-                  />
+                  <SquarePenIcon className="size-3.5" />
                 </TooltipTrigger>
                 <TooltipPopup side="right">
                   {newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : "New thread"}
                 </TooltipPopup>
               </Tooltip>
-            </div>
-          </div>
-        </SidebarGroup>
-        {projects.length > 0 ? (
-          <SidebarGroup className="px-2 pb-2 pt-0">
-            <div className="flex items-center gap-1">
-              <Menu>
-                <MenuTrigger
-                  aria-label="Filter threads by project"
-                  className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm font-medium text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-                >
-                  {scopedProject ? (
-                    <ProjectFavicon
-                      environmentId={scopedProject.environmentId}
-                      cwd={scopedProject.workspaceRoot}
-                      className="size-4 shrink-0"
-                    />
-                  ) : (
-                    <FolderIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-                  )}
-                  <span className="min-w-0 flex-1 truncate">
-                    {scopedProject?.title ?? "All projects"}
-                  </span>
-                  <ChevronDownIcon className="size-4 shrink-0 text-sidebar-muted-foreground/70" />
-                </MenuTrigger>
-                <MenuPopup align="start" className="w-(--anchor-width)">
-                  <MenuRadioGroup
-                    value={projectScopeKey ?? "all"}
-                    onValueChange={(value) =>
-                      setProjectScopeKey(value === "all" ? null : (value as string))
-                    }
-                  >
-                    <MenuRadioItem
-                      value="all"
-                      closeOnClick
-                      className="h-8 min-h-8 px-1 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
-                    >
-                      <FolderIcon className="size-4 shrink-0" />
-                      <span className="min-w-0 truncate text-sm">All projects</span>
-                    </MenuRadioItem>
-                    {projects.map((project) => {
-                      const scopeKey = `${project.environmentId}:${project.id}`;
-                      return (
-                        <MenuRadioItem
-                          key={scopeKey}
-                          value={scopeKey}
-                          closeOnClick
-                          className="h-8 min-h-8 px-1 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
-                        >
-                          <ProjectFavicon
-                            environmentId={project.environmentId}
-                            cwd={project.workspaceRoot}
-                            className="size-4 shrink-0"
-                          />
-                          <span className="min-w-0 truncate text-sm">{project.title}</span>
-                          <button
-                            type="button"
-                            aria-label={`Remove project ${project.title}`}
-                            title={`Remove ${project.title}`}
-                            className="ml-auto inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/55 outline-none transition-colors hover:bg-destructive/12 hover:text-destructive focus-visible:bg-destructive/12 focus-visible:text-destructive focus-visible:ring-2 focus-visible:ring-destructive/40"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              void handleRemoveProject(project);
-                            }}
-                          >
-                            <Trash2Icon className="size-3.5" />
-                          </button>
-                        </MenuRadioItem>
-                      );
-                    })}
-                  </MenuRadioGroup>
-                </MenuPopup>
-              </Menu>
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <SidebarMenuButton
-                      size="sm"
-                      className="relative size-8 shrink-0 justify-center rounded-md bg-transparent p-0 text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-                      onClick={openAddProjectCommandPalette}
+                    <button
                       type="button"
-                      aria-label="New project"
+                      data-testid="sidebar-add-project-trigger"
+                      className="inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-[calc(--spacing(1)-1px)] text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                      onClick={openAddProjectCommandPalette}
+                      aria-label="Add project"
                     />
                   }
                 >
-                  <FolderPlusIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-                  <span
-                    className="pointer-events-none absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
-                    aria-hidden="true"
-                  />
+                  <FolderPlusIcon className="size-3.5" />
                 </TooltipTrigger>
-                <TooltipPopup side="right">New project</TooltipPopup>
+                <TooltipPopup side="right">Add project</TooltipPopup>
               </Tooltip>
             </div>
-          </SidebarGroup>
-        ) : null}
-        <SidebarGroup className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
+          </div>
+          {projects.length > 0 ? (
+            <Menu>
+              <MenuTrigger
+                aria-label="Filter threads by project"
+                className="mb-1 flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm font-medium text-sidebar-foreground/90 outline-none transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {scopedProject ? (
+                  <ProjectFavicon
+                    environmentId={scopedProject.environmentId}
+                    cwd={scopedProject.workspaceRoot}
+                    className="size-4 shrink-0"
+                  />
+                ) : (
+                  <FolderIcon className="size-4 shrink-0 text-sidebar-muted-foreground/70" />
+                )}
+                <span className="min-w-0 flex-1 truncate">
+                  {scopedProject?.title ?? "All projects"}
+                </span>
+                <ChevronDownIcon className="size-3.5 shrink-0 text-sidebar-muted-foreground/60" />
+              </MenuTrigger>
+              <MenuPopup align="start" className="w-(--anchor-width)">
+                <MenuRadioGroup
+                  value={projectScopeKey ?? "all"}
+                  onValueChange={(value) =>
+                    setProjectScopeKey(value === "all" ? null : (value as string))
+                  }
+                >
+                  <MenuRadioItem
+                    value="all"
+                    closeOnClick
+                    className="h-8 min-h-8 px-1 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
+                  >
+                    <FolderIcon className="size-4 shrink-0" />
+                    <span className="min-w-0 truncate text-sm">All projects</span>
+                  </MenuRadioItem>
+                  {projects.map((project) => {
+                    const scopeKey = `${project.environmentId}:${project.id}`;
+                    return (
+                      <MenuRadioItem
+                        key={scopeKey}
+                        value={scopeKey}
+                        closeOnClick
+                        className="h-8 min-h-8 px-1 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
+                      >
+                        <ProjectFavicon
+                          environmentId={project.environmentId}
+                          cwd={project.workspaceRoot}
+                          className="size-4 shrink-0"
+                        />
+                        <span className="min-w-0 truncate text-sm">{project.title}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove project ${project.title}`}
+                          title={`Remove ${project.title}`}
+                          className="ml-auto inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/55 outline-none transition-colors hover:bg-destructive/12 hover:text-destructive focus-visible:bg-destructive/12 focus-visible:text-destructive focus-visible:ring-2 focus-visible:ring-destructive/40"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void handleRemoveProject(project);
+                          }}
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </button>
+                      </MenuRadioItem>
+                    );
+                  })}
+                </MenuRadioGroup>
+              </MenuPopup>
+            </Menu>
+          ) : null}
           <TooltipProvider
             key="sidebar-thread-tooltips-150"
             delay={150}
@@ -1775,6 +1741,7 @@ export default function SidebarV2() {
           ) : null}
         </SidebarGroup>
       </SidebarContent>
+      <SidebarSeparator />
       <SidebarChromeFooter />
     </>
   );

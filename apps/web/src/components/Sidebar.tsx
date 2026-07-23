@@ -248,7 +248,7 @@ const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> =
 };
 const SIDEBAR_ICON_ACTION_BUTTON_CLASS =
   "inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-[calc(--spacing(1)-1px)] text-muted-foreground/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring";
-const SIDEBAR_SECTION_ACTIONS_CLASS =
+export const SIDEBAR_SECTION_ACTIONS_CLASS =
   "pointer-events-none opacity-0 transition-opacity duration-150 group-hover/sidebar-section:pointer-events-auto group-hover/sidebar-section:opacity-100 group-focus-within/sidebar-section:pointer-events-auto group-focus-within/sidebar-section:opacity-100";
 
 function useScheduledThreadOrigin(thread: SidebarThreadSummary): OrchestrationThreadOrigin | null {
@@ -2940,16 +2940,10 @@ function SortableProjectItem({
 }
 
 interface SidebarProjectsContentProps {
-  showArm64IntelBuildWarning: boolean;
-  arm64IntelBuildWarningDescription: string | null;
-  desktopUpdateButtonAction: "download" | "install" | "none";
-  desktopUpdateButtonDisabled: boolean;
-  handleDesktopUpdateButtonClick: () => void;
   projectSortOrder: SidebarProjectSortOrder;
   threadSortOrder: SidebarThreadSortOrder;
   projectGroupingMode: SidebarProjectGroupingMode;
   threadPreviewCount: SidebarThreadPreviewCount;
-  chatPreviewCount: SidebarThreadPreviewCount;
   updateSettings: ReturnType<typeof useUpdateClientSettings>;
   openAddProject: () => void;
   isManualProjectSorting: boolean;
@@ -2966,7 +2960,6 @@ interface SidebarProjectsContentProps {
   activeRouteProjectKey: string | null;
   routeThreadKey: string | null;
   newThreadShortcutLabel: string | null;
-  commandPaletteShortcutLabel: string | null;
   threadJumpLabelByKey: ReadonlyMap<string, string>;
   attachThreadListAutoAnimateRef: (node: HTMLElement | null) => void;
   expandThreadListForProject: (projectKey: string) => void;
@@ -3185,80 +3178,15 @@ const SidebarChatThreadRow = memo(function SidebarChatThreadRow({
   );
 });
 
-const SidebarProjectsContent = memo(function SidebarProjectsContent(
-  props: SidebarProjectsContentProps,
-) {
-  const {
-    showArm64IntelBuildWarning,
-    arm64IntelBuildWarningDescription,
-    desktopUpdateButtonAction,
-    desktopUpdateButtonDisabled,
-    handleDesktopUpdateButtonClick,
-    projectSortOrder,
-    threadSortOrder,
-    projectGroupingMode,
-    threadPreviewCount,
-    chatPreviewCount,
-    updateSettings,
-    openAddProject,
-    isManualProjectSorting,
-    projectDnDSensors,
-    projectCollisionDetection,
-    handleProjectDragStart,
-    handleProjectDragEnd,
-    handleProjectDragCancel,
-    handleNewThread,
-    archiveThread,
-    deleteThread,
-    sortedProjects,
-    expandedThreadListsByProject,
-    activeRouteProjectKey,
-    routeThreadKey,
-    newThreadShortcutLabel,
-    commandPaletteShortcutLabel,
-    threadJumpLabelByKey,
-    attachThreadListAutoAnimateRef,
-    expandThreadListForProject,
-    collapseThreadListForProject,
-    dragInProgressRef,
-    suppressProjectClickAfterDragRef,
-    suppressProjectClickForContextMenuRef,
-    attachProjectListAutoAnimateRef,
-    projectsLength,
-  } = props;
-
+export const SidebarPrimaryNavigation = memo(function SidebarPrimaryNavigation({
+  routeThreadKey,
+}: {
+  routeThreadKey: string | null;
+}) {
   const [isChatThreadListExpanded, setIsChatThreadListExpanded] = useState(false);
-  const handleProjectSortOrderChange = useCallback(
-    (sortOrder: SidebarProjectSortOrder) => {
-      updateSettings({ sidebarProjectSortOrder: sortOrder });
-    },
-    [updateSettings],
-  );
-  const handleThreadSortOrderChange = useCallback(
-    (sortOrder: SidebarThreadSortOrder) => {
-      updateSettings({ sidebarThreadSortOrder: sortOrder });
-    },
-    [updateSettings],
-  );
-  const handleProjectGroupingModeChange = useCallback(
-    (groupingMode: SidebarProjectGroupingMode) => {
-      updateSettings({ sidebarProjectGroupingMode: groupingMode });
-    },
-    [updateSettings],
-  );
-  const handleThreadPreviewCountChange = useCallback(
-    (count: SidebarThreadPreviewCount) => {
-      updateSettings({ sidebarThreadPreviewCount: count });
-    },
-    [updateSettings],
-  );
-  const handleChatPreviewCountChange = useCallback(
-    (count: SidebarThreadPreviewCount) => {
-      setIsChatThreadListExpanded(false);
-      updateSettings({ sidebarChatPreviewCount: count });
-    },
-    [updateSettings],
-  );
+  const threadSortOrder = useClientSettings((settings) => settings.sidebarThreadSortOrder);
+  const chatPreviewCount = useClientSettings((settings) => settings.sidebarChatPreviewCount);
+  const updateSettings = useUpdateClientSettings();
   const chatThreads = useThreadShells();
   const handleNewChat = useNewChatHandler();
   const navigate = useNavigate();
@@ -3269,6 +3197,9 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
   const primaryChatEnvironmentId = usePrimaryEnvironmentId();
   const { isMobile, setOpenMobile } = useSidebar();
   const scheduledTasks = useAtomValue(primaryServerScheduledTasksAtom);
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const desktopUpdateState = useDesktopUpdateState();
+  const { archiveThread } = useThreadActions();
   const appSettingsConfirmThreadArchive = useClientSettings<boolean>(
     (settings) => settings.confirmThreadArchive,
   );
@@ -3278,6 +3209,17 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
   const showMoreChatsButtonRender = useMemo(() => <button type="button" />, []);
   const showLessChatsButtonRender = useMemo(() => <button type="button" />, []);
   const chatEnvironmentId = primaryChatEnvironmentId ?? environments[0]?.environmentId ?? null;
+  const commandPaletteShortcutLabel = shortcutLabelForCommand(
+    keybindings,
+    "commandPalette.toggle",
+    {
+      platform: navigator.platform,
+      context: {
+        terminalFocus: false,
+        terminalOpen: false,
+      },
+    },
+  );
   const visibleChatThreads = useMemo(
     () =>
       sortThreads(
@@ -3332,6 +3274,19 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
       }),
     );
   }, [chatThreadLastVisitedAts, hiddenChatThreads, visibleChatThreads]);
+  const handleThreadSortOrderChange = useCallback(
+    (sortOrder: SidebarThreadSortOrder) => {
+      updateSettings({ sidebarThreadSortOrder: sortOrder });
+    },
+    [updateSettings],
+  );
+  const handleChatPreviewCountChange = useCallback(
+    (count: SidebarThreadPreviewCount) => {
+      setIsChatThreadListExpanded(false);
+      updateSettings({ sidebarChatPreviewCount: count });
+    },
+    [updateSettings],
+  );
   const handleCreateChat = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
@@ -3355,9 +3310,97 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     }
     void navigate({ to: "/scheduled-tasks" });
   }, [isMobile, navigate, setOpenMobile]);
+  const animatedChatListsRef = useRef(new WeakSet<HTMLElement>());
+  const attachChatListAutoAnimateRef = useCallback((node: HTMLElement | null) => {
+    if (!node || animatedChatListsRef.current.has(node)) {
+      return;
+    }
+    autoAnimate(node, SIDEBAR_LIST_ANIMATION_OPTIONS);
+    animatedChatListsRef.current.add(node);
+  }, []);
+
+  const desktopUpdateButtonDisabled = isDesktopUpdateButtonDisabled(desktopUpdateState);
+  const desktopUpdateButtonAction = desktopUpdateState
+    ? resolveDesktopUpdateButtonAction(desktopUpdateState)
+    : "none";
+  const showArm64IntelBuildWarning =
+    isElectron && shouldShowArm64IntelBuildWarning(desktopUpdateState);
+  const arm64IntelBuildWarningDescription =
+    desktopUpdateState && showArm64IntelBuildWarning
+      ? getArm64IntelBuildWarningDescription(desktopUpdateState)
+      : null;
+  const handleDesktopUpdateButtonClick = useCallback(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge || !desktopUpdateState) return;
+    if (desktopUpdateButtonDisabled || desktopUpdateButtonAction === "none") return;
+
+    if (desktopUpdateButtonAction === "download") {
+      void bridge
+        .downloadUpdate()
+        .then((result) => {
+          if (result.completed) {
+            toastManager.add({
+              type: "success",
+              title: "Update downloaded",
+              description: "Restart the app from the update button to install it.",
+            });
+          }
+          if (!shouldToastDesktopUpdateActionResult(result)) return;
+          const actionError = getDesktopUpdateActionError(result);
+          if (!actionError) return;
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not download update",
+              description: actionError,
+            }),
+          );
+        })
+        .catch((error) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not start update download",
+              description: error instanceof Error ? error.message : "An unexpected error occurred.",
+            }),
+          );
+        });
+      return;
+    }
+
+    if (desktopUpdateButtonAction === "install") {
+      const confirmed = window.confirm(
+        getDesktopUpdateInstallConfirmationMessage(desktopUpdateState),
+      );
+      if (!confirmed) return;
+      void bridge
+        .installUpdate()
+        .then((result) => {
+          if (!shouldToastDesktopUpdateActionResult(result)) return;
+          const actionError = getDesktopUpdateActionError(result);
+          if (!actionError) return;
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not install update",
+              description: actionError,
+            }),
+          );
+        })
+        .catch((error) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not install update",
+              description: error instanceof Error ? error.message : "An unexpected error occurred.",
+            }),
+          );
+        });
+    }
+  }, [desktopUpdateButtonAction, desktopUpdateButtonDisabled, desktopUpdateState]);
 
   return (
-    <SidebarContent className="gap-0">
+    <>
       <SidebarGroup className="px-2 pt-2 pb-1">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -3419,7 +3462,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               onClick={handleScheduledTasksClick}
             >
               <CalendarClockIcon className="size-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate text-left text-xs">Scheduled Tasks</span>
+              <span className="min-w-0 flex-1 truncate text-left text-xs">Scheduled tasks</span>
               {scheduledTasks.length > 0 ? (
                 <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/scheduled-tasks-trigger:opacity-100 group-focus-within/scheduled-tasks-trigger:opacity-100">
                   {scheduledTasks.length}
@@ -3459,7 +3502,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
             </Tooltip>
           </div>
         </div>
-        <SidebarMenu ref={attachThreadListAutoAnimateRef}>
+        <SidebarMenu ref={attachChatListAutoAnimateRef}>
           {previewChatThreads.map((thread) => {
             const threadRef = scopeThreadRef(thread.environmentId, thread.id);
             const threadKey = scopedThreadKey(threadRef);
@@ -3515,6 +3558,73 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
           ) : null}
         </SidebarMenu>
       </SidebarGroup>
+    </>
+  );
+});
+
+const SidebarProjectsContent = memo(function SidebarProjectsContent(
+  props: SidebarProjectsContentProps,
+) {
+  const {
+    projectSortOrder,
+    threadSortOrder,
+    projectGroupingMode,
+    threadPreviewCount,
+    updateSettings,
+    openAddProject,
+    isManualProjectSorting,
+    projectDnDSensors,
+    projectCollisionDetection,
+    handleProjectDragStart,
+    handleProjectDragEnd,
+    handleProjectDragCancel,
+    handleNewThread,
+    archiveThread,
+    deleteThread,
+    sortedProjects,
+    expandedThreadListsByProject,
+    activeRouteProjectKey,
+    routeThreadKey,
+    newThreadShortcutLabel,
+    threadJumpLabelByKey,
+    attachThreadListAutoAnimateRef,
+    expandThreadListForProject,
+    collapseThreadListForProject,
+    dragInProgressRef,
+    suppressProjectClickAfterDragRef,
+    suppressProjectClickForContextMenuRef,
+    attachProjectListAutoAnimateRef,
+    projectsLength,
+  } = props;
+
+  const handleProjectSortOrderChange = useCallback(
+    (sortOrder: SidebarProjectSortOrder) => {
+      updateSettings({ sidebarProjectSortOrder: sortOrder });
+    },
+    [updateSettings],
+  );
+  const handleThreadSortOrderChange = useCallback(
+    (sortOrder: SidebarThreadSortOrder) => {
+      updateSettings({ sidebarThreadSortOrder: sortOrder });
+    },
+    [updateSettings],
+  );
+  const handleProjectGroupingModeChange = useCallback(
+    (groupingMode: SidebarProjectGroupingMode) => {
+      updateSettings({ sidebarProjectGroupingMode: groupingMode });
+    },
+    [updateSettings],
+  );
+  const handleThreadPreviewCountChange = useCallback(
+    (count: SidebarThreadPreviewCount) => {
+      updateSettings({ sidebarThreadPreviewCount: count });
+    },
+    [updateSettings],
+  );
+
+  return (
+    <SidebarContent className="gap-0">
+      <SidebarPrimaryNavigation routeThreadKey={routeThreadKey} />
       <SidebarGroup className="px-2 py-2">
         <div className="group/sidebar-section mb-1 flex items-center justify-between pl-2 pr-1.5">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
@@ -3651,7 +3761,6 @@ export default function Sidebar() {
   const sidebarProjectGroupingMode = useClientSettings((s) => s.sidebarProjectGroupingMode);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
-  const sidebarChatPreviewCount = useClientSettings((s) => s.sidebarChatPreviewCount);
   const updateSettings = useUpdateClientSettings();
   const handleNewThread = useNewThreadHandler();
   const { archiveThread, deleteThread } = useThreadActions();
@@ -3685,7 +3794,6 @@ export default function Sidebar() {
   const dragInProgressRef = useRef(false);
   const suppressProjectClickAfterDragRef = useRef(false);
   const suppressProjectClickForContextMenuRef = useRef(false);
-  const desktopUpdateState = useDesktopUpdateState();
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const platform = navigator.platform;
@@ -4137,91 +4245,6 @@ export default function Sidebar() {
     };
   }, [clearSelection]);
 
-  const desktopUpdateButtonDisabled = isDesktopUpdateButtonDisabled(desktopUpdateState);
-  const desktopUpdateButtonAction = desktopUpdateState
-    ? resolveDesktopUpdateButtonAction(desktopUpdateState)
-    : "none";
-  const showArm64IntelBuildWarning =
-    isElectron && shouldShowArm64IntelBuildWarning(desktopUpdateState);
-  const arm64IntelBuildWarningDescription =
-    desktopUpdateState && showArm64IntelBuildWarning
-      ? getArm64IntelBuildWarningDescription(desktopUpdateState)
-      : null;
-  const commandPaletteShortcutLabel = shortcutLabelForCommand(
-    keybindings,
-    "commandPalette.toggle",
-    newThreadShortcutLabelOptions,
-  );
-  const handleDesktopUpdateButtonClick = useCallback(() => {
-    const bridge = window.desktopBridge;
-    if (!bridge || !desktopUpdateState) return;
-    if (desktopUpdateButtonDisabled || desktopUpdateButtonAction === "none") return;
-
-    if (desktopUpdateButtonAction === "download") {
-      void bridge
-        .downloadUpdate()
-        .then((result) => {
-          if (result.completed) {
-            toastManager.add({
-              type: "success",
-              title: "Update downloaded",
-              description: "Restart the app from the update button to install it.",
-            });
-          }
-          if (!shouldToastDesktopUpdateActionResult(result)) return;
-          const actionError = getDesktopUpdateActionError(result);
-          if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not download update",
-              description: actionError,
-            }),
-          );
-        })
-        .catch((error) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not start update download",
-              description: error instanceof Error ? error.message : "An unexpected error occurred.",
-            }),
-          );
-        });
-      return;
-    }
-
-    if (desktopUpdateButtonAction === "install") {
-      const confirmed = window.confirm(
-        getDesktopUpdateInstallConfirmationMessage(desktopUpdateState),
-      );
-      if (!confirmed) return;
-      void bridge
-        .installUpdate()
-        .then((result) => {
-          if (!shouldToastDesktopUpdateActionResult(result)) return;
-          const actionError = getDesktopUpdateActionError(result);
-          if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: actionError,
-            }),
-          );
-        })
-        .catch((error) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: error instanceof Error ? error.message : "An unexpected error occurred.",
-            }),
-          );
-        });
-    }
-  }, [desktopUpdateButtonAction, desktopUpdateButtonDisabled, desktopUpdateState]);
-
   const expandThreadListForProject = useCallback((projectKey: string) => {
     setExpandedThreadListsByProject((current) => {
       if (current.has(projectKey)) return current;
@@ -4252,16 +4275,10 @@ export default function Sidebar() {
       ) : (
         <>
           <SidebarProjectsContent
-            showArm64IntelBuildWarning={showArm64IntelBuildWarning}
-            arm64IntelBuildWarningDescription={arm64IntelBuildWarningDescription}
-            desktopUpdateButtonAction={desktopUpdateButtonAction}
-            desktopUpdateButtonDisabled={desktopUpdateButtonDisabled}
-            handleDesktopUpdateButtonClick={handleDesktopUpdateButtonClick}
             projectSortOrder={sidebarProjectSortOrder}
             threadSortOrder={sidebarThreadSortOrder}
             projectGroupingMode={sidebarProjectGroupingMode}
             threadPreviewCount={sidebarThreadPreviewCount}
-            chatPreviewCount={sidebarChatPreviewCount}
             updateSettings={updateSettings}
             openAddProject={openAddProjectCommandPalette}
             isManualProjectSorting={isManualProjectSorting}
@@ -4278,7 +4295,6 @@ export default function Sidebar() {
             activeRouteProjectKey={activeRouteProjectKey}
             routeThreadKey={routeThreadKey}
             newThreadShortcutLabel={newThreadShortcutLabel}
-            commandPaletteShortcutLabel={commandPaletteShortcutLabel}
             threadJumpLabelByKey={visibleThreadJumpLabelByKey}
             attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
             expandThreadListForProject={expandThreadListForProject}
