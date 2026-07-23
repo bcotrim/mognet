@@ -8,6 +8,7 @@ import * as Ref from "effect/Ref";
 import * as Electron from "electron";
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
+import * as DesktopCloseGuard from "../app/DesktopCloseGuard.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
@@ -43,6 +44,7 @@ type WindowTitleBarOptions = Pick<
 type DesktopWindowRuntimeServices =
   | DesktopEnvironment.DesktopEnvironment
   | DesktopAssets.DesktopAssets
+  | DesktopCloseGuard.DesktopCloseGuard
   | DesktopAppSettings.DesktopAppSettings
   | ElectronMenu.ElectronMenu
   | ElectronShell.ElectronShell
@@ -240,6 +242,7 @@ function bindFirstRevealTrigger(
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const assets = yield* DesktopAssets.DesktopAssets;
+  const closeGuard = yield* DesktopCloseGuard.DesktopCloseGuard;
   const electronMenu = yield* ElectronMenu.ElectronMenu;
   const electronShell = yield* ElectronShell.ElectronShell;
   const electronTheme = yield* ElectronTheme.ElectronTheme;
@@ -521,8 +524,31 @@ export const make = Effect.gen(function* () {
     window.on("move", scheduleBoundsPersist);
     window.on("maximize", scheduleBoundsPersist);
     window.on("unmaximize", scheduleBoundsPersist);
-    window.on("close", () => {
+    let closeAllowed = false;
+    let closeConfirmationPending = false;
+    window.on("close", (event) => {
       runFork(flushBoundsPersist);
+      if (closeAllowed || !closeGuard.shouldConfirmClose()) return;
+
+      event.preventDefault();
+      if (closeConfirmationPending) return;
+      closeConfirmationPending = true;
+      void runPromise(
+        Effect.gen(function* () {
+          if (!(yield* closeGuard.confirmClose)) return;
+          if (environment.platform !== "darwin") {
+            yield* closeGuard.grantNextAppQuit;
+          }
+          closeAllowed = true;
+          window.close();
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              closeConfirmationPending = false;
+            }),
+          ),
+        ),
+      );
     });
 
     if (environment.platform === "darwin") {

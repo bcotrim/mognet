@@ -33,6 +33,7 @@ vi.mock("electron", async (importOriginal) => ({
 }));
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
+import * as DesktopCloseGuard from "../app/DesktopCloseGuard.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopState from "../app/DesktopState.ts";
@@ -105,6 +106,7 @@ function makeFakeBrowserWindow() {
 
   return {
     window: window as unknown as Electron.BrowserWindow,
+    close: window.close,
     getBounds: window.getBounds,
     getNormalBounds: window.getNormalBounds,
     isDestroyed: window.isDestroyed,
@@ -185,6 +187,7 @@ function makeTestLayer(input: {
   readonly beforeMainWindowBoundsUpdate?: (
     bounds: DesktopAppSettings.DesktopWindowBounds,
   ) => Effect.Effect<void>;
+  readonly closeGuard?: DesktopCloseGuard.DesktopCloseGuard["Service"];
   readonly openedExternalUrls?: unknown[];
 }) {
   let desktopSettings = input.desktopSettings ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS;
@@ -244,6 +247,18 @@ function makeTestLayer(input: {
     Layer.provide(
       Layer.mergeAll(
         desktopAssetsLayer,
+        Layer.succeed(
+          DesktopCloseGuard.DesktopCloseGuard,
+          input.closeGuard ??
+            DesktopCloseGuard.DesktopCloseGuard.of({
+              setRunningSessionCount: () => Effect.void,
+              shouldConfirmClose: () => false,
+              confirmClose: Effect.succeed(true),
+              grantNextAppQuit: Effect.void,
+              consumeNextAppQuitGrant: Effect.succeed(false),
+              allowAppQuit: Effect.void,
+            }),
+        ),
         desktopEnvironmentLayer,
         desktopAppSettingsLayer,
         desktopServerExposureLayer,
@@ -342,6 +357,17 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
       Layer.provide(
         Layer.mergeAll(
           desktopAssetsLayer,
+          Layer.succeed(
+            DesktopCloseGuard.DesktopCloseGuard,
+            DesktopCloseGuard.DesktopCloseGuard.of({
+              setRunningSessionCount: () => Effect.void,
+              shouldConfirmClose: () => false,
+              confirmClose: Effect.succeed(true),
+              grantNextAppQuit: Effect.void,
+              consumeNextAppQuitGrant: Effect.succeed(false),
+              allowAppQuit: Effect.void,
+            }),
+          ),
           desktopEnvironmentLayer,
           DesktopAppSettings.layerTest(),
           desktopServerExposureLayer,
@@ -797,6 +823,82 @@ describe("DesktopWindow", () => {
       assert.equal(createdWindowOptions[0]?.height, 780);
       assert.isUndefined(createdWindowOptions[0]?.x);
       assert.isUndefined(createdWindowOptions[0]?.y);
+    }),
+  );
+
+  it.effect("keeps the main window open when running-session close is canceled", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const confirmClose = vi.fn(() => Effect.succeed(false));
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+        closeGuard: DesktopCloseGuard.DesktopCloseGuard.of({
+          setRunningSessionCount: () => Effect.void,
+          shouldConfirmClose: () => true,
+          confirmClose: Effect.suspend(confirmClose),
+          grantNextAppQuit: Effect.void,
+          consumeNextAppQuitGrant: Effect.succeed(false),
+          allowAppQuit: Effect.void,
+        }),
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+
+        const close = fakeWindow.windowListeners.get("close");
+        if (!close) {
+          return yield* Effect.die("window close listener was not registered");
+        }
+        const preventDefault = vi.fn();
+        close({ preventDefault });
+        yield* Effect.promise(() => Promise.resolve());
+
+        assert.equal(preventDefault.mock.calls.length, 1);
+        assert.equal(confirmClose.mock.calls.length, 1);
+        assert.equal(fakeWindow.close.mock.calls.length, 0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("closes the main window after running-session close is confirmed", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+        closeGuard: DesktopCloseGuard.DesktopCloseGuard.of({
+          setRunningSessionCount: () => Effect.void,
+          shouldConfirmClose: () => true,
+          confirmClose: Effect.succeed(true),
+          grantNextAppQuit: Effect.void,
+          consumeNextAppQuitGrant: Effect.succeed(false),
+          allowAppQuit: Effect.void,
+        }),
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+
+        const close = fakeWindow.windowListeners.get("close");
+        if (!close) {
+          return yield* Effect.die("window close listener was not registered");
+        }
+        const preventDefault = vi.fn();
+        close({ preventDefault });
+        yield* Effect.promise(() => Promise.resolve());
+
+        assert.equal(preventDefault.mock.calls.length, 1);
+        assert.equal(fakeWindow.close.mock.calls.length, 1);
+      }).pipe(Effect.provide(layer));
     }),
   );
 

@@ -7,6 +7,7 @@ import * as Scope from "effect/Scope";
 
 import type * as Electron from "electron";
 
+import * as DesktopCloseGuard from "./DesktopCloseGuard.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
 import * as DesktopShutdown from "./DesktopShutdown.ts";
@@ -27,7 +28,7 @@ export class DesktopLifecycleRelaunchError extends Schema.TaggedErrorClass<Deskt
   }
 }
 
-export type DesktopLifecycleRuntimeServices =
+export type DesktopLifecycleRelaunchServices =
   | DesktopEnvironment.DesktopEnvironment
   | DesktopShutdown.DesktopShutdown
   | DesktopState.DesktopState
@@ -35,15 +36,19 @@ export type DesktopLifecycleRuntimeServices =
   | ElectronApp.ElectronApp
   | ElectronTheme.ElectronTheme;
 
+export type DesktopLifecycleRuntimeServices =
+  | DesktopCloseGuard.DesktopCloseGuard
+  | DesktopLifecycleRelaunchServices;
+
 /**
- * @effect-expect-leaking DesktopEnvironment | DesktopShutdown | DesktopState | DesktopWindow | ElectronApp | ElectronTheme
+ * @effect-expect-leaking DesktopCloseGuard | DesktopEnvironment | DesktopShutdown | DesktopState | DesktopWindow | ElectronApp | ElectronTheme
  */
 export class DesktopLifecycle extends Context.Service<
   DesktopLifecycle,
   {
     readonly relaunch: (
       reason: string,
-    ) => Effect.Effect<void, never, DesktopLifecycleRuntimeServices>;
+    ) => Effect.Effect<void, never, DesktopLifecycleRelaunchServices>;
     readonly register: Effect.Effect<void, never, Scope.Scope | DesktopLifecycleRuntimeServices>;
   }
 >()("@t3tools/desktop/app/DesktopLifecycle") {}
@@ -90,6 +95,9 @@ function handleBeforeQuit(
   event: Electron.Event,
   runEffect: <A, E>(effect: Effect.Effect<A, E, DesktopLifecycleRuntimeServices>) => Promise<A>,
   allowQuit: () => boolean,
+  isQuitPending: () => boolean,
+  markQuitPending: () => void,
+  clearQuitPending: () => void,
   markQuitAllowed: () => void,
 ): void {
   if (allowQuit()) {
@@ -104,21 +112,38 @@ function handleBeforeQuit(
   }
 
   event.preventDefault();
+  if (isQuitPending()) return;
+  markQuitPending();
   void runEffect(
     Effect.gen(function* () {
-      const state = yield* DesktopState.DesktopState;
-      yield* Ref.set(state.quitting, true);
-      yield* logLifecycleInfo("before-quit received");
-      yield* requestDesktopShutdownAndWait();
+      const closeGuard = yield* DesktopCloseGuard.DesktopCloseGuard;
+      if (yield* closeGuard.consumeNextAppQuitGrant) return true;
+      return yield* closeGuard.confirmClose;
     }).pipe(Effect.withSpan("desktop.lifecycle.beforeQuit")),
-  ).finally(() => {
-    markQuitAllowed();
+  ).then((confirmed) => {
+    if (!confirmed) {
+      clearQuitPending();
+      return;
+    }
     void runEffect(
       Effect.gen(function* () {
-        const electronApp = yield* ElectronApp.ElectronApp;
-        yield* electronApp.quit;
-      }).pipe(Effect.withSpan("desktop.lifecycle.quitAfterShutdown")),
-    );
+        const state = yield* DesktopState.DesktopState;
+        yield* Ref.set(state.quitting, true);
+        yield* logLifecycleInfo("before-quit received");
+        yield* requestDesktopShutdownAndWait();
+      }).pipe(Effect.withSpan("desktop.lifecycle.beforeQuitShutdown")),
+    ).finally(() => {
+      clearQuitPending();
+      markQuitAllowed();
+      void runEffect(
+        Effect.gen(function* () {
+          const closeGuard = yield* DesktopCloseGuard.DesktopCloseGuard;
+          const electronApp = yield* ElectronApp.ElectronApp;
+          yield* closeGuard.allowAppQuit;
+          yield* electronApp.quit;
+        }).pipe(Effect.withSpan("desktop.lifecycle.quitAfterShutdown")),
+      );
+    });
   });
 }
 
@@ -130,11 +155,13 @@ function quitFromSignal(
     Effect.gen(function* () {
       yield* Effect.annotateCurrentSpan({ signal });
       const electronApp = yield* ElectronApp.ElectronApp;
+      const closeGuard = yield* DesktopCloseGuard.DesktopCloseGuard;
       const state = yield* DesktopState.DesktopState;
       const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
       if (wasQuitting) return;
       yield* logLifecycleInfo("process signal received", { signal });
       yield* requestDesktopShutdownAndWait();
+      yield* closeGuard.allowAppQuit;
       yield* electronApp.quit;
     }).pipe(Effect.withSpan("desktop.lifecycle.processSignal")),
   );
@@ -176,6 +203,7 @@ export const make = DesktopLifecycle.of({
     const context = yield* Effect.context<DesktopLifecycleRuntimeServices>();
     const runEffect = Effect.runPromiseWith(context);
     let quitAllowed = false;
+    let quitPending = false;
     yield* electronTheme.onUpdated(() => {
       void runEffect(
         desktopWindow.syncAppearance.pipe(Effect.withSpan("desktop.lifecycle.themeUpdated")),
@@ -186,6 +214,13 @@ export const make = DesktopLifecycle.of({
         event,
         runEffect,
         () => quitAllowed,
+        () => quitPending,
+        () => {
+          quitPending = true;
+        },
+        () => {
+          quitPending = false;
+        },
         () => {
           quitAllowed = true;
         },
