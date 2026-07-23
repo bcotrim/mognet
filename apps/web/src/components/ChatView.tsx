@@ -111,7 +111,7 @@ import {
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
-import { isCommandPaletteOpen } from "../commandPaletteContext";
+import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
@@ -151,6 +151,7 @@ import {
 } from "~/projectScripts";
 import { newDraftId, newMessageId, newThreadId } from "~/lib/utils";
 import { getProviderModelCapabilities, resolveSelectableProvider } from "../providerModels";
+import { NO_PROVIDER_MODEL_SELECTION } from "../providerInstances";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
@@ -199,6 +200,7 @@ import {
   primaryServerAvailableTerminalsAtom,
   primaryServerKeybindingsAtom,
   primaryServerScheduledTasksAtom,
+  primaryServerSettingsAtom,
   serverEnvironment,
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
@@ -216,8 +218,12 @@ import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
-import { resolveEffectiveEnvMode } from "./BranchToolbar.logic";
-import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
+import { resolveEffectiveEnvMode, resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
+import {
+  getProviderStatusBannerKey,
+  ProviderStatusBanner,
+  shouldShowProviderStatusBanner,
+} from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { resolveScheduledThreadOrigin } from "../scheduledTaskOrigin";
@@ -240,13 +246,13 @@ import {
   getStartedThreadModelChangeBlockReason,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
-  modelSelectionsEqual,
   type LocalDispatchSnapshot,
   PullRequestDialogState,
   cloneComposerImageForRetry,
   deriveLockedProvider,
   readFileAsDataUrl,
   resolveThreadError,
+  resolveThreadMetadataUpdateForNextTurn,
   resolveSendEnvMode,
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
@@ -743,6 +749,10 @@ type LocalThreadErrorEntry = {
   readonly at: number;
 };
 
+function chatActionErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "An error occurred.";
+}
+
 function ChatViewContent(props: ChatViewProps) {
   const {
     environmentId,
@@ -770,6 +780,7 @@ function ChatViewContent(props: ChatViewProps) {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const switchGitRef = useAtomCommand(vcsEnvironment.switchRef, { reportFailure: false });
   const setThreadRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
     reportFailure: false,
   });
@@ -806,6 +817,10 @@ function ChatViewContent(props: ChatViewProps) {
     (store) => store.threadLastVisitedAtById[routeThreadKey],
   );
   const settings = useEnvironmentSettings(environmentId);
+  // New-thread defaults live in the primary environment's settings.json (the
+  // settings UI never writes to remote environments), so read them from the
+  // primary server rather than the thread's environment.
+  const primaryServerSettings = useAtomValue(primaryServerSettingsAtom);
   const setStickyComposerModelSelection = useComposerDraftStore(
     (store) => store.setStickyModelSelection,
   );
@@ -993,10 +1008,7 @@ function ChatViewContent(props: ChatViewProps) {
         ? buildLocalDraftThread(
             threadId,
             draftThread,
-            fallbackDraftProject?.defaultModelSelection ?? {
-              instanceId: ProviderInstanceId.make("codex"),
-              model: DEFAULT_MODEL,
-            },
+            fallbackDraftProject?.defaultModelSelection ?? NO_PROVIDER_MODEL_SELECTION,
           )
         : undefined,
     [draftThread, fallbackDraftProject?.defaultModelSelection, threadId],
@@ -1438,7 +1450,7 @@ function ChatViewContent(props: ChatViewProps) {
     hasMultipleRegisteredEnvironments && activeThread
       ? `${environmentById.get(activeThread.environmentId)?.label ?? serverConfig?.environment.label ?? activeThread.environmentId} server`
       : "server";
-  const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
+  const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     if (activeEnvironmentUnavailableState) {
       const connection = activeEnvironmentUnavailableState.connection;
@@ -1508,7 +1520,7 @@ function ChatViewContent(props: ChatViewProps) {
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;
   const unlockedSelectedProvider = resolveSelectableProvider(
     providerStatuses,
-    selectedProviderByThreadId ?? threadProvider ?? ProviderDriverKind.make("codex"),
+    selectedProviderByThreadId ?? threadProvider,
   );
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);
@@ -1952,6 +1964,22 @@ function ChatViewContent(props: ChatViewProps) {
     const defaultInstanceId = defaultInstanceIdForDriver(selectedProvider);
     return providerStatuses.find((status) => status.instanceId === defaultInstanceId) ?? null;
   }, [activeProviderInstanceId, providerStatuses, selectedProvider]);
+  const providerStatusBannerKey = getProviderStatusBannerKey(activeProviderStatus);
+  const [dismissedProviderStatusBannerKey, setDismissedProviderStatusBannerKey] = useState<
+    string | null
+  >(null);
+  useEffect(() => {
+    if (providerStatusBannerKey === null && dismissedProviderStatusBannerKey !== null) {
+      setDismissedProviderStatusBannerKey(null);
+    }
+  }, [dismissedProviderStatusBannerKey, providerStatusBannerKey]);
+  const visibleProviderStatus = shouldShowProviderStatusBanner(
+    activeProviderStatus,
+    dismissedProviderStatusBannerKey,
+  )
+    ? activeProviderStatus
+    : null;
+  const hasTimelineTopBanner = Boolean(threadError) || visibleProviderStatus !== null;
   const activeProjectCwd = hasWorkspaceProject ? activeProject.workspaceRoot : null;
   const activeThreadWorktreePath = hasWorkspaceProject
     ? (activeThread?.worktreePath ?? null)
@@ -2802,6 +2830,7 @@ function ChatViewContent(props: ChatViewProps) {
       threadId: ThreadId;
       createdAt: string;
       modelSelection?: ModelSelection;
+      branch?: string;
       runtimeMode: RuntimeMode;
       interactionMode: ProviderInteractionMode;
     }): Promise<AtomCommandResult<void, unknown>> => {
@@ -2810,16 +2839,19 @@ function ChatViewContent(props: ChatViewProps) {
       }
 
       let result: AtomCommandResult<void, unknown> = AsyncResult.success(undefined);
-      if (
-        input.modelSelection !== undefined &&
-        !modelSelectionsEqual(input.modelSelection, serverThread.modelSelection)
-      ) {
+      const metadataUpdate = resolveThreadMetadataUpdateForNextTurn({
+        currentModelSelection: serverThread.modelSelection,
+        ...(input.modelSelection ? { nextModelSelection: input.modelSelection } : {}),
+        currentBranch: serverThread.branch,
+        ...(input.branch ? { nextBranch: input.branch } : {}),
+      });
+      if (metadataUpdate) {
         result = mapAtomCommandResult(
           await updateThreadMetadata({
             environmentId,
             input: {
               threadId: input.threadId,
-              modelSelection: input.modelSelection,
+              ...metadataUpdate,
             },
           }),
           () => undefined,
@@ -3308,12 +3340,185 @@ function ChatViewContent(props: ChatViewProps) {
     : canOverrideServerThreadEnvMode
       ? (pendingServerThreadStartFromOriginByThreadId[activeThread?.id ?? ""] ??
         activeProject?.newWorktreesStartFromOrigin ??
-        settings.newWorktreesStartFromOrigin)
+        primaryServerSettings.newWorktreesStartFromOrigin)
       : false;
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
   });
+  const localCheckoutBranchMismatch = useMemo(
+    () =>
+      isServerThread
+        ? resolveLocalCheckoutBranchMismatch({
+            effectiveEnvMode: envMode,
+            activeWorktreePath,
+            activeThreadBranch,
+            currentGitBranch: gitStatusQuery.data?.refName ?? null,
+          })
+        : null,
+    [activeThreadBranch, activeWorktreePath, envMode, gitStatusQuery.data?.refName, isServerThread],
+  );
+  const [branchRepairAction, setBranchRepairAction] = useState<
+    "update-thread" | "switch-checkout" | null
+  >(null);
+  const handleUpdateThreadToCheckout = useCallback(async () => {
+    if (!activeThread || !localCheckoutBranchMismatch || branchRepairAction !== null) {
+      return;
+    }
+    setBranchRepairAction("update-thread");
+    const updateResult = await updateThreadMetadata({
+      environmentId,
+      input: {
+        threadId: activeThread.id,
+        branch: localCheckoutBranchMismatch.currentBranch,
+        worktreePath: null,
+      },
+    });
+    setBranchRepairAction(null);
+    if (updateResult._tag === "Failure" && !isAtomCommandInterrupted(updateResult)) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to update thread branch",
+          description: chatActionErrorMessage(squashAtomCommandFailure(updateResult)),
+        }),
+      );
+      return;
+    }
+    scheduleComposerFocus();
+  }, [
+    activeThread,
+    branchRepairAction,
+    environmentId,
+    localCheckoutBranchMismatch,
+    scheduleComposerFocus,
+    updateThreadMetadata,
+  ]);
+  const handleSwitchCheckoutToThread = useCallback(async () => {
+    if (
+      !activeProjectCwd ||
+      !activeThread ||
+      !localCheckoutBranchMismatch ||
+      branchRepairAction !== null
+    ) {
+      return;
+    }
+    setBranchRepairAction("switch-checkout");
+    const checkoutResult = await switchGitRef({
+      environmentId,
+      input: {
+        cwd: activeProjectCwd,
+        refName: localCheckoutBranchMismatch.threadBranch,
+      },
+    });
+    if (checkoutResult._tag === "Failure") {
+      setBranchRepairAction(null);
+      if (!isAtomCommandInterrupted(checkoutResult)) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Failed to switch checkout",
+            description: chatActionErrorMessage(squashAtomCommandFailure(checkoutResult)),
+          }),
+        );
+      }
+      return;
+    }
+
+    const nextBranch = checkoutResult.value.refName ?? localCheckoutBranchMismatch.threadBranch;
+    if (nextBranch !== activeThread.branch) {
+      const updateResult = await updateThreadMetadata({
+        environmentId,
+        input: { threadId: activeThread.id, branch: nextBranch, worktreePath: null },
+      });
+      if (updateResult._tag === "Failure") {
+        setBranchRepairAction(null);
+        if (!isAtomCommandInterrupted(updateResult)) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Checkout switched, but the thread could not be updated",
+              description: chatActionErrorMessage(squashAtomCommandFailure(updateResult)),
+            }),
+          );
+        }
+        gitStatusQuery.refresh();
+        return;
+      }
+    }
+    gitStatusQuery.refresh();
+    setBranchRepairAction(null);
+    scheduleComposerFocus();
+  }, [
+    activeProjectCwd,
+    activeThread,
+    branchRepairAction,
+    environmentId,
+    gitStatusQuery,
+    localCheckoutBranchMismatch,
+    scheduleComposerFocus,
+    switchGitRef,
+    updateThreadMetadata,
+  ]);
+  const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
+    if (!localCheckoutBranchMismatch) {
+      return systemComposerBannerItems;
+    }
+    const isRepairingBranch = branchRepairAction !== null;
+    return [
+      ...systemComposerBannerItems,
+      {
+        id: `branch-mismatch:${activeThread?.id ?? "unknown"}:${localCheckoutBranchMismatch.threadBranch}:${localCheckoutBranchMismatch.currentBranch}`,
+        variant: "warning",
+        icon: <TriangleAlertIcon />,
+        title: "You're on a different branch",
+        className:
+          "text-base sm:text-sm [&>div]:items-start max-sm:[&>div]:flex-wrap max-sm:[&>div>div:last-child]:w-full max-sm:[&>div>div:last-child]:self-start dark:shadow-none",
+        actionClassName:
+          "max-sm:w-full max-sm:border-t max-sm:border-border/60 max-sm:pt-2 max-sm:pl-6 sm:border-l sm:border-border/60 sm:pl-3",
+        description: (
+          <p className="text-pretty">
+            This thread is on{" "}
+            <code className="font-medium text-foreground">
+              {localCheckoutBranchMismatch.threadBranch}
+            </code>
+            , but you're currently checked out at{" "}
+            <code className="font-medium text-foreground">
+              {localCheckoutBranchMismatch.currentBranch}
+            </code>
+            . Sending a message will update the thread.
+          </p>
+        ),
+        actions: (
+          <>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={isRepairingBranch}
+              onClick={() => void handleUpdateThreadToCheckout()}
+            >
+              {branchRepairAction === "update-thread" ? "Moving..." : "Move thread here"}
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={isRepairingBranch}
+              onClick={() => void handleSwitchCheckoutToThread()}
+            >
+              {branchRepairAction === "switch-checkout" ? "Switching..." : "Checkout thread branch"}
+            </Button>
+          </>
+        ),
+      },
+    ];
+  }, [
+    activeThread?.id,
+    branchRepairAction,
+    handleSwitchCheckoutToThread,
+    handleUpdateThreadToCheckout,
+    localCheckoutBranchMismatch,
+    systemComposerBannerItems,
+  ]);
 
   useEffect(() => {
     setPendingServerThreadEnvMode(null);
@@ -3591,7 +3796,7 @@ function ChatViewContent(props: ChatViewProps) {
       return;
     }
     const sendCtx = composerRef.current?.getSendContext();
-    if (!sendCtx) return;
+    if (!sendCtx?.providerAvailable) return;
     const {
       images: composerImages,
       terminalContexts: composerTerminalContexts,
@@ -3869,6 +4074,9 @@ function ChatViewContent(props: ChatViewProps) {
         threadId: threadIdForSend,
         createdAt: messageCreatedAt,
         ...(ctxSelectedModel ? { modelSelection: ctxSelectedModelSelection } : {}),
+        ...(localCheckoutBranchMismatch
+          ? { branch: localCheckoutBranchMismatch.currentBranch }
+          : {}),
         runtimeMode,
         interactionMode,
       });
@@ -4197,7 +4405,7 @@ function ChatViewContent(props: ChatViewProps) {
       }
 
       const sendCtx = composerRef.current?.getSendContext();
-      if (!sendCtx) {
+      if (!sendCtx?.providerAvailable) {
         return;
       }
       const {
@@ -4253,6 +4461,9 @@ function ChatViewContent(props: ChatViewProps) {
         threadId: threadIdForSend,
         createdAt: messageCreatedAt,
         modelSelection: ctxSelectedModelSelection,
+        ...(localCheckoutBranchMismatch
+          ? { branch: localCheckoutBranchMismatch.currentBranch }
+          : {}),
         runtimeMode,
         interactionMode: nextInteractionMode,
       });
@@ -4329,6 +4540,7 @@ function ChatViewContent(props: ChatViewProps) {
       isConnecting,
       isSendBusy,
       isServerThread,
+      localCheckoutBranchMismatch,
       persistThreadSettingsForNextTurn,
       resetLocalDispatch,
       runtimeMode,
@@ -4356,7 +4568,7 @@ function ChatViewContent(props: ChatViewProps) {
     }
 
     const sendCtx = composerRef.current?.getSendContext();
-    if (!sendCtx) {
+    if (!sendCtx?.providerAvailable) {
       return;
     }
     const {
@@ -4607,7 +4819,8 @@ function ChatViewContent(props: ChatViewProps) {
           startFromOrigin: resolveNewDraftStartFromOrigin({
             envMode: mode,
             newWorktreesStartFromOrigin:
-              activeProject?.newWorktreesStartFromOrigin ?? settings.newWorktreesStartFromOrigin,
+              activeProject?.newWorktreesStartFromOrigin ??
+              primaryServerSettings.newWorktreesStartFromOrigin,
           }),
           ...(mode === "worktree" && draftThread?.worktreePath ? { worktreePath: null } : {}),
         });
@@ -4620,7 +4833,7 @@ function ChatViewContent(props: ChatViewProps) {
       activeProject?.newWorktreesStartFromOrigin,
       draftThread?.worktreePath,
       isLocalDraftThread,
-      settings.newWorktreesStartFromOrigin,
+      primaryServerSettings.newWorktreesStartFromOrigin,
       setPendingServerThreadEnvMode,
       scheduleComposerFocus,
       setDraftThreadContext,
@@ -4788,7 +5001,7 @@ function ChatViewContent(props: ChatViewProps) {
         <header
           data-chat-header
           className={cn(
-            "border-b border-border transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none",
+            "bg-background transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none",
             isElectron
               ? cn(
                   "workspace-topbar drag-region relative px-3 sm:px-5",
@@ -4808,6 +5021,7 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadTitle={activeThread.title}
             activeThreadOrigin={activeThreadOrigin}
             activeProjectName={hasWorkspaceProject ? activeProject?.title : undefined}
+            activeProjectCwd={hasWorkspaceProject ? (activeProject?.workspaceRoot ?? null) : null}
             openInCwd={hasWorkspaceProject ? gitCwd : null}
             activeProjectScripts={hasWorkspaceProject ? activeProject?.scripts : undefined}
             preferredScriptId={
@@ -4827,13 +5041,18 @@ function ChatViewContent(props: ChatViewProps) {
           />
         </header>
 
-        {/* Error banner */}
-        <ProviderStatusBanner status={activeProviderStatus} />
         <ThreadErrorBanner error={threadError} onDismiss={dismissThreadError} />
         {/* Main content area with optional plan sidebar */}
         <div className="flex min-h-0 min-w-0 flex-1">
           {/* Chat column */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            {/* Provider status overlays the timeline without changing its content height. */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+              <ProviderStatusBanner
+                status={visibleProviderStatus}
+                onDismiss={() => setDismissedProviderStatusBannerKey(providerStatusBannerKey)}
+              />
+            </div>
             {/* Messages Wrapper */}
             <div className="relative flex min-h-0 flex-1 flex-col">
               {/* Messages — LegendList handles virtualization and scrolling internally */}
@@ -4871,6 +5090,7 @@ function ChatViewContent(props: ChatViewProps) {
                 onIsAtEndChange={onIsAtEndChange}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
                 hideEmptyPlaceholder={isDraftHeroState}
+                topFadeEnabled={!hasTimelineTopBanner}
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
@@ -4903,17 +5123,6 @@ function ChatViewContent(props: ChatViewProps) {
                   : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               }
             >
-              {!isDraftHeroState ? (
-                <div
-                  key="docked-composer-blur"
-                  aria-hidden="true"
-                  className="chat-composer-horizontal-inset pointer-events-none absolute inset-x-0 top-1.5 bottom-0 z-0 sm:top-2"
-                >
-                  <div className="relative mx-auto h-full w-full max-w-3xl overflow-clip rounded-t-[20px]">
-                    <div className="chat-composer-shared-blur absolute -inset-8" />
-                  </div>
-                </div>
-              ) : null}
               <div
                 ref={attachDraftHeroTransitionGroupRef}
                 className="chat-composer-horizontal-inset w-full"
@@ -4951,7 +5160,7 @@ function ChatViewContent(props: ChatViewProps) {
                   >
                     <div
                       ref={attachDraftHeroComposerAnchorRef}
-                      className="relative z-10 mx-auto w-full max-w-3xl"
+                      className="relative z-10 isolate mx-auto w-full max-w-3xl before:pointer-events-none before:absolute before:inset-x-0 before:bottom-0 before:-z-10 before:h-2 before:rounded-b-[22px] before:bg-background"
                     >
                       <ChatComposer
                         composerRef={composerRef}
@@ -5034,12 +5243,8 @@ function ChatViewContent(props: ChatViewProps) {
                       )}
                     >
                       <div
-                        className={cn(
-                          "chat-composer-lower-chrome relative z-10",
-                          isGitRepo
-                            ? "pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
-                            : "pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
-                        )}
+                        data-terminal-open={terminalPanelOpen ? "true" : undefined}
+                        className="chat-composer-lower-chrome relative z-0 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
                       >
                         {isGitRepo && (
                           <div className="pointer-events-auto">

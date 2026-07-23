@@ -56,6 +56,7 @@ const CADENCE_LABELS: Record<ScheduledTaskCadence, string> = {
 
 const RUNTIME_MODE_LABELS: Record<RuntimeMode, string> = {
   "approval-required": "Approval required",
+  auto: "Auto",
   "auto-accept-edits": "Auto-accept edits",
   "full-access": "Full access",
 };
@@ -67,6 +68,7 @@ const INTERACTION_MODE_LABELS: Record<ProviderInteractionMode, string> = {
 
 const RUNTIME_MODES: ReadonlyArray<RuntimeMode> = [
   "approval-required",
+  "auto",
   "auto-accept-edits",
   "full-access",
 ];

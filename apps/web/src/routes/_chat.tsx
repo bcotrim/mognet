@@ -2,7 +2,10 @@ import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect } from "react";
 
-import { isCommandPaletteOpen } from "../commandPaletteContext";
+import { isCommandPaletteOpen } from "../commandPaletteBus";
+import { useClientSettings } from "../hooks/useSettings";
+import { openCommandPalette } from "../commandPaletteBus";
+import { useProjects } from "../state/entities";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import {
@@ -30,6 +33,8 @@ function ChatRouteGlobalShortcuts() {
     routeThreadRef,
   } = useHandleNewThread();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const sidebarV2Enabled = useClientSettings((settings) => settings.sidebarV2Enabled);
+  const projectCount = useProjects().length;
   const terminalOpen = useRightPanelStore((state) =>
     routeThreadRef
       ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "terminal"
@@ -80,6 +85,13 @@ function ChatRouteGlobalShortcuts() {
       if (command === "chat.new") {
         event.preventDefault();
         event.stopPropagation();
+        // Sidebar v2 routes creation through the command palette whenever
+        // there is a real choice to make; v1 (and single-project setups)
+        // keep the immediate contextual create.
+        if (sidebarV2Enabled && projectCount > 1) {
+          openCommandPalette({ open: "new-thread-in" });
+          return;
+        }
         void startNewThreadFromContext({
           activeDraftThread,
           activeThread: activeThread ?? undefined,
@@ -146,8 +158,10 @@ function ChatRouteGlobalShortcuts() {
     keybindings,
     defaultProjectRef,
     previewOpen,
+    projectCount,
     routeThreadRef,
     selectedThreadKeysSize,
+    sidebarV2Enabled,
     terminalOpen,
   ]);
 

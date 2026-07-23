@@ -21,6 +21,7 @@ import {
   modelSelectionsEqual,
   reconcileRetainedMountedThreadIds,
   resolveThreadError,
+  resolveThreadMetadataUpdateForNextTurn,
   resolveSendEnvMode,
   shouldIncludeTurnStartBootstrap,
   shouldWriteThreadErrorToCurrentServerThread,
@@ -51,6 +52,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
+    settledOverride: null,
+    settledAt: null,
     deletedAt: null,
     latestTurn: null,
     branch: null,
@@ -84,6 +87,34 @@ describe("buildEmptyThreadWelcomeTitle", () => {
     expect(buildEmptyThreadWelcomeTitle("mognet")).toBe("What's next in mognet, kupo?");
     expect(buildEmptyThreadWelcomeTitle("  studio  ")).toBe("What's next in studio, kupo?");
     expect(buildEmptyThreadWelcomeTitle(null)).toBe("What's next, kupo?");
+  });
+});
+
+describe("resolveThreadMetadataUpdateForNextTurn", () => {
+  const modelSelection = {
+    instanceId: ProviderInstanceId.make("codex"),
+    model: "gpt-5.4",
+  };
+
+  it("updates a stale local thread branch to the active checkout", () => {
+    expect(
+      resolveThreadMetadataUpdateForNextTurn({
+        currentModelSelection: modelSelection,
+        currentBranch: "feature/thread",
+        nextBranch: "feature/checkout",
+      }),
+    ).toEqual({ branch: "feature/checkout", worktreePath: null });
+  });
+
+  it("does not write metadata when the model and branch are unchanged", () => {
+    expect(
+      resolveThreadMetadataUpdateForNextTurn({
+        currentModelSelection: modelSelection,
+        nextModelSelection: modelSelection,
+        currentBranch: "feature/current",
+        nextBranch: "feature/current",
+      }),
+    ).toBeNull();
   });
 });
 

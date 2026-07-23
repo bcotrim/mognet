@@ -8,11 +8,9 @@ import type {
   SourceControlRepositoryInfo,
 } from "@t3tools/contracts";
 import {
-  DEFAULT_MODEL,
   DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
   DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
   DEFAULT_PROJECT_THREAD_ENV_MODE,
-  ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Option from "effect/Option";
@@ -221,10 +219,7 @@ export function buildProjectCreateCommand(input: {
     title: inferProjectTitleFromPath(input.workspaceRoot),
     workspaceRoot: input.workspaceRoot,
     createWorkspaceRootIfMissing: true,
-    defaultModelSelection: {
-      instanceId: ProviderInstanceId.make("codex"),
-      model: DEFAULT_MODEL,
-    },
+    defaultModelSelection: null,
     defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
     newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
     textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
