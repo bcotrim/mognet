@@ -3,6 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { InteractionSounds } from "./components/InteractionSounds";
 import { PreviewAutomationHosts } from "./components/preview/PreviewAutomationHosts";
+import { RunningSessionCloseGuard } from "./components/RunningSessionCloseGuard";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
 import type { AppRouter } from "./router";
 
@@ -15,6 +16,7 @@ export function AppRoot({ router }: { readonly router: AppRouter }) {
   return (
     <AppAtomRegistryProvider>
       <InteractionSounds />
+      <RunningSessionCloseGuard />
       <RouterProvider router={router} />
       <PreviewAutomationHosts />
       <ElectronBrowserHost />

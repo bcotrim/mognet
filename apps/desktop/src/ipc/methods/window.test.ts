@@ -5,10 +5,15 @@ import * as Option from "effect/Option";
 
 import type * as Electron from "electron";
 
+import * as DesktopCloseGuard from "../../app/DesktopCloseGuard.ts";
 import * as DesktopBackendManager from "../../backend/DesktopBackendManager.ts";
 import * as DesktopBackendPool from "../../backend/DesktopBackendPool.ts";
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";
-import { getLocalEnvironmentBootstraps, getWindowFullscreenState } from "./window.ts";
+import {
+  getLocalEnvironmentBootstraps,
+  getWindowFullscreenState,
+  setRunningSessionCount,
+} from "./window.ts";
 
 const readyWslConfig: DesktopBackendManager.DesktopBackendStartConfig = {
   executablePath: "wsl.exe",
@@ -144,5 +149,27 @@ describe("getWindowFullscreenState", () => {
         }),
       ),
     );
+  });
+});
+
+describe("setRunningSessionCount", () => {
+  it.effect("updates desktop close protection state", () => {
+    let runningSessionCount = 0;
+    const closeGuard = DesktopCloseGuard.DesktopCloseGuard.of({
+      setRunningSessionCount: (count) =>
+        Effect.sync(() => {
+          runningSessionCount = count;
+        }),
+      shouldConfirmClose: () => false,
+      confirmClose: Effect.succeed(true),
+      grantNextAppQuit: Effect.void,
+      consumeNextAppQuitGrant: Effect.succeed(false),
+      allowAppQuit: Effect.void,
+    });
+
+    return Effect.gen(function* () {
+      yield* setRunningSessionCount.handler(3);
+      assert.equal(runningSessionCount, 3);
+    }).pipe(Effect.provide(Layer.succeed(DesktopCloseGuard.DesktopCloseGuard, closeGuard)));
   });
 });

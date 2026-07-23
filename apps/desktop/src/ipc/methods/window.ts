@@ -3,6 +3,7 @@ import {
   DesktopAppBrandingSchema,
   DesktopEnvironmentBootstrapSchema,
   DesktopThemeSchema,
+  NonNegativeInt,
   PickFolderOptionsSchema,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   type DesktopEnvironmentBootstrap,
@@ -13,6 +14,7 @@ import * as Schema from "effect/Schema";
 
 import * as DesktopBackendPool from "../../backend/DesktopBackendPool.ts";
 import * as DesktopLocalEnvironmentAuth from "../../backend/DesktopLocalEnvironmentAuth.ts";
+import * as DesktopCloseGuard from "../../app/DesktopCloseGuard.ts";
 import * as DesktopEnvironment from "../../app/DesktopEnvironment.ts";
 import * as DesktopAppSettings from "../../settings/DesktopAppSettings.ts";
 import * as DesktopWslBackend from "../../wsl/DesktopWslBackend.ts";
@@ -225,6 +227,16 @@ export const confirm = DesktopIpc.makeIpcMethod({
     return yield* electronWindow.focusedMainOrFirst.pipe(
       Effect.flatMap((owner) => dialog.confirm({ owner, message })),
     );
+  }),
+});
+
+export const setRunningSessionCount = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.SET_RUNNING_SESSION_COUNT_CHANNEL,
+  payload: NonNegativeInt,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.window.setRunningSessionCount")(function* (count) {
+    const closeGuard = yield* DesktopCloseGuard.DesktopCloseGuard;
+    yield* closeGuard.setRunningSessionCount(count);
   }),
 });
 
