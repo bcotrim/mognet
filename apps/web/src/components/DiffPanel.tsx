@@ -662,22 +662,24 @@ export default function DiffPanel({
       }),
     [collapsedDiffFileKeys, renderableFiles],
   );
-  const codeViewFiles = allCodeViewFiles;
-  const navigatorFiles = filterInteractiveReviewFiles(codeViewFiles, activeTourStep);
+  const codeViewFiles = useMemo(
+    () => filterInteractiveReviewFiles(allCodeViewFiles, activeTourStep),
+    [activeTourStep, allCodeViewFiles],
+  );
   const reviewFileContextByPath = EMPTY_REVIEW_FILE_CONTEXT;
   const reviewFindingsByFilePath = EMPTY_REVIEW_FINDINGS;
   const selectedFileKey = selectedFilePath
     ? (codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath)?.fileKey ?? null)
     : null;
-  const activeNavigatorFileKey = navigatorFiles.some(
+  const activeNavigatorFileKey = codeViewFiles.some(
     (candidate) => candidate.fileKey === navigatedFileKey,
   )
     ? navigatedFileKey
-    : (navigatorFiles.find((candidate) => candidate.fileKey === selectedFileKey)?.fileKey ??
-      navigatorFiles[0]?.fileKey ??
+    : (codeViewFiles.find((candidate) => candidate.fileKey === selectedFileKey)?.fileKey ??
+      codeViewFiles[0]?.fileKey ??
       null);
   const showDiffFileNavigator =
-    navigatorFiles.length > 1 || activeTourStepCodeNotesByFilePath.size > 0;
+    codeViewFiles.length > 1 || activeTourStepCodeNotesByFilePath.size > 0;
 
   useEffect(() => {
     setNavigatedFileKey(null);
@@ -705,9 +707,7 @@ export default function DiffPanel({
   );
   const scrollToDiffAnchor = useCallback(
     (anchor: InteractiveReviewTourAnchor) => {
-      const file =
-        codeViewFiles.find((candidate) => candidate.filePath === anchor.filePath) ??
-        allCodeViewFiles.find((candidate) => candidate.filePath === anchor.filePath);
+      const file = codeViewFiles.find((candidate) => candidate.filePath === anchor.filePath);
       if (!file) return;
 
       setNavigatedFileKey(file.fileKey);
@@ -747,7 +747,7 @@ export default function DiffPanel({
             },
       );
     },
-    [allCodeViewFiles, codeViewFiles],
+    [codeViewFiles],
   );
 
   useEffect(() => {
@@ -1176,7 +1176,7 @@ export default function DiffPanel({
                     />
                     <DiffFileNavigator
                       activeFileKey={activeNavigatorFileKey}
-                      files={navigatorFiles}
+                      files={codeViewFiles}
                       codeNotesByFilePath={activeTourStepCodeNotesByFilePath}
                       inlineCommentCountByFilePath={inlineCommentCountByFilePath}
                       reviewFileContextByPath={reviewFileContextByPath}
@@ -1188,7 +1188,7 @@ export default function DiffPanel({
                 ) : showDiffFileNavigator ? (
                   <DiffFileNavigator
                     activeFileKey={activeNavigatorFileKey}
-                    files={navigatorFiles}
+                    files={codeViewFiles}
                     codeNotesByFilePath={activeTourStepCodeNotesByFilePath}
                     inlineCommentCountByFilePath={inlineCommentCountByFilePath}
                     reviewFileContextByPath={reviewFileContextByPath}
