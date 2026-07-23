@@ -41,6 +41,15 @@ export interface InteractiveReviewTour {
   readonly steps: ReadonlyArray<InteractiveReviewTourStep>;
 }
 
+export function filterInteractiveReviewFiles<T extends { readonly filePath: string }>(
+  files: ReadonlyArray<T>,
+  step: Pick<InteractiveReviewTourStep, "files"> | null,
+): ReadonlyArray<T> {
+  if (!step?.files.length) return files;
+  const filePaths = new Set(step.files);
+  return files.filter((file) => filePaths.has(file.filePath));
+}
+
 interface BuildInteractiveReviewTourPromptInput {
   readonly userRequest: string;
   readonly projectTitle: string | null;

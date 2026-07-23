@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildInteractiveReviewTourPrompt,
   extractInteractiveReviewTourFromText,
+  filterInteractiveReviewFiles,
   isInteractiveReviewRequest,
   stripInteractiveReviewTourArtifact,
   stripInteractiveReviewTourPrompt,
@@ -100,6 +101,21 @@ describe("interactiveReviewTour", () => {
     expect(tour?.steps[0]?.kind).toBe("data-flow");
     expect(tour?.steps[0]?.files).toEqual(["src/parser.ts"]);
     expect(tour?.steps[0]?.anchors[0]?.startLine).toBe(10);
+  });
+
+  it("scopes changed files to the active review step", () => {
+    const files = [
+      { filePath: "src/entry.ts" },
+      { filePath: "src/parser.ts" },
+      { filePath: "src/view.tsx" },
+    ];
+
+    expect(
+      filterInteractiveReviewFiles(files, {
+        files: ["src/parser.ts", "src/missing.ts"],
+      }),
+    ).toEqual([{ filePath: "src/parser.ts" }]);
+    expect(filterInteractiveReviewFiles(files, null)).toBe(files);
   });
 
   it("strips only the machine-readable artifact block", () => {
