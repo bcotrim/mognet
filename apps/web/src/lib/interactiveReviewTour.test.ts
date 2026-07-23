@@ -103,7 +103,7 @@ describe("interactiveReviewTour", () => {
     expect(tour?.steps[0]?.anchors[0]?.startLine).toBe(10);
   });
 
-  it("scopes changed files to the active review step", () => {
+  it("scopes diff files to the active review step", () => {
     const files = [
       { filePath: "src/entry.ts" },
       { filePath: "src/parser.ts" },
