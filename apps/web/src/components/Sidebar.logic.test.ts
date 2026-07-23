@@ -12,6 +12,7 @@ import {
   getProjectSortTimestamp,
   hasUnseenCompletion,
   isContextMenuPointerDown,
+  isSidebarV2ProjectThread,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
@@ -36,6 +37,7 @@ import {
   OrchestrationLatestTurn,
   ProjectId,
   ProviderInstanceId,
+  STANDALONE_CHAT_PROJECT_ID,
   ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -841,6 +843,32 @@ describe("resolveSidebarV2Status", () => {
 
   it("defaults to ready with no session", () => {
     expect(resolveSidebarV2Status({ ...idle, session: null })).toBe("ready");
+  });
+});
+
+describe("isSidebarV2ProjectThread", () => {
+  it("keeps standalone chats out of the project thread feed", () => {
+    expect(
+      isSidebarV2ProjectThread({
+        archivedAt: null,
+        projectId: STANDALONE_CHAT_PROJECT_ID,
+      }),
+    ).toBe(false);
+    expect(
+      isSidebarV2ProjectThread({
+        archivedAt: null,
+        projectId: ProjectId.make("project-1"),
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps archived project threads hidden", () => {
+    expect(
+      isSidebarV2ProjectThread({
+        archivedAt: "2026-03-09T10:00:00.000Z",
+        projectId: ProjectId.make("project-1"),
+      }),
+    ).toBe(false);
   });
 });
 

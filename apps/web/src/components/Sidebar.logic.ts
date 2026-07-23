@@ -1,5 +1,5 @@
 import * as React from "react";
-import type { ContextMenuItem } from "@t3tools/contracts";
+import { STANDALONE_CHAT_PROJECT_ID, type ContextMenuItem } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import {
   getThreadSortTimestamp,
@@ -485,6 +485,12 @@ export function resolveSidebarV2Status(thread: SidebarV2StatusInput): SidebarV2S
     return "failed";
   }
   return "ready";
+}
+
+export function isSidebarV2ProjectThread(
+  thread: Pick<SidebarThreadSummary, "archivedAt" | "projectId">,
+): boolean {
+  return thread.archivedAt === null && thread.projectId !== STANDALONE_CHAT_PROJECT_ID;
 }
 
 /** NaN-safe Date.parse for sort comparators: a malformed timestamp must not
