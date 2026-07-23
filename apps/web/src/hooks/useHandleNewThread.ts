@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import {
   scopedProjectKey,
   scopeProjectRef,
@@ -29,6 +30,7 @@ import {
 } from "../logicalProject";
 import { readThreadShell, useProjects, useServerConfigs, useThread } from "../state/entities";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
+import { primaryServerSettingsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
@@ -56,7 +58,12 @@ export function shouldApplyStickyModelStateToNewDraft(
 
 export function useNewThreadHandler() {
   const projects = useProjects();
-  const serverConfigs = useServerConfigs();
+  // New-thread defaults are a user preference, and the settings UI only ever
+  // edits the primary environment's settings.json. Reading the target
+  // environment's own settings here would silently reset remote projects to
+  // the decoded defaults ("local" mode, current branch), since nothing can
+  // set those values on a remote server.
+  const primaryServerSettings = useAtomValue(primaryServerSettingsAtom);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const router = useRouter();
   const getCurrentRouteTarget = useCallback(() => {
@@ -89,8 +96,6 @@ export function useNewThreadHandler() {
           candidate.id === projectRef.projectId &&
           candidate.environmentId === projectRef.environmentId,
       );
-      const environmentSettings =
-        serverConfigs.get(projectRef.environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS;
       const logicalProjectKey = project
         ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
         : scopedProjectKey(projectRef);
@@ -187,9 +192,9 @@ export function useNewThreadHandler() {
       const threadId = newThreadId();
       const createdAt = new Date().toISOString();
       const defaultThreadEnvMode =
-        project?.defaultThreadEnvMode ?? environmentSettings.defaultThreadEnvMode;
+        project?.defaultThreadEnvMode ?? primaryServerSettings.defaultThreadEnvMode;
       const newWorktreesStartFromOrigin =
-        project?.newWorktreesStartFromOrigin ?? environmentSettings.newWorktreesStartFromOrigin;
+        project?.newWorktreesStartFromOrigin ?? primaryServerSettings.newWorktreesStartFromOrigin;
       const initialEnvMode = options?.envMode ?? defaultThreadEnvMode;
       const initialBranch =
         options?.branch !== undefined ? options.branch : (project?.defaultBranch ?? null);
@@ -219,7 +224,7 @@ export function useNewThreadHandler() {
         });
       })();
     },
-    [getCurrentRouteTarget, projectGroupingSettings, projects, router, serverConfigs],
+    [getCurrentRouteTarget, primaryServerSettings, projectGroupingSettings, projects, router],
   );
 }
 

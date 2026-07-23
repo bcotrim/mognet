@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
-  DEFAULT_MODEL,
   DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
   DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
   DEFAULT_PROJECT_THREAD_ENV_MODE,
@@ -149,10 +148,7 @@ describe("add project shared logic", () => {
       title: "repo",
       workspaceRoot: "/work/repo",
       createWorkspaceRootIfMissing: true,
-      defaultModelSelection: {
-        instanceId: "codex",
-        model: DEFAULT_MODEL,
-      },
+      defaultModelSelection: null,
     });
   });
 });

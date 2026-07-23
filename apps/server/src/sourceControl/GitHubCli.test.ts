@@ -61,7 +61,7 @@ describe("GitHubCli.layer", () => {
             JSON.stringify({
               number: 42,
               title: "Add PR thread creation",
-              url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+              url: "https://github.com/bcotrim/mognet/pull/42",
               baseRefName: "main",
               headRefName: "feature/pr-threads",
               state: "OPEN",
@@ -79,7 +79,7 @@ describe("GitHubCli.layer", () => {
                 },
               ],
               headRepository: {
-                nameWithOwner: "octocat/codething-mvp",
+                nameWithOwner: "octocat/mognet",
               },
               headRepositoryOwner: {
                 login: "octocat",
@@ -98,12 +98,12 @@ describe("GitHubCli.layer", () => {
       assert.deepStrictEqual(result, {
         number: 42,
         title: "Add PR thread creation",
-        url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+        url: "https://github.com/bcotrim/mognet/pull/42",
         baseRefName: "main",
         headRefName: "feature/pr-threads",
         state: "open",
         isCrossRepository: true,
-        headRepositoryNameWithOwner: "octocat/codething-mvp",
+        headRepositoryNameWithOwner: "octocat/mognet",
         headRepositoryOwnerLogin: "octocat",
         isDraft: false,
         mergeStatus: "conflicting",
@@ -140,14 +140,14 @@ describe("GitHubCli.layer", () => {
             JSON.stringify({
               number: 42,
               title: "  Add PR thread creation  \n",
-              url: " https://github.com/pingdotgg/codething-mvp/pull/42 ",
+              url: " https://github.com/bcotrim/mognet/pull/42 ",
               baseRefName: " main ",
               headRefName: "\tfeature/pr-threads\t",
               state: "OPEN",
               mergedAt: null,
               isCrossRepository: true,
               headRepository: {
-                nameWithOwner: " octocat/codething-mvp ",
+                nameWithOwner: " octocat/mognet ",
               },
               headRepositoryOwner: {
                 login: " octocat ",
@@ -166,12 +166,12 @@ describe("GitHubCli.layer", () => {
       assert.deepStrictEqual(result, {
         number: 42,
         title: "Add PR thread creation",
-        url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+        url: "https://github.com/bcotrim/mognet/pull/42",
         baseRefName: "main",
         headRefName: "feature/pr-threads",
         state: "open",
         isCrossRepository: true,
-        headRepositoryNameWithOwner: "octocat/codething-mvp",
+        headRepositoryNameWithOwner: "octocat/mognet",
         headRepositoryOwnerLogin: "octocat",
       });
     }).pipe(Effect.provide(layer)),
@@ -187,14 +187,14 @@ describe("GitHubCli.layer", () => {
               {
                 number: 0,
                 title: "invalid",
-                url: "https://github.com/pingdotgg/codething-mvp/pull/0",
+                url: "https://github.com/bcotrim/mognet/pull/0",
                 baseRefName: "main",
                 headRefName: "feature/invalid",
               },
               {
                 number: 43,
                 title: "  Valid PR  ",
-                url: " https://github.com/pingdotgg/codething-mvp/pull/43 ",
+                url: " https://github.com/bcotrim/mognet/pull/43 ",
                 baseRefName: " main ",
                 headRefName: " feature/pr-list ",
                 headRepository: {
@@ -219,10 +219,65 @@ describe("GitHubCli.layer", () => {
         {
           number: 43,
           title: "Valid PR",
-          url: "https://github.com/pingdotgg/codething-mvp/pull/43",
+          url: "https://github.com/bcotrim/mognet/pull/43",
           baseRefName: "main",
           headRefName: "feature/pr-list",
           state: "open",
+        },
+      ]);
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("keeps pull requests from gh versions without headRepository.nameWithOwner", () =>
+    // gh < 2.47 (e.g. Ubuntu-packaged 2.46) exports headRepository as
+    // {id, name} only. These entries must decode instead of being dropped,
+    // with nameWithOwner rebuilt from the owner login.
+    Effect.gen(function* () {
+      mockRun.mockReturnValueOnce(
+        Effect.succeed(
+          processOutput(
+            // @effect-diagnostics-next-line preferSchemaOverJson:off
+            JSON.stringify([
+              {
+                number: 2829,
+                title: "Codex turn mapping",
+                url: "https://github.com/bcotrim/mognet/pull/2829",
+                baseRefName: "main",
+                headRefName: "mognet/codex-turn-mapping",
+                state: "OPEN",
+                mergedAt: null,
+                isCrossRepository: false,
+                headRepository: {
+                  id: "R_kgDORLtfbQ",
+                  name: "mognet",
+                },
+                headRepositoryOwner: {
+                  id: "MDEyOk9yZ2FuaXphdGlvbjg5MTkxNzI3",
+                  login: "bcotrim",
+                },
+              },
+            ]),
+          ),
+        ),
+      );
+
+      const gh = yield* GitHubCli.GitHubCli;
+      const result = yield* gh.listOpenPullRequests({
+        cwd: "/repo",
+        headSelector: "mognet/codex-turn-mapping",
+      });
+
+      assert.deepStrictEqual(result, [
+        {
+          number: 2829,
+          title: "Codex turn mapping",
+          url: "https://github.com/bcotrim/mognet/pull/2829",
+          baseRefName: "main",
+          headRefName: "mognet/codex-turn-mapping",
+          state: "open",
+          isCrossRepository: false,
+          headRepositoryNameWithOwner: "bcotrim/mognet",
+          headRepositoryOwnerLogin: "bcotrim",
         },
       ]);
     }).pipe(Effect.provide(layer)),
@@ -235,9 +290,9 @@ describe("GitHubCli.layer", () => {
           processOutput(
             // @effect-diagnostics-next-line preferSchemaOverJson:off
             JSON.stringify({
-              nameWithOwner: "octocat/codething-mvp",
-              url: "https://github.com/octocat/codething-mvp",
-              sshUrl: "git@github.com:octocat/codething-mvp.git",
+              nameWithOwner: "octocat/mognet",
+              url: "https://github.com/octocat/mognet",
+              sshUrl: "git@github.com:octocat/mognet.git",
             }),
           ),
         ),
@@ -246,13 +301,13 @@ describe("GitHubCli.layer", () => {
       const gh = yield* GitHubCli.GitHubCli;
       const result = yield* gh.getRepositoryCloneUrls({
         cwd: "/repo",
-        repository: "octocat/codething-mvp",
+        repository: "octocat/mognet",
       });
 
       assert.deepStrictEqual(result, {
-        nameWithOwner: "octocat/codething-mvp",
-        url: "https://github.com/octocat/codething-mvp",
-        sshUrl: "git@github.com:octocat/codething-mvp.git",
+        nameWithOwner: "octocat/mognet",
+        url: "https://github.com/octocat/mognet",
+        sshUrl: "git@github.com:octocat/mognet.git",
       });
     }).pipe(Effect.provide(layer)),
   );
@@ -262,7 +317,7 @@ describe("GitHubCli.layer", () => {
       mockRun.mockReturnValueOnce(
         Effect.succeed(
           processOutput(
-            "✓ Created repository octocat/codething-mvp on github.com\nhttps://github.com/octocat/codething-mvp\n",
+            "✓ Created repository octocat/mognet on github.com\nhttps://github.com/octocat/mognet\n",
           ),
         ),
       );
@@ -270,20 +325,20 @@ describe("GitHubCli.layer", () => {
       const gh = yield* GitHubCli.GitHubCli;
       const result = yield* gh.createRepository({
         cwd: "/repo",
-        repository: "octocat/codething-mvp",
+        repository: "octocat/mognet",
         visibility: "private",
       });
 
       assert.deepStrictEqual(result, {
-        nameWithOwner: "octocat/codething-mvp",
-        url: "https://github.com/octocat/codething-mvp",
-        sshUrl: "git@github.com:octocat/codething-mvp.git",
+        nameWithOwner: "octocat/mognet",
+        url: "https://github.com/octocat/mognet",
+        sshUrl: "git@github.com:octocat/mognet.git",
       });
       expect(mockRun).toHaveBeenCalledTimes(1);
       expect(mockRun).toHaveBeenNthCalledWith(1, {
         operation: "GitHubCli.execute",
         command: "gh",
-        args: ["repo", "create", "octocat/codething-mvp", "--private"],
+        args: ["repo", "create", "octocat/mognet", "--private"],
         cwd: "/repo",
         timeoutMs: 30_000,
       });
@@ -297,14 +352,14 @@ describe("GitHubCli.layer", () => {
       const gh = yield* GitHubCli.GitHubCli;
       const result = yield* gh.createRepository({
         cwd: "/repo",
-        repository: "octocat/codething-mvp",
+        repository: "octocat/mognet",
         visibility: "private",
       });
 
       assert.deepStrictEqual(result, {
-        nameWithOwner: "octocat/codething-mvp",
-        url: "https://github.com/octocat/codething-mvp",
-        sshUrl: "git@github.com:octocat/codething-mvp.git",
+        nameWithOwner: "octocat/mognet",
+        url: "https://github.com/octocat/mognet",
+        sshUrl: "git@github.com:octocat/mognet.git",
       });
     }).pipe(Effect.provide(layer)),
   );
