@@ -35,11 +35,13 @@ import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { openDiffFilePrimaryAction } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
-import type {
-  InteractiveReviewTour,
-  InteractiveReviewTourAnchor,
-  InteractiveReviewTourStep,
+import {
+  filterInteractiveReviewFiles,
+  type InteractiveReviewTour,
+  type InteractiveReviewTourAnchor,
+  type InteractiveReviewTourStep,
 } from "~/lib/interactiveReviewTour";
+import type { ReviewCommentContext } from "../reviewCommentContext";
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
 import { useTheme } from "../hooks/useTheme";
 import {
@@ -58,7 +60,6 @@ import {
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useProject, useThread } from "../state/entities";
 import { resolveThreadRouteRef } from "../threadRoutes";
-import type { ReviewCommentContext } from "../reviewCommentContext";
 import { useClientSettings } from "../hooks/useSettings";
 import { formatShortTimestamp } from "../timestampFormat";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
@@ -314,6 +315,7 @@ export default function DiffPanel({
   }));
   const [navigatedFileKey, setNavigatedFileKey] = useState<string | null>(null);
   const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null);
+  const [interactiveReviewEnabled, setInteractiveReviewEnabled] = useState(true);
   const [isTourPanelCollapsed, setTourPanelCollapsed] = useState(true);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
 
@@ -341,8 +343,9 @@ export default function DiffPanel({
     serverConfig?.availableEditors ?? [],
   );
   const tourSteps = interactiveReviewTour?.steps ?? [];
-  const activeTourStep =
-    tourSteps.find((step) => step.id === activeTourStepId) ?? tourSteps[0] ?? null;
+  const activeTourStep = interactiveReviewEnabled
+    ? (tourSteps.find((step) => step.id === activeTourStepId) ?? tourSteps[0] ?? null)
+    : null;
   const activeTourStepCodeNotesByFilePath = useMemo(() => {
     if (!activeTourStep || activeTourStep.anchors.length === 0) return EMPTY_TOUR_CODE_NOTES;
     const notesByFilePath = new Map<string, InteractiveReviewTourAnchor[]>();
@@ -529,15 +532,17 @@ export default function DiffPanel({
   const selectedGitSource = branchDiffPreviewData?.sources.find(
     (source) => source.kind === selectedGitSourceKind,
   );
-  const tourFallbackGitSource = interactiveReviewTour
-    ? branchDiffPreviewData?.sources.find(
-        (source) => source.kind !== selectedGitSourceKind && source.diff.trim().length > 0,
-      )
-    : undefined;
+  const tourFallbackGitSource =
+    interactiveReviewEnabled && interactiveReviewTour
+      ? branchDiffPreviewData?.sources.find(
+          (source) => source.kind !== selectedGitSourceKind && source.diff.trim().length > 0,
+        )
+      : undefined;
   useEffect(() => {
     if (
       !routeThreadRef ||
       selectedTurnId !== null ||
+      !interactiveReviewEnabled ||
       !interactiveReviewTour ||
       selectedGitSource?.diff.trim() ||
       !tourFallbackGitSource
@@ -552,6 +557,7 @@ export default function DiffPanel({
       );
   }, [
     interactiveReviewTour,
+    interactiveReviewEnabled,
     routeThreadRef,
     selectedGitSource?.diff,
     selectedTurnId,
@@ -657,18 +663,21 @@ export default function DiffPanel({
     [collapsedDiffFileKeys, renderableFiles],
   );
   const codeViewFiles = allCodeViewFiles;
+  const navigatorFiles = filterInteractiveReviewFiles(codeViewFiles, activeTourStep);
   const reviewFileContextByPath = EMPTY_REVIEW_FILE_CONTEXT;
   const reviewFindingsByFilePath = EMPTY_REVIEW_FINDINGS;
   const selectedFileKey = selectedFilePath
     ? (codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath)?.fileKey ?? null)
     : null;
-  const activeNavigatorFileKey = codeViewFiles.some(
+  const activeNavigatorFileKey = navigatorFiles.some(
     (candidate) => candidate.fileKey === navigatedFileKey,
   )
     ? navigatedFileKey
-    : (selectedFileKey ?? codeViewFiles[0]?.fileKey ?? null);
+    : (navigatorFiles.find((candidate) => candidate.fileKey === selectedFileKey)?.fileKey ??
+      navigatorFiles[0]?.fileKey ??
+      null);
   const showDiffFileNavigator =
-    codeViewFiles.length > 1 || activeTourStepCodeNotesByFilePath.size > 0;
+    navigatorFiles.length > 1 || activeTourStepCodeNotesByFilePath.size > 0;
 
   useEffect(() => {
     setNavigatedFileKey(null);
@@ -804,6 +813,30 @@ export default function DiffPanel({
   };
   const displayControls = (
     <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+      {interactiveReviewTour ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Toggle
+                aria-label={
+                  interactiveReviewEnabled
+                    ? "Disable interactive review"
+                    : "Enable interactive review"
+                }
+                variant="outline"
+                size="xs"
+                pressed={interactiveReviewEnabled}
+                onPressedChange={(pressed) => setInteractiveReviewEnabled(Boolean(pressed))}
+              />
+            }
+          >
+            <BookOpenTextIcon className="size-3" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            {interactiveReviewEnabled ? "Disable interactive review" : "Enable interactive review"}
+          </TooltipPopup>
+        </Tooltip>
+      ) : null}
       <ToggleGroup
         className="shrink-0"
         variant="outline"
@@ -1143,7 +1176,7 @@ export default function DiffPanel({
                     />
                     <DiffFileNavigator
                       activeFileKey={activeNavigatorFileKey}
-                      files={codeViewFiles}
+                      files={navigatorFiles}
                       codeNotesByFilePath={activeTourStepCodeNotesByFilePath}
                       inlineCommentCountByFilePath={inlineCommentCountByFilePath}
                       reviewFileContextByPath={reviewFileContextByPath}
@@ -1155,7 +1188,7 @@ export default function DiffPanel({
                 ) : showDiffFileNavigator ? (
                   <DiffFileNavigator
                     activeFileKey={activeNavigatorFileKey}
-                    files={codeViewFiles}
+                    files={navigatorFiles}
                     codeNotesByFilePath={activeTourStepCodeNotesByFilePath}
                     inlineCommentCountByFilePath={inlineCommentCountByFilePath}
                     reviewFileContextByPath={reviewFileContextByPath}
