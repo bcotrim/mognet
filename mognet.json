@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/bcotrim/mognet/main/mognet.schema.json",
+  "iconPath": "assets/dev/mognet-dev-web-apple-touch-180.png",
+  "scripts": [
+    {
+      "name": "Setup Worktree",
+      "command": "vp i && ln -sf $MOGNET_PROJECT_ROOT/.env .env && ln -sf $MOGNET_PROJECT_ROOT/infra/relay/.env infra/relay/.env",
+      "icon": "configure",
+      "runOnWorktreeCreate": true
+    }
+  ]
+}

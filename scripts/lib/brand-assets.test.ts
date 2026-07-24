@@ -3,14 +3,15 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   BRAND_ASSET_PATHS,
   DEVELOPMENT_ICON_OVERRIDES,
-  PUBLISH_ICON_OVERRIDES,
+  DEVELOPMENT_PUBLIC_ICON_OVERRIDES,
   resolveWebAssetBrandForChannel,
+  resolveWebAssetBrandForPackageVersion,
   resolveWebIconOverrides,
 } from "./brand-assets.ts";
 
 describe("brand-assets", () => {
-  it("maps server publish web assets to production icons", () => {
-    expect(PUBLISH_ICON_OVERRIDES).toEqual([
+  it("maps production web assets into the server package", () => {
+    expect(resolveWebIconOverrides("production", "dist/client")).toEqual([
       {
         sourceRelativePath: BRAND_ASSET_PATHS.productionWebFaviconIco,
         targetRelativePath: "dist/client/favicon.ico",
@@ -54,5 +55,25 @@ describe("brand-assets", () => {
   it("maps hosted release channels to web asset brands", () => {
     expect(resolveWebAssetBrandForChannel("latest")).toBe("production");
     expect(resolveWebAssetBrandForChannel("nightly")).toBe("nightly");
+  });
+
+  it("maps package versions to web asset brands", () => {
+    expect(resolveWebAssetBrandForPackageVersion("0.0.29")).toBe("production");
+    expect(resolveWebAssetBrandForPackageVersion("0.0.29-nightly.20260723.882")).toBe("nightly");
+  });
+
+  it("keeps development, nightly, and production icon families separate", () => {
+    expect([
+      BRAND_ASSET_PATHS.developmentDesktopIconPng,
+      BRAND_ASSET_PATHS.nightlyMacIconPng,
+      BRAND_ASSET_PATHS.productionMacIconPng,
+    ]).toEqual([
+      "assets/dev/mognet-dev-macos-1024.png",
+      "assets/nightly/mognet-nightly-macos-1024.png",
+      "assets/prod/mognet-macos-1024.png",
+    ]);
+    expect(DEVELOPMENT_PUBLIC_ICON_OVERRIDES[0]?.targetRelativePath).toBe(
+      "apps/web/public/favicon.ico",
+    );
   });
 });

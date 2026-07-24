@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bcotrim/mognet/main/mognet.schema.json",
+  "title": "Mognet project file",
+  "description": "Checked-in project configuration for Mognet.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "iconPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "scripts": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "command"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "type": "string"
+          },
+          "runOnWorktreeCreate": {
+            "type": "boolean"
+          },
+          "previewUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "autoOpenPreview": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

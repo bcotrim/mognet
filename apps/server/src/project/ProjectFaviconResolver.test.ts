@@ -8,16 +8,22 @@ import * as PlatformError from "effect/PlatformError";
 
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ProjectFaviconResolver from "./ProjectFaviconResolver.ts";
+import * as MognetProjectFileLoader from "./MognetProjectFileLoader.ts";
 
 const TestLayer = Layer.empty.pipe(
-  Layer.provideMerge(ProjectFaviconResolver.layer.pipe(Layer.provide(WorkspacePaths.layer))),
+  Layer.provideMerge(
+    ProjectFaviconResolver.layer.pipe(
+      Layer.provide(WorkspacePaths.layer),
+      Layer.provide(MognetProjectFileLoader.layer),
+    ),
+  ),
   Layer.provideMerge(NodeServices.layer),
 );
 
 const makeTempDir = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   return yield* fileSystem.makeTempDirectoryScoped({
-    prefix: "t3code-project-favicon-",
+    prefix: "mognet-project-favicon-",
   });
 });
 
@@ -37,7 +43,7 @@ const writeTextFile = Effect.fn("writeTextFile")(function* (
 
 const makeResolverWithFileSystem = (fileSystem: FileSystem.FileSystem) =>
   ProjectFaviconResolver.make.pipe(
-    Effect.provide(WorkspacePaths.layer),
+    Effect.provide([WorkspacePaths.layer, MognetProjectFileLoader.layer]),
     Effect.provideService(FileSystem.FileSystem, fileSystem),
   );
 
@@ -53,6 +59,63 @@ it.layer(TestLayer)("ProjectFaviconResolverLive", (it) => {
 
         expect(resolved).not.toBeNull();
         expect(resolved).toContain("favicon.svg");
+      }),
+    );
+
+    it.effect("prefers a mognet.json iconPath over well-known files", () =>
+      Effect.gen(function* () {
+        const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "mognet.json", '{ "iconPath": "brand/mark.svg" }');
+        yield* writeTextFile(cwd, "brand/mark.svg", "<svg>mark</svg>");
+        yield* writeTextFile(cwd, "favicon.svg", "<svg>favicon</svg>");
+
+        const resolved = yield* resolver.resolvePath(cwd);
+
+        expect(resolved).not.toBeNull();
+        expect(resolved).toContain("brand/mark.svg");
+      }),
+    );
+
+    it.effect("falls back to well-known files when the mognet.json iconPath does not exist", () =>
+      Effect.gen(function* () {
+        const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "mognet.json", '{ "iconPath": "brand/missing.svg" }');
+        yield* writeTextFile(cwd, "favicon.svg", "<svg>favicon</svg>");
+
+        const resolved = yield* resolver.resolvePath(cwd);
+
+        expect(resolved).not.toBeNull();
+        expect(resolved).toContain("favicon.svg");
+      }),
+    );
+
+    it.effect("ignores invalid mognet.json files", () =>
+      Effect.gen(function* () {
+        const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "mognet.json", "{ not json");
+        yield* writeTextFile(cwd, "favicon.svg", "<svg>favicon</svg>");
+
+        const resolved = yield* resolver.resolvePath(cwd);
+
+        expect(resolved).not.toBeNull();
+        expect(resolved).toContain("favicon.svg");
+      }),
+    );
+
+    it.effect("does not resolve a mognet.json iconPath outside the workspace root", () =>
+      Effect.gen(function* () {
+        const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
+        const parent = yield* makeTempDir;
+        const cwd = `${parent}/app`;
+        yield* writeTextFile(parent, "secret.svg", "<svg>secret</svg>");
+        yield* writeTextFile(cwd, "mognet.json", '{ "iconPath": "../secret.svg" }');
+
+        const resolved = yield* resolver.resolvePath(cwd);
+
+        expect(resolved).toBeNull();
       }),
     );
 

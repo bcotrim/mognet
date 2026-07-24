@@ -5,13 +5,6 @@ import type { DraftThreadEnvMode } from "../composerDraftStore";
 interface ThreadContextLike {
   environmentId: EnvironmentId;
   projectId: ProjectId;
-  branch: string | null;
-  worktreePath: string | null;
-}
-
-interface DraftThreadContextLike extends ThreadContextLike {
-  envMode: DraftThreadEnvMode;
-  startFromOrigin: boolean;
 }
 
 interface NewThreadHandler {
@@ -26,20 +19,11 @@ interface NewThreadHandler {
   ): Promise<void>;
 }
 
-type NewThreadOptions = NonNullable<Parameters<NewThreadHandler>[1]>;
-
-export interface NewThreadDefaults {
-  readonly branch: string | null;
-  readonly envMode: DraftThreadEnvMode;
-  readonly startFromOrigin: boolean;
-}
-
 export interface ChatThreadActionContext {
-  readonly activeDraftThread: DraftThreadContextLike | null;
+  readonly activeDraftThread: ThreadContextLike | null;
   readonly activeThread: ThreadContextLike | undefined;
   readonly defaultProjectRef: ScopedProjectRef | null;
   readonly handleNewThread: NewThreadHandler;
-  readonly getNewThreadDefaults?: (projectRef: ScopedProjectRef) => NewThreadDefaults;
 }
 
 export function resolveNewDraftStartFromOrigin(input: {
@@ -64,83 +48,13 @@ export function resolveThreadActionProjectRef(
   return context.defaultProjectRef;
 }
 
-function threadMatchesProject(
-  thread: ThreadContextLike | null | undefined,
-  projectRef: ScopedProjectRef,
-) {
-  return (
-    thread?.environmentId === projectRef.environmentId && thread.projectId === projectRef.projectId
-  );
-}
-
-function resolveDefaultThreadOptions(
-  context: ChatThreadActionContext,
-  projectRef: ScopedProjectRef,
-): NewThreadOptions | null {
-  const defaults = context.getNewThreadDefaults?.(projectRef) ?? null;
-  if (!defaults) {
-    return null;
-  }
-
-  return {
-    ...(defaults.branch !== null ? { branch: defaults.branch } : {}),
-    envMode: defaults.envMode,
-    startFromOrigin: defaults.startFromOrigin,
-  };
-}
-
-function buildContextualThreadOptions(
-  context: ChatThreadActionContext,
-  projectRef: ScopedProjectRef,
-): NewThreadOptions {
-  const defaultOptions = resolveDefaultThreadOptions(context, projectRef);
-  if (defaultOptions?.envMode === "worktree" || defaultOptions?.branch !== undefined) {
-    return defaultOptions;
-  }
-
-  const activeDraftThread = threadMatchesProject(context.activeDraftThread, projectRef)
-    ? context.activeDraftThread
-    : null;
-  const activeThread = threadMatchesProject(context.activeThread, projectRef)
-    ? context.activeThread
-    : null;
-
-  if (!activeDraftThread && !activeThread) {
-    return defaultOptions ?? {};
-  }
-
-  return {
-    branch: activeThread?.branch ?? activeDraftThread?.branch ?? null,
-    worktreePath: activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null,
-    envMode: activeDraftThread?.envMode ?? (activeThread?.worktreePath ? "worktree" : "local"),
-    ...(activeDraftThread
-      ? { startFromOrigin: activeDraftThread.startFromOrigin }
-      : defaultOptions?.startFromOrigin !== undefined
-        ? { startFromOrigin: defaultOptions.startFromOrigin }
-        : {}),
-  };
-}
-
-export async function startNewThreadInProjectFromContext(
-  context: ChatThreadActionContext,
-  projectRef: ScopedProjectRef,
-): Promise<void> {
-  await context.handleNewThread(projectRef, buildContextualThreadOptions(context, projectRef));
-}
-
+// New threads inherit only the *project* from the current context. Branch,
+// worktree, and env mode always come from the user's configured defaults —
+// carrying them over from the viewed thread meant "new thread" silently
+// reused checkouts and branches. Explicit affordances (branch toolbar's
+// "new thread in this worktree") pass those options to handleNewThread
+// directly instead.
 export async function startNewThreadFromContext(
-  context: ChatThreadActionContext,
-): Promise<boolean> {
-  const projectRef = resolveThreadActionProjectRef(context);
-  if (!projectRef) {
-    return false;
-  }
-
-  await startNewThreadInProjectFromContext(context, projectRef);
-  return true;
-}
-
-export async function startNewLocalThreadFromContext(
   context: ChatThreadActionContext,
 ): Promise<boolean> {
   const projectRef = resolveThreadActionProjectRef(context);
