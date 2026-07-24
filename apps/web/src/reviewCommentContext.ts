@@ -196,6 +196,7 @@ export function formatReviewCommentContext(comment: ReviewCommentContext): strin
   return [
     [
       "<review_comment",
+      ' source="mognet" author="user"',
       ` sectionId="${escapeReviewCommentAttribute(comment.sectionId)}"`,
       ` sectionTitle="${escapeReviewCommentAttribute(comment.sectionTitle)}"`,
       ` filePath="${escapeReviewCommentAttribute(comment.filePath)}"`,
