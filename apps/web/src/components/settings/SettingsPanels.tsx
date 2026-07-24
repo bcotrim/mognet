@@ -238,6 +238,7 @@ function AboutVersionSection() {
       const confirmed = window.confirm(
         getDesktopUpdateInstallConfirmationMessage(
           updateState ?? { availableVersion: null, downloadedVersion: null },
+          navigator.platform,
         ),
       );
       if (!confirmed) return;
