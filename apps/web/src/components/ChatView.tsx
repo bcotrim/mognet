@@ -5346,7 +5346,7 @@ function ChatViewContent(props: ChatViewProps) {
                   >
                     <div
                       ref={attachDraftHeroComposerAnchorRef}
-                      className="relative z-10 isolate mx-auto w-full max-w-3xl before:pointer-events-none before:absolute before:inset-x-0 before:bottom-0 before:-z-10 before:h-2 before:rounded-b-[22px] before:bg-background"
+                      className="chat-composer-glass-host relative z-10 mx-auto w-full max-w-3xl rounded-[22px]"
                     >
                       <ChatComposer
                         composerRef={composerRef}
