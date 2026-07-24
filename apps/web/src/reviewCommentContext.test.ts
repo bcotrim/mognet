@@ -97,6 +97,7 @@ describe("review comment context parsing", () => {
     const segments = parseReviewCommentMessageSegments(prompt);
 
     expect(segments).toHaveLength(2);
+    expect(prompt).toContain('<review_comment source="mognet" author="user"');
     expect(segments[1]).toEqual(
       expect.objectContaining({
         kind: "review-comment",
