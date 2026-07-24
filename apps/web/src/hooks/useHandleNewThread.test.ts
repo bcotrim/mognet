@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId } from "@t3tools/contracts";
 import {
   resolveNewThreadDefaults,
-  shouldApplyStickyModelStateToNewDraft,
+  shouldApplyInheritedModelStateToNewDraft,
 } from "./useHandleNewThread";
 
 describe("resolveNewThreadDefaults", () => {
@@ -49,14 +49,14 @@ describe("resolveNewThreadDefaults", () => {
   });
 });
 
-describe("shouldApplyStickyModelStateToNewDraft", () => {
-  it("skips sticky model state when the project has its own default", () => {
+describe("shouldApplyInheritedModelStateToNewDraft", () => {
+  it("skips inherited model state when the project has its own default", () => {
     expect(
-      shouldApplyStickyModelStateToNewDraft({
+      shouldApplyInheritedModelStateToNewDraft({
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.4",
       }),
     ).toBe(false);
-    expect(shouldApplyStickyModelStateToNewDraft(null)).toBe(true);
+    expect(shouldApplyInheritedModelStateToNewDraft(null)).toBe(true);
   });
 });
