@@ -50,7 +50,7 @@ export function resolveNewThreadDefaults(
   };
 }
 
-export function shouldApplyStickyModelStateToNewDraft(
+export function shouldApplyInheritedModelStateToNewDraft(
   projectDefaultModelSelection: ModelSelection | null | undefined,
 ): boolean {
   return projectDefaultModelSelection == null;
@@ -200,7 +200,10 @@ export function useNewThreadHandler() {
               ...(carryRuntimeMode ? { runtimeMode: carryRuntimeMode } : {}),
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             });
-            if (carryModelSelection) {
+            if (
+              carryModelSelection &&
+              shouldApplyInheritedModelStateToNewDraft(project?.defaultModelSelection)
+            ) {
               // The carried selection is a complete snapshot of the viewed
               // thread's model state: absent options mean "no options", not
               // "keep the stale draft's options".
@@ -297,7 +300,7 @@ export function useNewThreadHandler() {
           runtimeMode: carryRuntimeMode ?? DEFAULT_RUNTIME_MODE,
           ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
         });
-        if (shouldApplyStickyModelStateToNewDraft(project?.defaultModelSelection)) {
+        if (shouldApplyInheritedModelStateToNewDraft(project?.defaultModelSelection)) {
           applyStickyState(draftId);
           if (carryModelSelection) {
             setModelSelection(draftId, carryModelSelection, { replaceOptions: true });
