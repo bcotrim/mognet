@@ -50,10 +50,11 @@ export function resolveNewThreadDefaults(
   };
 }
 
-export function shouldApplyInheritedModelStateToNewDraft(
+export function resolveNewDraftModelSelection(
   projectDefaultModelSelection: ModelSelection | null | undefined,
-): boolean {
-  return projectDefaultModelSelection == null;
+  inheritedModelSelection: ModelSelection | null | undefined,
+): ModelSelection | null {
+  return projectDefaultModelSelection ?? inheritedModelSelection ?? null;
 }
 
 export function useNewThreadHandler() {
@@ -200,14 +201,14 @@ export function useNewThreadHandler() {
               ...(carryRuntimeMode ? { runtimeMode: carryRuntimeMode } : {}),
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             });
-            if (
-              carryModelSelection &&
-              shouldApplyInheritedModelStateToNewDraft(project?.defaultModelSelection)
-            ) {
-              // The carried selection is a complete snapshot of the viewed
-              // thread's model state: absent options mean "no options", not
-              // "keep the stale draft's options".
-              setModelSelection(reusableStoredDraftThread.draftId, carryModelSelection, {
+            const nextModelSelection = resolveNewDraftModelSelection(
+              project?.defaultModelSelection,
+              carryModelSelection,
+            );
+            if (nextModelSelection) {
+              // The default/inherited selection is a complete snapshot:
+              // absent options mean "no options", not "keep stale options".
+              setModelSelection(reusableStoredDraftThread.draftId, nextModelSelection, {
                 replaceOptions: true,
               });
             }
@@ -300,11 +301,15 @@ export function useNewThreadHandler() {
           runtimeMode: carryRuntimeMode ?? DEFAULT_RUNTIME_MODE,
           ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
         });
-        if (shouldApplyInheritedModelStateToNewDraft(project?.defaultModelSelection)) {
+        if (project?.defaultModelSelection == null) {
           applyStickyState(draftId);
-          if (carryModelSelection) {
-            setModelSelection(draftId, carryModelSelection, { replaceOptions: true });
-          }
+        }
+        const initialModelSelection = resolveNewDraftModelSelection(
+          project?.defaultModelSelection,
+          carryModelSelection,
+        );
+        if (initialModelSelection) {
+          setModelSelection(draftId, initialModelSelection, { replaceOptions: true });
         }
 
         await router.navigate({
