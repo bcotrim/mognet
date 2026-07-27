@@ -34,7 +34,7 @@ export function getChangeRequestStateColorClass(state: ChangeRequestState): stri
     case "open":
       return "text-success-foreground";
     case "closed":
-      return "text-muted-foreground";
+      return "text-red-600 dark:text-red-300/90";
     case "merged":
       return "text-purple-400";
   }

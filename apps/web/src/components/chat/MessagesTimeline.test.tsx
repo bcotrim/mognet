@@ -445,6 +445,7 @@ describe("MessagesTimeline", () => {
 
     expect(markup).not.toContain("Show full message");
     expect(markup).toContain('data-user-message-collapsible="false"');
+    expect(markup).toContain("rounded-2xl bg-accent p-3");
   });
 
   it("renders assistant changed files collapsed below the reply by default", () => {
