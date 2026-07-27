@@ -104,6 +104,14 @@ const EnvServerConfig = Config.all({
   host: optionalEnv("MOGNET_HOST", Config.string),
   t3Home: optionalEnv("MOGNET_HOME", Config.string),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  devAllowedOrigins: envWithDefault("MOGNET_DEV_ALLOWED_ORIGINS", Config.string, "").pipe(
+    Config.map((value) =>
+      value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  ),
   noBrowser: optionalEnv("MOGNET_NO_BROWSER", Config.boolean),
   bootstrapFd: optionalEnv("MOGNET_BOOTSTRAP_FD", Config.int),
   autoBootstrapProjectFromCwd: optionalEnv(
@@ -346,6 +354,7 @@ export const resolveServerConfig = (
       host,
       staticDir,
       devUrl,
+      devAllowedOrigins: env.devAllowedOrigins,
       noBrowser,
       startupPresentation,
       desktopBootstrapToken,
