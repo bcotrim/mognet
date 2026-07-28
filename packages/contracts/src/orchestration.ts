@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as Struct from "effect/Struct";
-import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
+import { DEFAULT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { RepositoryIdentity } from "./environment.ts";
 import {
   ApprovalRequestId,
@@ -227,7 +227,7 @@ export const DEFAULT_PROJECT_THREAD_ENV_MODE: ProjectDefaultThreadEnvMode = "loc
 export const DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN = true;
 export const DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION: ModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
-  model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
+  model: DEFAULT_TEXT_GENERATION_MODEL,
 };
 
 export const OrchestrationProject = Schema.Struct({

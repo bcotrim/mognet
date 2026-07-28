@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { EditorId, ExternalTerminalId } from "./editor.ts";
-import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
+import { DEFAULT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { ModelSelection } from "./orchestration.ts";
 import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance.ts";
 
@@ -61,6 +61,9 @@ export const GlassOpacity = Schema.Int.check(
 );
 export type GlassOpacity = typeof GlassOpacity.Type;
 export const DEFAULT_GLASS_OPACITY: GlassOpacity = 80;
+export const EnvironmentIdentificationMode = Schema.Literals(["artwork", "pill", "none"]);
+export type EnvironmentIdentificationMode = typeof EnvironmentIdentificationMode.Type;
+export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "artwork";
 
 export const ClientSettingsSchema = Schema.Struct({
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -74,6 +77,9 @@ export const ClientSettingsSchema = Schema.Struct({
   defaultEditor: Schema.NullOr(EditorId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   defaultTerminal: Schema.NullOr(ExternalTerminalId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  environmentIdentificationMode: EnvironmentIdentificationMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE)),
   ),
   glassOpacity: GlassOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_GLASS_OPACITY)),
@@ -126,6 +132,12 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_CHAT_PREVIEW_COUNT)),
   ),
   sidebarV2Enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Whether `sidebarV2Enabled` reflects an explicit choice in Settings → Beta.
+  // Client settings persist as a whole blob, so every user who has ever touched
+  // any setting already has `sidebarV2Enabled: false` stored — without this bit
+  // there is no way to tell that apart from "left alone", and a channel-derived
+  // default could never reach them. Mirrors `updateChannelConfiguredByUser`.
+  sidebarV2ConfiguredByUser: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   timestampFormat: TimestampFormat.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
   ),
@@ -406,6 +418,24 @@ export const ObservabilitySettings = Schema.Struct({
 });
 export type ObservabilitySettings = typeof ObservabilitySettings.Type;
 
+export const SourceControlWritingStyleMode = Schema.Literals([
+  "repo_conventions",
+  "conventional_commits",
+  "custom",
+]);
+export type SourceControlWritingStyleMode = typeof SourceControlWritingStyleMode.Type;
+
+export const SourceControlWritingStyleSettings = Schema.Struct({
+  mode: SourceControlWritingStyleMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed("repo_conventions" as const)),
+  ),
+  customInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  followChangeRequestTemplates: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+});
+export type SourceControlWritingStyleSettings = typeof SourceControlWritingStyleSettings.Type;
+
 export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
 
 export const ServerSettings = Schema.Struct({
@@ -427,9 +457,15 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(
       Effect.succeed({
         instanceId: ProviderInstanceId.make("codex"),
-        model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
+        model: DEFAULT_TEXT_GENERATION_MODEL,
       }),
     ),
+  ),
+  sourceControlWritingStyle: SourceControlWritingStyleSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  sourceControlWriterModelSelection: Schema.NullOr(ModelSelection).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
   ),
 
   // Legacy single-instance-per-driver settings. Continues to be the source
@@ -556,6 +592,14 @@ export const ServerSettingsPatch = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
+  sourceControlWritingStyle: Schema.optionalKey(
+    Schema.Struct({
+      mode: Schema.optionalKey(SourceControlWritingStyleMode),
+      customInstructions: Schema.optionalKey(TrimmedString),
+      followChangeRequestTemplates: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
+  sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   observability: Schema.optionalKey(
     Schema.Struct({
       otlpTracesUrl: Schema.optionalKey(TrimmedString),
@@ -587,6 +631,7 @@ export const ClientSettingsPatch = Schema.Struct({
   defaultTerminal: Schema.optionalKey(Schema.NullOr(ExternalTerminalId)),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
   interactionSounds: Schema.optionalKey(Schema.Boolean),
+  environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
   glassOpacity: Schema.optionalKey(GlassOpacity),
   favorites: Schema.optionalKey(
     Schema.Array(
@@ -619,6 +664,7 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
   sidebarChatPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
   sidebarV2Enabled: Schema.optionalKey(Schema.Boolean),
+  sidebarV2ConfiguredByUser: Schema.optionalKey(Schema.Boolean),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   wordWrap: Schema.optionalKey(Schema.Boolean),
 });

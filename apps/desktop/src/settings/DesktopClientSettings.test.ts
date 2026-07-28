@@ -21,6 +21,7 @@ const clientSettings: ClientSettings = {
   dismissedProviderUpdateNotificationKeys: [],
   diffIgnoreWhitespace: true,
   interactionSounds: false,
+  environmentIdentificationMode: "artwork",
   favorites: [],
   glassOpacity: 80,
   providerModelPreferences: {},
@@ -34,6 +35,7 @@ const clientSettings: ClientSettings = {
   sidebarThreadPreviewCount: 6,
   sidebarChatPreviewCount: 4,
   sidebarV2Enabled: false,
+  sidebarV2ConfiguredByUser: false,
   timestampFormat: "24-hour",
   wordWrap: true,
 };

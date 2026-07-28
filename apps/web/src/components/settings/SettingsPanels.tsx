@@ -24,7 +24,9 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import {
+  DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
   DEFAULT_UNIFIED_SETTINGS,
+  type EnvironmentIdentificationMode,
   MAX_GLASS_OPACITY,
   MIN_GLASS_OPACITY,
 } from "@t3tools/contracts/settings";
@@ -40,6 +42,10 @@ import {
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
 } from "../../components/desktopUpdate.logic";
+import {
+  resolveEnvironmentIdentificationPillLabel,
+  useEnvironmentStageLabel,
+} from "../SidebarStageBackdrop";
 import { isElectron } from "../../env";
 import { useTheme } from "../../hooks/useTheme";
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
@@ -102,6 +108,12 @@ const THEME_OPTIONS = [
     label: "Dark",
   },
 ] as const;
+
+const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
+  artwork: "Artwork",
+  pill: "Version pill",
+  none: "None",
+};
 
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
@@ -368,6 +380,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     () => [
       ...(theme !== "system" ? ["Theme"] : []),
       ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? ["Glass opacity"] : []),
+      ...(settings.environmentIdentificationMode !==
+      DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
+        ? ["Environment identification"]
+        : []),
       ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
         ? ["Time format"]
         : []),
@@ -422,6 +438,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.defaultEditor,
       settings.defaultTerminal,
       settings.diffIgnoreWhitespace,
+      settings.environmentIdentificationMode,
       settings.glassOpacity,
       settings.automaticGitFetchInterval,
       settings.enableAssistantStreaming,
@@ -453,6 +470,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       defaultEditor: DEFAULT_UNIFIED_SETTINGS.defaultEditor,
       defaultTerminal: DEFAULT_UNIFIED_SETTINGS.defaultTerminal,
+      environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       sidebarChatPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarChatPreviewCount,
@@ -477,6 +495,9 @@ export function GeneralSettingsPanel() {
   const { theme, setTheme } = useTheme();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
+  const environmentStageLabel = useEnvironmentStageLabel();
+  const showEnvironmentIdentification =
+    resolveEnvironmentIdentificationPillLabel(environmentStageLabel) !== null;
   const observability = useAtomValue(primaryServerObservabilityAtom);
   const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
   const availableTerminals = useAtomValue(primaryServerAvailableTerminalsAtom);
@@ -700,6 +721,48 @@ export function GeneralSettingsPanel() {
             </div>
           }
         />
+
+        {showEnvironmentIdentification ? (
+          <SettingsRow
+            title="Environment identification"
+            description="Choose how Dev and Nightly environments are identified."
+            resetAction={
+              settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
+                <SettingResetButton
+                  label="environment identification"
+                  onClick={() =>
+                    updateSettings({
+                      environmentIdentificationMode: DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Select
+                value={settings.environmentIdentificationMode}
+                onValueChange={(value) => {
+                  if (value === "artwork" || value === "pill" || value === "none") {
+                    updateSettings({ environmentIdentificationMode: value });
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-40" aria-label="Environment identification">
+                  <SelectValue>
+                    {ENVIRONMENT_IDENTIFICATION_LABELS[settings.environmentIdentificationMode]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  {Object.entries(ENVIRONMENT_IDENTIFICATION_LABELS).map(([value, label]) => (
+                    <SelectItem hideIndicator key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+        ) : null}
 
         <SettingsRow
           title="Time format"

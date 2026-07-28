@@ -38,7 +38,10 @@ import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
-import { ServerSettingsService } from "../../serverSettings.ts";
+import {
+  resolveSourceControlWriterModelSelection,
+  ServerSettingsService,
+} from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
@@ -698,7 +701,14 @@ const make = Effect.gen(function* () {
     const cwd = input.worktreePath;
     const attachments = input.attachments ?? [];
     yield* Effect.gen(function* () {
-      const modelSelection = yield* resolveTextGenerationModelSelection(input.threadId);
+      const settings = yield* serverSettingsService.getSettings;
+      const modelSelection =
+        settings.sourceControlWriterModelSelection === null
+          ? yield* resolveTextGenerationModelSelection(input.threadId)
+          : resolveSourceControlWriterModelSelection(
+              settings,
+              yield* providerRegistry.getProviders,
+            );
 
       const generated = yield* textGeneration.generateBranchName({
         cwd,
