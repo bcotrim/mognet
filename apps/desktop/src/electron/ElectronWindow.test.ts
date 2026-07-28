@@ -94,6 +94,7 @@ describe("ElectronWindow", () => {
         webPreferences: {
           preload: "/tmp/preload.js",
           partition: "persist:mognet-preview-test",
+          backgroundThrottling: null,
           sandbox: true,
           contextIsolation: true,
           nodeIntegration: false,

@@ -49,6 +49,7 @@ import { useTheme } from "../hooks/useTheme";
 import {
   buildFileDiffRenderKey,
   getDiffCollapseIconClassName,
+  getDiffLineStat,
   getRenderablePatch,
   resolveDiffThemeName,
   resolveFileDiffPath,
@@ -689,6 +690,7 @@ export default function DiffPanel({
   useEffect(() => {
     setNavigatedFileKey(null);
   }, [collapseScopeKey]);
+  const diffLineStat = useMemo(() => getDiffLineStat(renderableFiles), [renderableFiles]);
 
   useEffect(() => {
     if (!selectedFilePath) return;
@@ -828,6 +830,14 @@ export default function DiffPanel({
   };
   const displayControls = (
     <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+      {codeViewFiles.length > 0 && (
+        <DiffStatLabel
+          additions={diffLineStat.additions}
+          deletions={diffLineStat.deletions}
+          className="mr-1 text-[11px]"
+          layout="inline"
+        />
+      )}
       {interactiveReviewTour ? (
         <Tooltip>
           <TooltipTrigger

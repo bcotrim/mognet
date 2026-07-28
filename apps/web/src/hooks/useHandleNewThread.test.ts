@@ -47,17 +47,29 @@ describe("resolveNewThreadDefaults", () => {
 });
 
 describe("resolveNewDraftModelSelection", () => {
-  it("prefers the project default over inherited draft state", () => {
-    const projectDefault = {
-      instanceId: ProviderInstanceId.make("codex"),
-      model: "gpt-5.6",
-    };
-    const inherited = {
-      instanceId: ProviderInstanceId.make("codex"),
-      model: "gpt-5.4",
-    };
+  const projectDefault = {
+    instanceId: ProviderInstanceId.make("codex-personal"),
+    model: "gpt-5.6",
+    options: [
+      { id: "reasoningEffort", value: "high" },
+      { id: "fastMode", value: true },
+    ],
+  } as const;
+  const inherited = {
+    instanceId: ProviderInstanceId.make("codex"),
+    model: "gpt-5.4",
+    options: [{ id: "reasoningEffort", value: "low" }],
+  } as const;
 
+  it("prefers the project model and provider options for fresh drafts", () => {
     expect(resolveNewDraftModelSelection(projectDefault, inherited)).toBe(projectDefault);
+  });
+
+  it("replaces stale reused-draft model state with the project default", () => {
+    expect(resolveNewDraftModelSelection(projectDefault, inherited)).toBe(projectDefault);
+  });
+
+  it("falls back to inherited state when the project has no default", () => {
     expect(resolveNewDraftModelSelection(null, inherited)).toBe(inherited);
     expect(resolveNewDraftModelSelection(null, null)).toBeNull();
   });
