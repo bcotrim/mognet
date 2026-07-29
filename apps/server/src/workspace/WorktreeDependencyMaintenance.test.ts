@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - Spies on native removal to verify its postcondition.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
@@ -9,10 +10,11 @@ import {
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
-import { assert, it } from "@effect/vitest";
+import { assert, it, vi } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as NodeFS from "node:fs";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -20,7 +22,10 @@ import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawne
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
-import { sweepArchivedWorktreeDependencies } from "./WorktreeDependencyMaintenance.ts";
+import {
+  removeWorktreeNodeDependencies,
+  sweepArchivedWorktreeDependencies,
+} from "./WorktreeDependencyMaintenance.ts";
 
 const projectId = ProjectId.make("project-dependency-maintenance");
 const modelSelection = {
@@ -75,6 +80,17 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
         });
         yield* fileSystem.writeFileString(path.join(worktreePath, "package.json"), "{}");
       }
+      const electronResourcesPath = path.join(
+        eligiblePath,
+        "node_modules",
+        "electron",
+        "dist",
+        "Electron.app",
+        "Contents",
+        "Resources",
+      );
+      yield* fileSystem.makeDirectory(electronResourcesPath, { recursive: true });
+      yield* fileSystem.writeFileString(path.join(electronResourcesPath, "default_app.asar"), "{}");
       const canonicalUnignoredPath = yield* fileSystem.realPath(unignoredPath);
 
       const project: OrchestrationProjectShell = {
@@ -148,6 +164,28 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
       assert.isTrue(yield* fileSystem.exists(path.join(activePath, "node_modules")));
       assert.isTrue(yield* fileSystem.exists(path.join(terminalPath, "node_modules")));
       assert.isTrue(yield* fileSystem.exists(path.join(unignoredPath, "node_modules")));
+    }),
+  ).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("fails when node_modules remains after removal", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "mognet-dependency-removal-",
+      });
+      const nodeModulesPath = path.join(root, "node_modules");
+      yield* fileSystem.makeDirectory(nodeModulesPath);
+
+      const remove = vi.spyOn(NodeFS.promises, "rm").mockResolvedValue(undefined);
+      const error = yield* removeWorktreeNodeDependencies(nodeModulesPath).pipe(
+        Effect.flip,
+        Effect.ensuring(Effect.sync(() => remove.mockRestore())),
+      );
+
+      assert.match(error.message, /still exist/);
     }),
   ).pipe(Effect.provide(NodeServices.layer)),
 );
