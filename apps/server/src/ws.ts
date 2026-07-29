@@ -113,13 +113,13 @@ import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-const EDITOR_DISCOVERY_TIMEOUT = Duration.seconds(5);
+const LAUNCHER_DISCOVERY_TIMEOUT = Duration.seconds(5);
 
-export const resolveAvailableEditorsForConfig = <A, E, R>(
+export const resolveAvailableLaunchersForConfig = <A, E, R>(
   discovery: Effect.Effect<ReadonlyArray<A>, E, R>,
 ) =>
   discovery.pipe(
-    Effect.timeoutOption(EDITOR_DISCOVERY_TIMEOUT),
+    Effect.timeoutOption(LAUNCHER_DISCOVERY_TIMEOUT),
     Effect.map(Option.getOrElse(() => [])),
   );
 
@@ -756,6 +756,13 @@ const makeWsRpcLayer = (
         const scheduledTaskList = yield* scheduledTasks.list;
         const environment = yield* serverEnvironment.getDescriptor;
         const auth = yield* serverAuth.getDescriptor();
+        const [availableEditors, availableTerminals] = yield* Effect.all(
+          [
+            resolveAvailableLaunchersForConfig(externalLauncher.resolveAvailableEditors()),
+            resolveAvailableLaunchersForConfig(externalLauncher.resolveAvailableTerminals()),
+          ],
+          { concurrency: "unbounded" },
+        );
 
         return {
           environment,
@@ -766,10 +773,8 @@ const makeWsRpcLayer = (
           issues: keybindingsConfig.issues,
           providers,
           scheduledTasks: scheduledTaskList.tasks,
-          availableEditors: yield* resolveAvailableEditorsForConfig(
-            externalLauncher.resolveAvailableEditors(),
-          ),
-          availableTerminals: yield* externalLauncher.resolveAvailableTerminals(),
+          availableEditors,
+          availableTerminals,
           observability: {
             logsDirectoryPath: config.logsDir,
             localTracingEnabled: true,
