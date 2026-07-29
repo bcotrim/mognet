@@ -190,14 +190,14 @@ export function resolveBranchToolbarPrBranch(input: {
   return input.activeThreadBranch === input.resolvedActiveBranch ? input.activeThreadBranch : null;
 }
 
-export function resolveLocalCheckoutBranchMismatch(input: {
+export function resolveThreadCheckoutBranchMismatch(input: {
   effectiveEnvMode: EnvMode;
   activeWorktreePath: string | null;
   activeThreadBranch: string | null;
   currentGitBranch: string | null;
 }): { threadBranch: string; currentBranch: string } | null {
   const { effectiveEnvMode, activeWorktreePath, activeThreadBranch, currentGitBranch } = input;
-  if (effectiveEnvMode !== "local" || activeWorktreePath !== null) {
+  if (effectiveEnvMode === "worktree" && activeWorktreePath === null) {
     return null;
   }
   if (!activeThreadBranch || !currentGitBranch || activeThreadBranch === currentGitBranch) {

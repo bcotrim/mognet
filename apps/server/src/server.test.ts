@@ -5563,6 +5563,125 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("runs setup before a turn when archived worktree dependencies were pruned", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "mognet-setup-recovery-project-",
+      });
+      const worktreePath = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "mognet-setup-recovery-worktree-",
+      });
+      yield* fileSystem.writeFileString(path.join(worktreePath, "package.json"), "{}");
+
+      const threadId = ThreadId.make("thread-setup-recovery");
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      const getThreadShellById = vi.fn(() =>
+        Effect.succeed(
+          Option.some(
+            makeDefaultOrchestrationThreadShell({
+              id: threadId,
+              worktreePath,
+            }),
+          ),
+        ),
+      );
+      const getProjectShellById = vi.fn(() =>
+        Effect.succeed(
+          Option.some({
+            id: defaultProjectId,
+            kind: "workspace" as const,
+            title: "Setup recovery",
+            workspaceRoot,
+            defaultModelSelection,
+            ...PROJECT_DEFAULTS,
+            scripts: [
+              {
+                id: "setup",
+                name: "Setup",
+                command: "vp install",
+                icon: "configure" as const,
+                runOnWorktreeCreate: true,
+              },
+            ],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          }),
+        ),
+      );
+      const runForThread = vi.fn(
+        (
+          _: Parameters<
+            ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"]
+          >[0],
+        ) =>
+          Effect.succeed({
+            status: "started" as const,
+            scriptId: "setup",
+            scriptName: "Setup",
+            terminalId: "setup-setup",
+            cwd: worktreePath,
+          }),
+      );
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                return { sequence: dispatchedCommands.length };
+              }),
+            readEvents: () => Stream.empty,
+          },
+          projectSetupScriptRunner: { runForThread },
+          projectionSnapshotQuery: {
+            getThreadShellById,
+            getProjectShellById,
+          },
+        },
+      });
+
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-setup-recovery"),
+            threadId,
+            message: {
+              messageId: MessageId.make("msg-setup-recovery"),
+              role: "user",
+              text: "continue",
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            createdAt,
+          }),
+        ),
+      );
+
+      assert.equal(getThreadShellById.mock.calls.length, 1);
+      assert.equal(getProjectShellById.mock.calls.length, 1);
+      assert.equal(runForThread.mock.calls.length, 1);
+      assert.equal(response.sequence, 3);
+      assert.deepEqual(runForThread.mock.calls[0]?.[0], {
+        threadId,
+        projectId: defaultProjectId,
+        projectCwd: workspaceRoot,
+        worktreePath,
+      });
+      assert.deepEqual(
+        dispatchedCommands.map((command) => command.type),
+        ["thread.activity.append", "thread.activity.append", "thread.turn.start"],
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("bootstraps projectless chat turns with a hidden standalone project", () =>
     Effect.gen(function* () {
       const dispatchedCommands: Array<OrchestrationCommand> = [];

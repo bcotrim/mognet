@@ -119,7 +119,7 @@ import {
   sortSettledThreadsForSidebarV2,
   sortThreadsForSidebarV2,
 } from "./Sidebar.logic";
-import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
+import { resolveThreadCheckoutBranchMismatch } from "./BranchToolbar.logic";
 import {
   prStatusIndicator,
   resolveThreadPr,
@@ -497,7 +497,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
         })
       : null,
   );
-  const branchMismatch = resolveLocalCheckoutBranchMismatch({
+  const branchMismatch = resolveThreadCheckoutBranchMismatch({
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
     activeWorktreePath: thread.worktreePath,
     activeThreadBranch: thread.branch,

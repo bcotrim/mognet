@@ -13,7 +13,7 @@ import {
   resolveBranchToolbarPrBranch,
   resolveBranchToolbarValue,
   resolveLockedWorkspaceLabel,
-  resolveLocalCheckoutBranchMismatch,
+  resolveThreadCheckoutBranchMismatch,
   resolvePreviousWorktreeLabel,
   resolvePreviousWorktreeSeed,
   shouldIncludeBranchPickerItem,
@@ -299,10 +299,10 @@ describe("resolveBranchToolbarPrBranch", () => {
   });
 });
 
-describe("resolveLocalCheckoutBranchMismatch", () => {
+describe("resolveThreadCheckoutBranchMismatch", () => {
   it("detects when a local thread is associated with a different branch than the checkout", () => {
     expect(
-      resolveLocalCheckoutBranchMismatch({
+      resolveThreadCheckoutBranchMismatch({
         effectiveEnvMode: "local",
         activeWorktreePath: null,
         activeThreadBranch: "feature/thread",
@@ -316,7 +316,7 @@ describe("resolveLocalCheckoutBranchMismatch", () => {
 
   it("ignores matching local checkout state", () => {
     expect(
-      resolveLocalCheckoutBranchMismatch({
+      resolveThreadCheckoutBranchMismatch({
         effectiveEnvMode: "local",
         activeWorktreePath: null,
         activeThreadBranch: "feature/thread",
@@ -325,20 +325,23 @@ describe("resolveLocalCheckoutBranchMismatch", () => {
     ).toBeNull();
   });
 
-  it("ignores dedicated worktrees because their checkout is already thread-scoped", () => {
+  it("detects stale branch metadata in a dedicated worktree", () => {
     expect(
-      resolveLocalCheckoutBranchMismatch({
+      resolveThreadCheckoutBranchMismatch({
         effectiveEnvMode: "worktree",
         activeWorktreePath: "/repo/.t3/worktrees/feature-thread",
         activeThreadBranch: "feature/thread",
         currentGitBranch: "feature/current",
       }),
-    ).toBeNull();
+    ).toEqual({
+      threadBranch: "feature/thread",
+      currentBranch: "feature/current",
+    });
   });
 
   it("ignores new-worktree base selection before a worktree exists", () => {
     expect(
-      resolveLocalCheckoutBranchMismatch({
+      resolveThreadCheckoutBranchMismatch({
         effectiveEnvMode: "worktree",
         activeWorktreePath: null,
         activeThreadBranch: "feature/base",

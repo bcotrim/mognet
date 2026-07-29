@@ -9,6 +9,7 @@ import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import { normalizeDispatchCommand } from "./Normalizer.ts";
+import { ThreadTurnBootstrapDispatcher } from "./ThreadTurnBootstrapDispatcher.ts";
 import {
   annotateEnvironmentRequest,
   failEnvironmentInternal,
@@ -25,6 +26,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const orchestrationEngine = yield* OrchestrationEngineService;
+    const threadTurnBootstrapDispatcher = yield* ThreadTurnBootstrapDispatcher;
 
     return handlers
       .handle(
@@ -81,6 +83,15 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           const normalizedCommand = yield* normalizeDispatchCommand(args.payload).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),
           );
+          if (normalizedCommand.type === "thread.turn.start") {
+            return yield* threadTurnBootstrapDispatcher
+              .dispatch(normalizedCommand)
+              .pipe(
+                Effect.catch((cause) =>
+                  failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                ),
+              );
+          }
           return yield* orchestrationEngine
             .dispatch(normalizedCommand)
             .pipe(

@@ -168,6 +168,8 @@ export class TerminalManager extends Context.Service<
      */
     readonly close: (input: TerminalCloseInput) => Effect.Effect<void, TerminalError>;
 
+    readonly hasRunningSession: (threadId: string) => Effect.Effect<boolean>;
+
     /**
      * Subscribe to terminal runtime events with a direct callback.
      *
@@ -1613,6 +1615,11 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     );
   });
 
+  const hasRunningSession = (threadId: string) =>
+    sessionsForThread(threadId).pipe(
+      Effect.map((sessions) => sessions.some((session) => session.status === "running")),
+    );
+
   const evictInactiveSessionsIfNeeded = Effect.fn("terminal.evictInactiveSessionsIfNeeded")(
     function* () {
       yield* modifyManagerState((state) => {
@@ -2662,6 +2669,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     clear,
     restart,
     close,
+    hasRunningSession,
     subscribe,
     subscribeMetadata,
   });

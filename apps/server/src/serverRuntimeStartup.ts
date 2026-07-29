@@ -34,6 +34,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import * as ScheduledTasks from "./scheduledTasks.ts";
+import * as WorktreeDependencyMaintenance from "./workspace/WorktreeDependencyMaintenance.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -313,6 +314,9 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
         yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
+        yield* WorktreeDependencyMaintenance.startArchivedWorktreeDependencyMaintenance.pipe(
+          Scope.provide(reactorScope),
+        );
       }),
     );
 

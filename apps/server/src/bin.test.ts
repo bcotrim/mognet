@@ -29,6 +29,7 @@ import { cli } from "./bin.ts";
 import * as ServerConfig from "./config.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
+import * as ThreadTurnBootstrapDispatcher from "./orchestration/ThreadTurnBootstrapDispatcher.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
@@ -116,6 +117,11 @@ const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Ef
     const routesLayer = HttpApiBuilder.layer(ProjectCliHttpApi).pipe(
       Layer.provide(orchestrationHttpApiLayer),
       Layer.provide(environmentAuthenticatedAuthLayer),
+      Layer.provide(
+        Layer.mock(ThreadTurnBootstrapDispatcher.ThreadTurnBootstrapDispatcher)({
+          dispatch: () => Effect.die("thread turn dispatch is unused"),
+        }),
+      ),
     );
     const appLayer = HttpRouter.serve(routesLayer, {
       disableListenLog: true,
