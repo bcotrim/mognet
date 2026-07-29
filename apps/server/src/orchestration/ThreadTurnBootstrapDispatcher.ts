@@ -6,17 +6,21 @@ import {
   STANDALONE_CHAT_PROJECT_ID,
   ThreadId,
 } from "@t3tools/contracts";
+import { setupProjectScript } from "@t3tools/shared/projectScripts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "../config.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
+import * as WorktreeDependencyMaintenance from "../workspace/WorktreeDependencyMaintenance.ts";
 import * as OrchestrationEngine from "./Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./Services/ProjectionSnapshotQuery.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
@@ -65,6 +69,8 @@ export const make = Effect.gen(function* () {
   const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
 
   const randomUUID = crypto.randomUUIDv4.pipe(
     Effect.mapError(
@@ -135,6 +141,7 @@ export const make = Effect.gen(function* () {
     let targetProjectId = bootstrap?.createThread?.projectId;
     let targetProjectCwd = bootstrap?.prepareWorktree?.projectCwd;
     let targetWorktreePath = bootstrap?.createThread?.worktreePath ?? null;
+    let shouldRunSetupScript = bootstrap?.runSetupScript === true;
 
     const cleanupCreatedThread = () =>
       createdThread
@@ -227,9 +234,59 @@ export const make = Effect.gen(function* () {
         );
       });
 
+    const resolveDependencyRecovery = () =>
+      Effect.gen(function* () {
+        if (shouldRunSetupScript || bootstrap?.createThread) return;
+
+        const thread = yield* projectionSnapshotQuery
+          .getThreadShellById(command.threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        if (!thread?.worktreePath) return;
+
+        const project = yield* projectionSnapshotQuery
+          .getProjectShellById(thread.projectId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        if (
+          !project ||
+          project.kind !== "workspace" ||
+          setupProjectScript(project.scripts) === null
+        ) {
+          return;
+        }
+
+        const worktreePath = path.resolve(thread.worktreePath);
+        if (
+          worktreePath === path.resolve(project.workspaceRoot) ||
+          !(yield* fileSystem.exists(worktreePath))
+        ) {
+          return;
+        }
+
+        const dependencyState =
+          yield* WorktreeDependencyMaintenance.inspectWorktreeNodeDependencies(worktreePath).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          );
+        if (!dependencyState.hasPackageManifest || dependencyState.hasNodeModules) return;
+
+        targetProjectId = thread.projectId;
+        targetProjectCwd = project.workspaceRoot;
+        targetWorktreePath = worktreePath;
+        shouldRunSetupScript = true;
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : Effect.logWarning("turn start dependency recovery check failed", {
+                threadId: command.threadId,
+                cause: Cause.pretty(cause),
+              }),
+        ),
+      );
+
     const runSetupProgram = () =>
       Effect.gen(function* () {
-        if (!bootstrap?.runSetupScript || !targetWorktreePath) {
+        if (!shouldRunSetupScript || !targetWorktreePath) {
           return;
         }
         const worktreePath = targetWorktreePath;
@@ -355,6 +412,7 @@ export const make = Effect.gen(function* () {
         yield* refreshGitStatus(targetWorktreePath);
       }
 
+      yield* resolveDependencyRecovery();
       yield* runSetupProgram();
 
       return yield* orchestrationEngine.dispatch(finalTurnStartCommand);

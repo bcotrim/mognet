@@ -336,6 +336,7 @@ function testLayer(
     clear: () => Effect.die("unused"),
     restart: () => Effect.die("unused"),
     close: () => Effect.die("unused"),
+    hasRunningSession: () => Effect.succeed(false),
     subscribe: () => Effect.succeed(() => undefined),
     subscribeMetadata: () => Effect.succeed(() => undefined),
     ...options?.terminalManager,

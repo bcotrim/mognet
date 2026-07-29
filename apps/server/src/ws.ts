@@ -772,7 +772,7 @@ const makeWsRpcLayer = (
           Stream.flatMap((items) => Stream.fromIterable(items)),
         );
 
-      const dispatchBootstrapTurnStart = (
+      const dispatchTurnStart = (
         command: Extract<OrchestrationCommand, { type: "thread.turn.start" }>,
       ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> =>
         threadTurnBootstrapDispatcher.dispatch(command);
@@ -781,8 +781,8 @@ const makeWsRpcLayer = (
         normalizedCommand: OrchestrationCommand,
       ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> => {
         const dispatchEffect =
-          normalizedCommand.type === "thread.turn.start" && normalizedCommand.bootstrap
-            ? dispatchBootstrapTurnStart(normalizedCommand)
+          normalizedCommand.type === "thread.turn.start"
+            ? dispatchTurnStart(normalizedCommand)
             : orchestrationEngine
                 .dispatch(normalizedCommand)
                 .pipe(
