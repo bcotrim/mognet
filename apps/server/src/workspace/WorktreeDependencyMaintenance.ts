@@ -1,12 +1,16 @@
+// @effect-diagnostics nodeBuiltinImport:off - Electron's original-fs avoids patched .asar traversal.
 import { setupProjectScript } from "@t3tools/shared/projectScripts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as NodeFS from "node:fs";
+import * as NodeModule from "node:module";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
@@ -14,6 +18,27 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 
 const ARCHIVE_GRACE_MS = Duration.toMillis(Duration.days(7));
 const SWEEP_INTERVAL = Duration.hours(24);
+
+// Electron patches node:fs to traverse .asar files, which breaks recursive removal.
+const nativeFileSystem =
+  "electron" in process.versions
+    ? (NodeModule.createRequire(import.meta.url)("original-fs") as typeof NodeFS)
+    : NodeFS;
+
+export class WorktreeDependencyRemovalError extends Schema.TaggedErrorClass<WorktreeDependencyRemovalError>()(
+  "WorktreeDependencyRemovalError",
+  {
+    nodeModulesPath: Schema.String,
+    reason: Schema.Literals(["remove-failed", "still-exists"]),
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return this.reason === "still-exists"
+      ? `Worktree dependencies still exist at '${this.nodeModulesPath}' after removal.`
+      : `Failed to remove worktree dependencies at '${this.nodeModulesPath}'.`;
+  }
+}
 
 export const inspectWorktreeNodeDependencies = Effect.fn("WorktreeDependencyMaintenance.inspect")(
   function* (worktreePath: string) {
@@ -24,6 +49,33 @@ export const inspectWorktreeNodeDependencies = Effect.fn("WorktreeDependencyMain
       fileSystem.exists(path.join(worktreePath, "node_modules")),
     ]);
     return { hasPackageManifest, hasNodeModules };
+  },
+);
+
+export const removeWorktreeNodeDependencies = Effect.fn("WorktreeDependencyMaintenance.remove")(
+  function* (nodeModulesPath: string) {
+    const fileSystem = yield* FileSystem.FileSystem;
+    yield* Effect.tryPromise({
+      try: () =>
+        nativeFileSystem.promises.rm(nodeModulesPath, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 100,
+        }),
+      catch: (cause) =>
+        new WorktreeDependencyRemovalError({
+          nodeModulesPath,
+          reason: "remove-failed",
+          cause,
+        }),
+    });
+    if (yield* fileSystem.exists(nodeModulesPath)) {
+      return yield* new WorktreeDependencyRemovalError({
+        nodeModulesPath,
+        reason: "still-exists",
+      });
+    }
   },
 );
 
@@ -135,10 +187,7 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
         return false;
       }
 
-      yield* fileSystem.remove(path.join(canonicalWorktreePath, "node_modules"), {
-        recursive: true,
-        force: true,
-      });
+      yield* removeWorktreeNodeDependencies(path.join(canonicalWorktreePath, "node_modules"));
       yield* Effect.logInfo("archived worktree dependencies pruned", {
         worktreePath: canonicalWorktreePath,
         threadIds: threads.map((thread) => thread.id),
