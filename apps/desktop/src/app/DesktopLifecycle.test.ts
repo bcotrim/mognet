@@ -60,6 +60,10 @@ function makeHarness(confirmClose: Effect.Effect<boolean>) {
         events.push("quit");
         resolveQuit();
       }),
+      onBeforeQuitForUpdate: (listener) =>
+        Effect.sync(() => {
+          listeners.set("before-quit-for-update", listener);
+        }),
       on: (eventName, listener) =>
         Effect.sync(() => {
           listeners.set(eventName, listener as AppListener);
@@ -126,6 +130,27 @@ describe("DesktopLifecycle", () => {
           "allow-quit",
           "quit",
         ]);
+        assert.isTrue(yield* Ref.get(state.quitting));
+      }),
+    ).pipe(Effect.provide(harness.layer));
+  });
+
+  it.effect("lets the updater-controlled quit proceed", () => {
+    const harness = makeHarness(Effect.succeed(false));
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        yield* DesktopLifecycle.make.register;
+        harness.listeners.get("before-quit-for-update")?.();
+        harness.listeners.get("before-quit")?.({
+          preventDefault: () => {
+            harness.events.push("prevent");
+          },
+        } as Electron.Event);
+        yield* Effect.promise(() => Promise.resolve());
+
+        const state = yield* DesktopState.DesktopState;
+        assert.deepEqual(harness.events, []);
         assert.isTrue(yield* Ref.get(state.quitting));
       }),
     ).pipe(Effect.provide(harness.layer));
