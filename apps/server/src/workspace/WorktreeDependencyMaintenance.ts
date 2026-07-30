@@ -19,7 +19,7 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 const ARCHIVE_GRACE_MS = Duration.toMillis(Duration.days(7));
 const RETAINED_ARCHIVED_WORKTREE_COUNT = 15;
 const MAX_WORKTREE_REMOVALS_PER_SWEEP = 10;
-const SWEEP_INTERVAL = Duration.hours(24);
+const SWEEP_INTERVAL = Duration.hours(1);
 
 // Electron patches node:fs to traverse .asar files, which breaks recursive removal.
 const nativeFileSystem =
@@ -86,20 +86,6 @@ function latestArchiveTime(threads: ReadonlyArray<{ readonly archivedAt: string 
     .map((thread) => (thread.archivedAt === null ? Number.NaN : Date.parse(thread.archivedAt)))
     .filter(Number.isFinite);
   return archiveTimes.length === 0 ? Number.NEGATIVE_INFINITY : Math.max(...archiveTimes);
-}
-
-function hasProtectedWorktreeState(status: string): boolean {
-  return status.split("\0").some((entry) => {
-    if (entry.length === 0) return false;
-    if (!entry.startsWith("!! ")) return true;
-
-    const ignoredPath = entry.slice(3);
-    return (
-      ignoredPath !== "node_modules/" &&
-      !ignoredPath.includes("/node_modules/") &&
-      !ignoredPath.startsWith(".vite-hooks/_/")
-    );
-  });
 }
 
 export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
@@ -248,27 +234,6 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
       });
       if (branchExists.exitCode !== 0) return didClean;
 
-      const status = yield* git.execute({
-        operation: "WorktreeDependencyMaintenance.checkStatus",
-        cwd: canonicalWorktreePath,
-        args: ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"],
-        allowNonZeroExit: true,
-        timeoutMs: 20_000,
-        maxOutputBytes: 64 * 1_024,
-      });
-      if (
-        status.exitCode !== 0 ||
-        status.stdoutTruncated ||
-        status.stderrTruncated ||
-        hasProtectedWorktreeState(status.stdout)
-      ) {
-        yield* Effect.logInfo("archived worktree retained due to local state", {
-          worktreePath: canonicalWorktreePath,
-          threadIds: threads.map((thread) => thread.id),
-        });
-        return didClean;
-      }
-
       const becameActive = (yield* Effect.forEach(threads, (thread) =>
         projectionSnapshotQuery.getThreadShellById(thread.id),
       )).some(Option.isSome);
@@ -280,6 +245,7 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
       yield* git.removeWorktree({
         cwd: workspaceRoot,
         path: canonicalWorktreePath,
+        force: true,
       });
       removedWorktreeCount += 1;
       yield* Effect.logInfo("archived worktree removed", {

@@ -170,7 +170,7 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
   ).pipe(Effect.provide(NodeServices.layer)),
 );
 
-it.effect("removes only clean archived worktrees beyond the retained 15", () =>
+it.effect("force-removes the oldest archived worktrees beyond the retained 15", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -223,15 +223,10 @@ it.effect("removes only clean archived worktrees beyond the retained 15", () =>
               hasRunningSession: () => Effect.succeed(false),
             }),
             Layer.mock(GitVcsDriver.GitVcsDriver)({
-              execute: ({ operation, cwd }) =>
+              execute: () =>
                 Effect.succeed({
                   exitCode: ChildProcessSpawner.ExitCode(0),
-                  stdout:
-                    operation === "WorktreeDependencyMaintenance.checkStatus"
-                      ? cwd === worktreePaths[0]
-                        ? "!! .env\0"
-                        : "!! apps/web/node_modules/\0!! .vite-hooks/_/pre-commit\0"
-                      : "",
+                  stdout: "",
                   stderr: "",
                   stdoutTruncated: false,
                   stderrTruncated: false,
@@ -245,9 +240,10 @@ it.effect("removes only clean archived worktrees beyond the retained 15", () =>
       assert.equal(cleanedCount, 10);
       assert.deepEqual(
         removeWorktree.mock.calls.map(([input]) => input),
-        worktreePaths.slice(1, 11).map((worktreePath) => ({
+        worktreePaths.slice(0, 10).map((worktreePath) => ({
           cwd: canonicalWorkspaceRoot,
           path: worktreePath,
+          force: true,
         })),
       );
     }),
