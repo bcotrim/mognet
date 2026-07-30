@@ -5770,6 +5770,131 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("restores a retired archived worktree before starting its next turn", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "mognet-worktree-restore-project-",
+      });
+      const worktreePath = path.join(workspaceRoot, "retired-worktree");
+      const branch = "mognet/retired-worktree";
+      const threadId = ThreadId.make("thread-worktree-restore");
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      const createWorktree = vi.fn(
+        (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
+          Effect.succeed({
+            worktree: {
+              refName: branch,
+              path: worktreePath,
+            },
+          }),
+      );
+      const runForThread = vi.fn(
+        (
+          _: Parameters<
+            ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"]
+          >[0],
+        ) =>
+          Effect.succeed({
+            status: "started" as const,
+            scriptId: "setup",
+            scriptName: "Setup",
+            terminalId: "setup-setup",
+            cwd: worktreePath,
+          }),
+      );
+
+      yield* buildAppUnderTest({
+        layers: {
+          gitVcsDriver: { createWorktree },
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                return { sequence: dispatchedCommands.length };
+              }),
+            readEvents: () => Stream.empty,
+          },
+          projectSetupScriptRunner: { runForThread },
+          projectionSnapshotQuery: {
+            getThreadShellById: () =>
+              Effect.succeed(
+                Option.some(
+                  makeDefaultOrchestrationThreadShell({
+                    id: threadId,
+                    branch,
+                    worktreePath,
+                  }),
+                ),
+              ),
+            getProjectShellById: () =>
+              Effect.succeed(
+                Option.some({
+                  id: defaultProjectId,
+                  kind: "workspace" as const,
+                  title: "Worktree restore",
+                  workspaceRoot,
+                  defaultModelSelection,
+                  ...PROJECT_DEFAULTS,
+                  scripts: [
+                    {
+                      id: "setup",
+                      name: "Setup",
+                      command: "vp install",
+                      icon: "configure" as const,
+                      runOnWorktreeCreate: true,
+                    },
+                  ],
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  updatedAt: "2026-01-01T00:00:00.000Z",
+                }),
+              ),
+          },
+        },
+      });
+
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-worktree-restore"),
+            threadId,
+            message: {
+              messageId: MessageId.make("msg-worktree-restore"),
+              role: "user",
+              text: "continue",
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            createdAt,
+          }),
+        ),
+      );
+
+      assert.equal(response.sequence, 3);
+      assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
+        cwd: workspaceRoot,
+        refName: branch,
+        path: worktreePath,
+      });
+      assert.deepEqual(runForThread.mock.calls[0]?.[0], {
+        threadId,
+        projectId: defaultProjectId,
+        projectCwd: workspaceRoot,
+        worktreePath,
+      });
+      assert.deepEqual(
+        dispatchedCommands.map((command) => command.type),
+        ["thread.activity.append", "thread.activity.append", "thread.turn.start"],
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("bootstraps projectless chat turns with a hidden standalone project", () =>
     Effect.gen(function* () {
       const dispatchedCommands: Array<OrchestrationCommand> = [];

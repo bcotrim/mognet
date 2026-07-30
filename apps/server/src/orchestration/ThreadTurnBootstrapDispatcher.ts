@@ -234,7 +234,7 @@ export const make = Effect.gen(function* () {
         );
       });
 
-    const resolveDependencyRecovery = () =>
+    const resolveWorktreeRecovery = () =>
       Effect.gen(function* () {
         if (shouldRunSetupScript || bootstrap?.createThread) return;
 
@@ -246,22 +246,36 @@ export const make = Effect.gen(function* () {
         const project = yield* projectionSnapshotQuery
           .getProjectShellById(thread.projectId)
           .pipe(Effect.map(Option.getOrUndefined));
-        if (
-          !project ||
-          project.kind !== "workspace" ||
-          setupProjectScript(project.scripts) === null
-        ) {
-          return;
-        }
+        if (!project || project.kind !== "workspace") return;
 
         const worktreePath = path.resolve(thread.worktreePath);
-        if (
-          worktreePath === path.resolve(project.workspaceRoot) ||
-          !(yield* fileSystem.exists(worktreePath))
-        ) {
+        if (worktreePath === path.resolve(project.workspaceRoot)) return;
+
+        if (!(yield* fileSystem.exists(worktreePath))) {
+          if (!thread.branch) {
+            return yield* new OrchestrationDispatchCommandError({
+              message: "Cannot restore the thread worktree because its branch is missing.",
+            });
+          }
+          yield* gitWorkflow.createWorktree({
+            cwd: project.workspaceRoot,
+            refName: thread.branch,
+            path: worktreePath,
+          });
+          targetProjectId = thread.projectId;
+          targetProjectCwd = project.workspaceRoot;
+          targetWorktreePath = worktreePath;
+          shouldRunSetupScript = setupProjectScript(project.scripts) !== null;
+          yield* refreshGitStatus(worktreePath);
+          yield* Effect.logInfo("archived worktree restored for turn start", {
+            threadId: command.threadId,
+            worktreePath,
+            branch: thread.branch,
+          });
           return;
         }
 
+        if (setupProjectScript(project.scripts) === null) return;
         const dependencyState =
           yield* WorktreeDependencyMaintenance.inspectWorktreeNodeDependencies(worktreePath).pipe(
             Effect.provideService(FileSystem.FileSystem, fileSystem),
@@ -273,16 +287,7 @@ export const make = Effect.gen(function* () {
         targetProjectCwd = project.workspaceRoot;
         targetWorktreePath = worktreePath;
         shouldRunSetupScript = true;
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(cause)
-            : Effect.logWarning("turn start dependency recovery check failed", {
-                threadId: command.threadId,
-                cause: Cause.pretty(cause),
-              }),
-        ),
-      );
+      });
 
     const runSetupProgram = () =>
       Effect.gen(function* () {
@@ -412,7 +417,7 @@ export const make = Effect.gen(function* () {
         yield* refreshGitStatus(targetWorktreePath);
       }
 
-      yield* resolveDependencyRecovery();
+      yield* resolveWorktreeRecovery();
       yield* runSetupProgram();
 
       return yield* orchestrationEngine.dispatch(finalTurnStartCommand);
