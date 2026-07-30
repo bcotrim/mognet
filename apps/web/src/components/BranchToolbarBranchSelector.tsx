@@ -608,6 +608,7 @@ export function BranchToolbarBranchSelector({
       resolvedActiveBranch,
     }),
     gitStatus: branchStatusQuery.data ?? null,
+    hasDedicatedWorktree: activeWorktreePath !== null,
   });
   const branchPrStatus = prStatusIndicator(branchPr, branchStatusQuery.data?.sourceControlProvider);
   // Action-oriented tooltip (the pill opens the PR), distinct from the sidebar's
