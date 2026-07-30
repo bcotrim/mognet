@@ -36,26 +36,33 @@ describe("resolveThreadPr", () => {
       resolveThreadPr({
         threadBranch: "feature/other",
         gitStatus: status(),
+        hasDedicatedWorktree: false,
       }),
     ).toBeNull();
   });
 
-  it("hides PR indicators when a dedicated worktree has switched away from the thread branch", () => {
+  it("shows PR indicators for dedicated worktree threads even when branch metadata is stale", () => {
+    const gitStatus = status();
+
     expect(
       resolveThreadPr({
         threadBranch: "stack/base",
-        gitStatus: status(),
+        gitStatus,
+        hasDedicatedWorktree: true,
       }),
-    ).toBeNull();
+    ).toBe(gitStatus.pr);
   });
 
-  it("hides PR indicators when thread branch metadata is missing", () => {
+  it("shows PR indicators for dedicated worktree threads even when branch metadata is missing", () => {
+    const gitStatus = status();
+
     expect(
       resolveThreadPr({
         threadBranch: null,
-        gitStatus: status(),
+        gitStatus,
+        hasDedicatedWorktree: true,
       }),
-    ).toBeNull();
+    ).toBe(gitStatus.pr);
   });
 
   it("shows the PR when the live checkout matches the stored thread branch", () => {
@@ -65,6 +72,7 @@ describe("resolveThreadPr", () => {
       resolveThreadPr({
         threadBranch: "feature/current",
         gitStatus,
+        hasDedicatedWorktree: false,
       }),
     ).toBe(gitStatus.pr);
   });
