@@ -17,6 +17,8 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 
 const ARCHIVE_GRACE_MS = Duration.toMillis(Duration.days(7));
+const RETAINED_ARCHIVED_WORKTREE_COUNT = 15;
+const MAX_WORKTREE_REMOVALS_PER_SWEEP = 10;
 const SWEEP_INTERVAL = Duration.hours(24);
 
 // Electron patches node:fs to traverse .asar files, which breaks recursive removal.
@@ -79,6 +81,27 @@ export const removeWorktreeNodeDependencies = Effect.fn("WorktreeDependencyMaint
   },
 );
 
+function latestArchiveTime(threads: ReadonlyArray<{ readonly archivedAt: string | null }>): number {
+  const archiveTimes = threads
+    .map((thread) => (thread.archivedAt === null ? Number.NaN : Date.parse(thread.archivedAt)))
+    .filter(Number.isFinite);
+  return archiveTimes.length === 0 ? Number.NEGATIVE_INFINITY : Math.max(...archiveTimes);
+}
+
+function hasProtectedWorktreeState(status: string): boolean {
+  return status.split("\0").some((entry) => {
+    if (entry.length === 0) return false;
+    if (!entry.startsWith("!! ")) return true;
+
+    const ignoredPath = entry.slice(3);
+    return (
+      ignoredPath !== "node_modules/" &&
+      !ignoredPath.includes("/node_modules/") &&
+      !ignoredPath.startsWith(".vite-hooks/_/")
+    );
+  });
+}
+
 export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -117,12 +140,25 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
     threadsByWorktreePath.set(worktreePath, threads);
   }
 
+  const worktreesByRecency = [...threadsByWorktreePath].toSorted(
+    ([leftPath, leftThreads], [rightPath, rightThreads]) =>
+      latestArchiveTime(rightThreads) - latestArchiveTime(leftThreads) ||
+      leftPath.localeCompare(rightPath),
+  );
+  const retainedWorktreePaths = new Set(
+    worktreesByRecency
+      .slice(0, RETAINED_ARCHIVED_WORKTREE_COUNT)
+      .map(([worktreePath]) => worktreePath),
+  );
+
   let cleanedCount = 0;
-  for (const [worktreePath, threads] of threadsByWorktreePath) {
+  let removedWorktreeCount = 0;
+  for (const [worktreePath, threads] of worktreesByRecency.toReversed()) {
     const cleaned = yield* Effect.gen(function* () {
       if (
         path.dirname(worktreePath) === worktreePath ||
         activeWorktreePaths.has(worktreePath) ||
+        !(yield* fileSystem.exists(worktreePath)) ||
         threads.some((thread) => {
           const archivedAt =
             thread.archivedAt === null ? Number.NaN : Date.parse(thread.archivedAt);
@@ -150,31 +186,87 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
       }
 
       const canonicalWorktreePath = yield* fileSystem.realPath(worktreePath);
+      const workspaceRoots = new Set<string>();
       for (const project of projects) {
-        if (
-          project !== undefined &&
-          canonicalWorktreePath ===
-            (yield* fileSystem.realPath(path.resolve(project.workspaceRoot)))
-        ) {
+        if (project === undefined) return false;
+        const workspaceRoot = yield* fileSystem.realPath(path.resolve(project.workspaceRoot));
+        workspaceRoots.add(workspaceRoot);
+        if (canonicalWorktreePath === workspaceRoot) {
           return false;
         }
       }
+      if (workspaceRoots.size !== 1) return false;
 
       const dependencyState = yield* inspectWorktreeNodeDependencies(canonicalWorktreePath);
-      if (!dependencyState.hasPackageManifest || !dependencyState.hasNodeModules) {
-        return false;
+      let didClean = false;
+      if (dependencyState.hasPackageManifest && dependencyState.hasNodeModules) {
+        const ignored = yield* git.execute({
+          operation: "WorktreeDependencyMaintenance.checkIgnored",
+          cwd: canonicalWorktreePath,
+          args: ["check-ignore", "-q", "--", "node_modules"],
+          allowNonZeroExit: true,
+          timeoutMs: 20_000,
+          maxOutputBytes: 1_024,
+        });
+        if (ignored.exitCode === 0) {
+          const becameActive = (yield* Effect.forEach(threads, (thread) =>
+            projectionSnapshotQuery.getThreadShellById(thread.id),
+          )).some(Option.isSome);
+          const hasRunningTerminal = (yield* Effect.forEach(threads, (thread) =>
+            terminalManager.hasRunningSession(thread.id),
+          )).some(Boolean);
+          if (becameActive || hasRunningTerminal) return false;
+
+          yield* removeWorktreeNodeDependencies(path.join(canonicalWorktreePath, "node_modules"));
+          yield* Effect.logInfo("archived worktree dependencies pruned", {
+            worktreePath: canonicalWorktreePath,
+            threadIds: threads.map((thread) => thread.id),
+          });
+          didClean = true;
+        }
       }
 
-      const ignored = yield* git.execute({
-        operation: "WorktreeDependencyMaintenance.checkIgnored",
-        cwd: canonicalWorktreePath,
-        args: ["check-ignore", "-q", "--", "node_modules"],
+      if (
+        retainedWorktreePaths.has(worktreePath) ||
+        removedWorktreeCount >= MAX_WORKTREE_REMOVALS_PER_SWEEP
+      ) {
+        return didClean;
+      }
+
+      const branch = threads[0]?.branch;
+      if (!branch || threads.some((thread) => thread.branch !== branch)) return didClean;
+
+      const workspaceRoot = [...workspaceRoots][0];
+      if (!workspaceRoot) return didClean;
+      const branchExists = yield* git.execute({
+        operation: "WorktreeDependencyMaintenance.checkBranch",
+        cwd: workspaceRoot,
+        args: ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`],
         allowNonZeroExit: true,
         timeoutMs: 20_000,
         maxOutputBytes: 1_024,
       });
-      if (ignored.exitCode !== 0) {
-        return false;
+      if (branchExists.exitCode !== 0) return didClean;
+
+      const status = yield* git.execute({
+        operation: "WorktreeDependencyMaintenance.checkStatus",
+        cwd: canonicalWorktreePath,
+        args: ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"],
+        allowNonZeroExit: true,
+        timeoutMs: 20_000,
+        maxOutputBytes: 64 * 1_024,
+      });
+      if (
+        status.exitCode !== 0 ||
+        status.stdoutTruncated ||
+        status.stderrTruncated ||
+        hasProtectedWorktreeState(status.stdout)
+      ) {
+        yield* Effect.logInfo("archived worktree retained due to local state", {
+          worktreePath: canonicalWorktreePath,
+          threadIds: threads.map((thread) => thread.id),
+        });
+        return didClean;
       }
 
       const becameActive = (yield* Effect.forEach(threads, (thread) =>
@@ -183,12 +275,14 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
       const hasRunningTerminal = (yield* Effect.forEach(threads, (thread) =>
         terminalManager.hasRunningSession(thread.id),
       )).some(Boolean);
-      if (becameActive || hasRunningTerminal) {
-        return false;
-      }
+      if (becameActive || hasRunningTerminal) return didClean;
 
-      yield* removeWorktreeNodeDependencies(path.join(canonicalWorktreePath, "node_modules"));
-      yield* Effect.logInfo("archived worktree dependencies pruned", {
+      yield* git.removeWorktree({
+        cwd: workspaceRoot,
+        path: canonicalWorktreePath,
+      });
+      removedWorktreeCount += 1;
+      yield* Effect.logInfo("archived worktree removed", {
         worktreePath: canonicalWorktreePath,
         threadIds: threads.map((thread) => thread.id),
       });
@@ -197,7 +291,7 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.failCause(cause)
-          : Effect.logWarning("archived worktree dependency cleanup skipped", {
+          : Effect.logWarning("archived worktree maintenance skipped", {
               worktreePath,
               cause: Cause.pretty(cause),
             }).pipe(Effect.as(false)),
@@ -216,15 +310,17 @@ export const startArchivedWorktreeDependencyMaintenance = Effect.gen(function* (
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.failCause(cause)
-          : Effect.logWarning("archived worktree dependency sweep failed", {
+          : Effect.logWarning("archived worktree maintenance sweep failed", {
               cause: Cause.pretty(cause),
             }),
       ),
       Effect.repeat(Schedule.spaced(SWEEP_INTERVAL)),
     ),
   );
-  yield* Effect.logInfo("archived worktree dependency maintenance started", {
+  yield* Effect.logInfo("archived worktree maintenance started", {
     archiveGraceMs: ARCHIVE_GRACE_MS,
+    retainedArchivedWorktreeCount: RETAINED_ARCHIVED_WORKTREE_COUNT,
+    maxWorktreeRemovalsPerSweep: MAX_WORKTREE_REMOVALS_PER_SWEEP,
     sweepIntervalMs: Duration.toMillis(SWEEP_INTERVAL),
   });
 });

@@ -59,6 +59,28 @@ const makeThread = (
   hasActionableProposedPlan: false,
 });
 
+const makeProject = (workspaceRoot: string): OrchestrationProjectShell => ({
+  id: projectId,
+  kind: "workspace",
+  title: "Dependency maintenance",
+  workspaceRoot,
+  defaultModelSelection: modelSelection,
+  defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
+  newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
+  textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+  scripts: [
+    {
+      id: "setup",
+      name: "Setup",
+      command: "vp install",
+      icon: "configure",
+      runOnWorktreeCreate: true,
+    },
+  ],
+  createdAt: "1960-01-01T00:00:00.000Z",
+  updatedAt: "1960-01-01T00:00:00.000Z",
+});
+
 it.effect("prunes only inactive ignored node_modules from archived worktrees", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -93,27 +115,7 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
       yield* fileSystem.writeFileString(path.join(electronResourcesPath, "default_app.asar"), "{}");
       const canonicalUnignoredPath = yield* fileSystem.realPath(unignoredPath);
 
-      const project: OrchestrationProjectShell = {
-        id: projectId,
-        kind: "workspace",
-        title: "Dependency maintenance",
-        workspaceRoot,
-        defaultModelSelection: modelSelection,
-        defaultThreadEnvMode: DEFAULT_PROJECT_THREAD_ENV_MODE,
-        newWorktreesStartFromOrigin: DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
-        textGenerationModelSelection: DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
-        scripts: [
-          {
-            id: "setup",
-            name: "Setup",
-            command: "vp install",
-            icon: "configure",
-            runOnWorktreeCreate: true,
-          },
-        ],
-        createdAt: "1960-01-01T00:00:00.000Z",
-        updatedAt: "1960-01-01T00:00:00.000Z",
-      };
+      const project = makeProject(workspaceRoot);
       const archivedThreads = [
         makeThread("eligible", eligiblePath),
         makeThread("active-archive", activePath),
@@ -164,6 +166,90 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
       assert.isTrue(yield* fileSystem.exists(path.join(activePath, "node_modules")));
       assert.isTrue(yield* fileSystem.exists(path.join(terminalPath, "node_modules")));
       assert.isTrue(yield* fileSystem.exists(path.join(unignoredPath, "node_modules")));
+    }),
+  ).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("removes only clean archived worktrees beyond the retained 15", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "mognet-worktree-retention-",
+      });
+      const workspaceRoot = path.join(root, "project");
+      yield* fileSystem.makeDirectory(workspaceRoot);
+      const canonicalWorkspaceRoot = yield* fileSystem.realPath(workspaceRoot);
+
+      const worktreePaths: string[] = [];
+      for (let index = 0; index < 27; index += 1) {
+        const worktreePath = path.join(root, `worktree-${index}`);
+        yield* fileSystem.makeDirectory(worktreePath);
+        worktreePaths.push(yield* fileSystem.realPath(worktreePath));
+      }
+      const archivedThreads = worktreePaths.map((worktreePath, index) =>
+        makeThread(
+          `thread-${index}`,
+          worktreePath,
+          `1960-01-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+        ),
+      );
+      const removeWorktree = vi.fn(
+        (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["removeWorktree"]>[0]) => Effect.void,
+      );
+
+      const cleanedCount = yield* sweepArchivedWorktreeDependencies.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
+              getArchivedShellSnapshot: () =>
+                Effect.succeed({
+                  snapshotSequence: 1,
+                  projects: [makeProject(workspaceRoot)],
+                  threads: archivedThreads,
+                  updatedAt: "1960-01-28T00:00:00.000Z",
+                }),
+              getShellSnapshot: () =>
+                Effect.succeed({
+                  snapshotSequence: 1,
+                  projects: [],
+                  threads: [],
+                  updatedAt: "1960-01-28T00:00:00.000Z",
+                }),
+              getThreadShellById: () => Effect.succeed(Option.none()),
+            }),
+            Layer.mock(TerminalManager.TerminalManager)({
+              hasRunningSession: () => Effect.succeed(false),
+            }),
+            Layer.mock(GitVcsDriver.GitVcsDriver)({
+              execute: ({ operation, cwd }) =>
+                Effect.succeed({
+                  exitCode: ChildProcessSpawner.ExitCode(0),
+                  stdout:
+                    operation === "WorktreeDependencyMaintenance.checkStatus"
+                      ? cwd === worktreePaths[0]
+                        ? "!! .env\0"
+                        : "!! apps/web/node_modules/\0!! .vite-hooks/_/pre-commit\0"
+                      : "",
+                  stderr: "",
+                  stdoutTruncated: false,
+                  stderrTruncated: false,
+                }),
+              removeWorktree,
+            }),
+          ),
+        ),
+      );
+
+      assert.equal(cleanedCount, 10);
+      assert.deepEqual(
+        removeWorktree.mock.calls.map(([input]) => input),
+        worktreePaths.slice(1, 11).map((worktreePath) => ({
+          cwd: canonicalWorkspaceRoot,
+          path: worktreePath,
+        })),
+      );
     }),
   ).pipe(Effect.provide(NodeServices.layer)),
 );
