@@ -1,7 +1,21 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ThreadArchiveBlockedError } from "./useThreadActions";
+import { getArchiveWorktreeChangesWarning, ThreadArchiveBlockedError } from "./useThreadActions";
+
+describe("getArchiveWorktreeChangesWarning", () => {
+  it("warns only when archiving would leave local changes disposable", () => {
+    expect(getArchiveWorktreeChangesWarning("/tmp/worktrees/feature-a", false)).toBeNull();
+    expect(getArchiveWorktreeChangesWarning("/tmp/worktrees/feature-a", true)).toBe(
+      [
+        'Worktree "feature-a" has uncommitted changes.',
+        "Archiving makes it eligible for automatic cleanup, which may permanently discard them.",
+        "",
+        "Archive anyway?",
+      ].join("\n"),
+    );
+  });
+});
 
 describe("ThreadArchiveBlockedError", () => {
   it("keeps the blocked thread context with the fixed message", () => {

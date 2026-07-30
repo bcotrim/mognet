@@ -94,6 +94,27 @@ export class ThreadSnoozeBlockedError extends Schema.TaggedErrorClass<ThreadSnoo
   }
 }
 
+export function getArchiveWorktreeChangesWarning(
+  worktreePath: string,
+  hasWorkingTreeChanges: boolean,
+): string | null {
+  return hasWorkingTreeChanges
+    ? [
+        `Worktree "${formatWorktreePathForDisplay(worktreePath)}" has uncommitted changes.`,
+        "Archiving makes it eligible for automatic cleanup, which may permanently discard them.",
+        "",
+        "Archive anyway?",
+      ].join("\n")
+    : null;
+}
+
+function readEnvironmentThreads(environmentId: EnvironmentId) {
+  return readEnvironmentThreadRefs(environmentId).flatMap((ref) => {
+    const thread = readThreadShell(ref);
+    return thread === null ? [] : [thread];
+  });
+}
+
 export function useThreadActions() {
   const closeTerminal = useAtomCommand(terminalEnvironment.close);
   const archiveThreadMutation = useAtomCommand(threadEnvironment.archive, {
@@ -171,6 +192,37 @@ export function useThreadActions() {
         );
       }
 
+      const disposableWorktreePath = getOrphanedWorktreePathForThread(
+        readEnvironmentThreads(threadRef.environmentId),
+        threadRef.threadId,
+      );
+      if (disposableWorktreePath !== null) {
+        const statusResult = await refreshVcsStatus({
+          environmentId: threadRef.environmentId,
+          input: { cwd: disposableWorktreePath },
+        });
+        if (statusResult._tag === "Failure") {
+          return statusResult;
+        }
+        const warning = getArchiveWorktreeChangesWarning(
+          disposableWorktreePath,
+          statusResult.value.hasWorkingTreeChanges,
+        );
+        if (warning !== null) {
+          const localApi = readLocalApi();
+          if (!localApi) {
+            return AsyncResult.success(undefined);
+          }
+          const confirmationResult = await settlePromise(() => localApi.dialogs.confirm(warning));
+          if (confirmationResult._tag === "Failure") {
+            return confirmationResult;
+          }
+          if (!confirmationResult.value) {
+            return AsyncResult.success(undefined);
+          }
+        }
+      }
+
       const currentRouteThreadRef = getCurrentRouteThreadRef();
       const shouldNavigateToDraft =
         currentRouteThreadRef?.threadId === threadRef.threadId &&
@@ -197,7 +249,7 @@ export function useThreadActions() {
 
       return archiveResult;
     },
-    [archiveThreadMutation, getCurrentRouteThreadRef, resolveThreadTarget],
+    [archiveThreadMutation, getCurrentRouteThreadRef, refreshVcsStatus, resolveThreadTarget],
   );
 
   const unarchiveThread = useCallback(
@@ -229,10 +281,7 @@ export function useThreadActions() {
         return result;
       }
       const { thread, threadRef } = resolved;
-      const threads = readEnvironmentThreadRefs(threadRef.environmentId).flatMap((ref) => {
-        const shell = readThreadShell(ref);
-        return shell === null ? [] : [shell];
-      });
+      const threads = readEnvironmentThreads(threadRef.environmentId);
       const threadProject = readProject({
         environmentId: threadRef.environmentId,
         projectId: thread.projectId,
