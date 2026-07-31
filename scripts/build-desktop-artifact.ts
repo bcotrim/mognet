@@ -1225,6 +1225,15 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       executableName: "mognet",
       icon: "icons",
       category: "Development",
+      // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
+      // in the .desktop entry (Exec already gets %U), so browsers can hand
+      // mognet:// callbacks to the app.
+      protocols: [
+        {
+          name: "Mognet",
+          schemes: ["mognet"],
+        },
+      ],
       desktop: {
         entry: {
           StartupWMClass: "mognet",
