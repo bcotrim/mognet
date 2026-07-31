@@ -240,6 +240,7 @@ function testLayer(
         threads: [],
         updatedAt: now,
       }),
+    searchThreads: () => Effect.succeed({ matches: [] }),
     getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 1 }),
     getCounts: () => Effect.succeed({ projectCount: projects.length, threadCount: threads.length }),
     getActiveProjectByWorkspaceRoot: (workspaceRoot) => {

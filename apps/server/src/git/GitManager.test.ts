@@ -670,6 +670,7 @@ function makeManager(input?: {
       getSnapshot: () => Effect.die("unused"),
       getShellSnapshot: () => Effect.die("unused"),
       getArchivedShellSnapshot: () => Effect.die("unused"),
+      searchThreads: () => Effect.succeed({ matches: [] }),
       getSnapshotSequence: () => Effect.die("unused"),
       getCounts: () => Effect.die("unused"),
       getActiveProjectByWorkspaceRoot: (workspaceRoot) =>
