@@ -56,7 +56,7 @@ describe("ElectronProtocol", () => {
           assert.equal(yield* Effect.promise(() => response.text()), "ok");
           assert.include(
             response.headers.get("content-security-policy") ?? "",
-            "script-src 'self' 'unsafe-inline'",
+            "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
           );
           assert.include(
             response.headers.get("content-security-policy") ?? "",
@@ -203,7 +203,7 @@ describe("ElectronProtocol", () => {
       }),
     );
 
-    assert.deepEqual(directives["script-src"], ["'self'", "'unsafe-inline'"]);
+    assert.deepEqual(directives["script-src"], ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"]);
     assert.deepEqual(directives["connect-src"], ["'self'", "http:", "https:", "ws:", "wss:"]);
     assert.deepEqual(directives["img-src"], [
       "'self'",

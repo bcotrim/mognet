@@ -41,6 +41,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 
@@ -365,7 +366,7 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
   return (
     <>
       <SettingsRow
-        title="New threads"
+        {...searchableSetting("project-new-threads")}
         description="Choose whether new threads start in the project checkout or a new worktree."
         status={option.environmentLabel ? `Environment: ${option.environmentLabel}` : null}
         control={
@@ -395,7 +396,7 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
       />
 
       <SettingsRow
-        title="Default branch"
+        {...searchableSetting("project-default-branch")}
         description="Use this branch when starting new threads instead of inheriting the current thread branch."
         control={
           <Input
@@ -417,7 +418,7 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
       {projectSettings.defaultThreadEnvMode === "worktree" ? (
         <SettingsRow
           className="bg-muted/20 sm:pl-9"
-          title="Start from origin"
+          {...searchableSetting("project-start-from-origin")}
           description="Create new worktrees from the latest matching branch on origin instead of your local branch."
           control={
             <Switch
@@ -430,7 +431,7 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
       ) : null}
 
       <SettingsRow
-        title="Default model"
+        {...searchableSetting("project-default-model")}
         description="Used as the starting model for new threads in this project."
         control={
           <ProjectModelSelectionControl
@@ -444,7 +445,7 @@ function ProjectDefaultsSettings({ option }: { option: ProjectOption }) {
       />
 
       <SettingsRow
-        title="Text generation model"
+        {...searchableSetting("project-text-generation-model")}
         description="Used for generated thread titles, worktree branch names, and similar project text."
         control={
           <ProjectModelSelectionControl
