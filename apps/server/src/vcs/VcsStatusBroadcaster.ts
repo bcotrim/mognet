@@ -388,6 +388,18 @@ export const make = Effect.gen(function* () {
     return Effect.gen(function* () {
       const consecutiveFailuresRef = yield* Ref.make(0);
       const needsInitialRefreshRef = yield* Ref.make(refreshImmediately);
+      const shouldRunRemoteRefresh = Effect.gen(function* () {
+        const demandCwds = yield* Ref.get(demandCwdsRef);
+        return (yield* Effect.all(
+          [...demandCwds.keys()].map((demandCwd) =>
+            backgroundPolicy.shouldRunScopeWork({
+              type: "vcs-status",
+              cwd: demandCwd,
+            }),
+          ),
+          { concurrency: "unbounded" },
+        )).some(Boolean);
+      });
       const refreshRemoteStatusIfEnabled = Effect.gen(function* () {
         const configuredInterval = yield* automaticRemoteRefreshInterval;
         const activeInterval = Duration.isZero(configuredInterval)
@@ -398,20 +410,17 @@ export const make = Effect.gen(function* () {
           return activeInterval;
         }
 
-        const demandCwds = yield* Ref.get(demandCwdsRef);
-        const shouldRun =
-          needsInitialRefresh ||
-          (yield* Effect.all(
-            [...demandCwds.keys()].map((demandCwd) =>
-              backgroundPolicy.shouldRunScopeWork({
-                type: "vcs-status",
-                cwd: demandCwd,
-              }),
-            ),
-            { concurrency: "unbounded" },
-          )).some(Boolean);
-        if (!shouldRun) {
-          return activeInterval;
+        if (!needsInitialRefresh && !(yield* shouldRunRemoteRefresh)) {
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const { changes } = yield* backgroundPolicy.subscribe;
+              if (yield* shouldRunRemoteRefresh) return;
+              yield* Stream.concat(changes, Stream.never).pipe(
+                Stream.filterEffect(() => shouldRunRemoteRefresh),
+                Stream.runHead,
+              );
+            }),
+          );
         }
 
         const exit = yield* refreshRemoteStatus(cwd, {
