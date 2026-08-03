@@ -45,13 +45,13 @@ function expectResponsiveXsControl(markup: string | undefined) {
 }
 
 describe("ProjectScriptsControl compact controls", () => {
-  it("keeps the primary Run control compact and expands it with its label", () => {
+  it("keeps the primary Run control icon-only", () => {
     const html = renderControl([PRIMARY_SCRIPT]);
+    const button = buttonTag(html, "Run Dev");
 
-    expectResponsiveXsControl(buttonTag(html, "Run Dev"));
-    expect(html).toContain(
-      'class="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5"',
-    );
+    expect(button).toContain("size-7");
+    expect(button).toContain("sm:size-6");
+    expect(html).not.toContain(">Run Dev<");
   });
 
   it("keeps the standalone Add control compact and expands it with its label", () => {
