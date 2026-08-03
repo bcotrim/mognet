@@ -11,6 +11,7 @@
     "dev:desktop": "node scripts/dev-runner.ts dev:desktop",
     "start": "vp run --filter t3 start",
     "start:desktop": "vp run --filter @t3tools/desktop start",
+    "update:desktop": "bash scripts/update-desktop.sh",
     "start:mock-update-server": "node scripts/mock-update-server.ts",
     "build": "vp run --filter './apps/*' --filter './packages/*' --filter './oxlint-plugin-t3code' --filter './scripts' build",
     "build:full": "vp run --filter './apps/*' --filter './packages/*' --filter './oxlint-plugin-t3code' --filter './scripts' build",
