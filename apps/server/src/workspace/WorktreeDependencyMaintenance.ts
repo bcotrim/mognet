@@ -13,6 +13,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProviderSessionDirectory from "../provider/Services/ProviderSessionDirectory.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 
@@ -92,13 +93,20 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const providerSessionDirectory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const terminalManager = yield* TerminalManager.TerminalManager;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const now = yield* Clock.currentTimeMillis;
-  const [archivedSnapshot, activeSnapshot] = yield* Effect.all([
+  const [archivedSnapshot, activeSnapshot, providerBindings] = yield* Effect.all([
     projectionSnapshotQuery.getArchivedShellSnapshot(),
     projectionSnapshotQuery.getShellSnapshot(),
+    providerSessionDirectory.listBindings(),
   ]);
+  const activeProviderThreadIds = new Set(
+    providerBindings
+      .filter((binding) => binding.status !== "stopped")
+      .map((binding) => binding.threadId),
+  );
 
   const canonicalizeRecordedPath = (recordedPath: string) => {
     const resolvedPath = path.resolve(recordedPath);
@@ -152,7 +160,7 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
             !Number.isFinite(archivedAt) ||
             now - archivedAt < ARCHIVE_GRACE_MS ||
             thread.latestTurn?.state === "running" ||
-            (thread.session !== null && thread.session.status !== "stopped")
+            activeProviderThreadIds.has(thread.id)
           );
         })
       ) {
