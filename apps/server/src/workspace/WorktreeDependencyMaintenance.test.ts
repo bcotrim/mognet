@@ -7,6 +7,7 @@ import {
   type OrchestrationProjectShell,
   type OrchestrationThreadShell,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -20,6 +21,7 @@ import * as Path from "effect/Path";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProviderSessionDirectory from "../provider/Services/ProviderSessionDirectory.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import {
@@ -28,6 +30,7 @@ import {
 } from "./WorktreeDependencyMaintenance.ts";
 
 const projectId = ProjectId.make("project-dependency-maintenance");
+const provider = ProviderDriverKind.make("codex");
 const modelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: "gpt-5-codex",
@@ -147,6 +150,9 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
               hasRunningSession: (threadId) =>
                 Effect.succeed(threadId === ThreadId.make("terminal")),
             }),
+            Layer.mock(ProviderSessionDirectory.ProviderSessionDirectory)({
+              listBindings: () => Effect.succeed([]),
+            }),
             Layer.mock(GitVcsDriver.GitVcsDriver)({
               execute: ({ cwd }) =>
                 Effect.succeed({
@@ -170,7 +176,7 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
   ).pipe(Effect.provide(NodeServices.layer)),
 );
 
-it.effect("force-removes the oldest archived worktrees beyond the retained 15", () =>
+it.effect("uses runtime session state when removing the oldest archived worktrees", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -195,6 +201,19 @@ it.effect("force-removes the oldest archived worktrees beyond the retained 15", 
           `1960-01-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
         ),
       );
+      archivedThreads[0] = {
+        ...archivedThreads[0]!,
+        session: {
+          threadId: archivedThreads[0]!.id,
+          status: "ready",
+          providerName: provider,
+          providerInstanceId: modelSelection.instanceId,
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: "1960-01-01T00:00:00.000Z",
+        },
+      };
       const removeWorktree = vi.fn(
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["removeWorktree"]>[0]) => Effect.void,
       );
@@ -222,6 +241,25 @@ it.effect("force-removes the oldest archived worktrees beyond the retained 15", 
             Layer.mock(TerminalManager.TerminalManager)({
               hasRunningSession: () => Effect.succeed(false),
             }),
+            Layer.mock(ProviderSessionDirectory.ProviderSessionDirectory)({
+              listBindings: () =>
+                Effect.succeed([
+                  {
+                    threadId: archivedThreads[0]!.id,
+                    provider,
+                    providerInstanceId: modelSelection.instanceId,
+                    status: "stopped",
+                    lastSeenAt: "1960-01-01T00:00:00.000Z",
+                  },
+                  {
+                    threadId: archivedThreads[1]!.id,
+                    provider,
+                    providerInstanceId: modelSelection.instanceId,
+                    status: "running",
+                    lastSeenAt: "1960-01-01T00:00:00.000Z",
+                  },
+                ]),
+            }),
             Layer.mock(GitVcsDriver.GitVcsDriver)({
               execute: () =>
                 Effect.succeed({
@@ -238,9 +276,10 @@ it.effect("force-removes the oldest archived worktrees beyond the retained 15", 
       );
 
       assert.equal(cleanedCount, 10);
+      const expectedRemovedPaths = [worktreePaths[0]!, ...worktreePaths.slice(2, 11)];
       assert.deepEqual(
         removeWorktree.mock.calls.map(([input]) => input),
-        worktreePaths.slice(0, 10).map((worktreePath) => ({
+        expectedRemovedPaths.map((worktreePath) => ({
           cwd: canonicalWorkspaceRoot,
           path: worktreePath,
           force: true,
