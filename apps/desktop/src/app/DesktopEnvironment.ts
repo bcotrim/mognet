@@ -66,6 +66,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly appUserModelId: string;
     readonly linuxDesktopEntryName: string;
     readonly linuxWmClass: string;
+    readonly linuxApplicationsDir: string;
+    readonly appImagePath: Option.Option<string>;
     readonly userDataDirName: string;
     readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
@@ -165,6 +167,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const legacyUserDataDirName = isDevelopment
     ? `${APP_BASE_NAME} (Dev)`
     : `${APP_BASE_NAME} (${LEGACY_PRODUCTION_STAGE_LABEL})`;
+  const linuxApplicationsDir = path.join(
+    Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
+    "applications",
+  );
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
@@ -208,6 +214,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     ),
     linuxDesktopEntryName: isDevelopment ? "mognet-dev.desktop" : "mognet.desktop",
     linuxWmClass: isDevelopment ? "mognet-dev" : "mognet",
+    linuxApplicationsDir,
+    appImagePath: config.appImagePath,
     userDataDirName,
     legacyUserDataDirName,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),
