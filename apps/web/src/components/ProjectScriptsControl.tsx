@@ -339,18 +339,14 @@ export default function ProjectScriptsControl({
             <TooltipTrigger
               render={
                 <Button
-                  size="xs"
+                  size="icon-xs"
                   variant="outline"
-                  className="w-7 px-0 sm:w-6 @3xl/header-actions:w-auto! @3xl/header-actions:px-[calc(--spacing(2)-1px)]"
                   aria-label={`Run ${primaryScript.name}`}
                   onClick={() => onRunScript(primaryScript)}
                 />
               }
             >
               <ScriptIcon icon={primaryScript.icon} />
-              <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
-                Run {primaryScript.name}
-              </span>
             </TooltipTrigger>
             <TooltipPopup side="top">Run {primaryScript.name}</TooltipPopup>
           </Tooltip>
