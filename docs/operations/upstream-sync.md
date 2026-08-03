@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `e60821f0e`
-- Reviewed on: `2026-08-02`
+- Last reviewed upstream commit: `30c962280`
+- Reviewed on: `2026-08-03`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
