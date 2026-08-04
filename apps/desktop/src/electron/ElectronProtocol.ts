@@ -27,6 +27,12 @@ export function registerDesktopSchemesAsPrivileged(): void {
   ]);
 }
 
+export const layerSchemePrivileges = Layer.effectDiscard(
+  Effect.sync(registerDesktopSchemesAsPrivileged).pipe(
+    Effect.withSpan("desktop.electron.protocol.registerSchemePrivileges"),
+  ),
+);
+
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
