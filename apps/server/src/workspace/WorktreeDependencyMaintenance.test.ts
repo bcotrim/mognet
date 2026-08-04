@@ -4,6 +4,7 @@ import {
   DEFAULT_PROJECT_NEW_WORKTREES_START_FROM_ORIGIN,
   DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
   DEFAULT_PROJECT_THREAD_ENV_MODE,
+  type OrchestrationCommand,
   type OrchestrationProjectShell,
   type OrchestrationThreadShell,
   ProjectId,
@@ -21,6 +22,7 @@ import * as Path from "effect/Path";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProviderSessionDirectory from "../provider/Services/ProviderSessionDirectory.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
@@ -146,6 +148,9 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
                 }),
               getThreadShellById: () => Effect.succeed(Option.none()),
             }),
+            Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
+              dispatch: () => Effect.die("thread deletion is not expected"),
+            }),
             Layer.mock(TerminalManager.TerminalManager)({
               hasRunningSession: (threadId) =>
                 Effect.succeed(threadId === ThreadId.make("terminal")),
@@ -176,7 +181,7 @@ it.effect("prunes only inactive ignored node_modules from archived worktrees", (
   ).pipe(Effect.provide(NodeServices.layer)),
 );
 
-it.effect("uses runtime session state when removing the oldest archived worktrees", () =>
+it.effect("retires missing and oldest inactive worktrees with their archived threads", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -184,15 +189,18 @@ it.effect("uses runtime session state when removing the oldest archived worktree
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "mognet-worktree-retention-",
       });
-      const workspaceRoot = path.join(root, "project");
+      const canonicalRoot = yield* fileSystem.realPath(root);
+      const workspaceRoot = path.join(canonicalRoot, "project");
       yield* fileSystem.makeDirectory(workspaceRoot);
       const canonicalWorkspaceRoot = yield* fileSystem.realPath(workspaceRoot);
 
       const worktreePaths: string[] = [];
       for (let index = 0; index < 27; index += 1) {
-        const worktreePath = path.join(root, `worktree-${index}`);
-        yield* fileSystem.makeDirectory(worktreePath);
-        worktreePaths.push(yield* fileSystem.realPath(worktreePath));
+        const worktreePath = path.join(canonicalRoot, `worktree-${index}`);
+        if (index > 0) {
+          yield* fileSystem.makeDirectory(worktreePath);
+        }
+        worktreePaths.push(worktreePath);
       }
       const archivedThreads = worktreePaths.map((worktreePath, index) =>
         makeThread(
@@ -217,6 +225,7 @@ it.effect("uses runtime session state when removing the oldest archived worktree
       const removeWorktree = vi.fn(
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["removeWorktree"]>[0]) => Effect.void,
       );
+      const dispatchedCommands: OrchestrationCommand[] = [];
 
       const cleanedCount = yield* sweepArchivedWorktreeDependencies.pipe(
         Effect.provide(
@@ -237,6 +246,13 @@ it.effect("uses runtime session state when removing the oldest archived worktree
                   updatedAt: "1960-01-28T00:00:00.000Z",
                 }),
               getThreadShellById: () => Effect.succeed(Option.none()),
+            }),
+            Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  dispatchedCommands.push(command);
+                  return { sequence: dispatchedCommands.length };
+                }),
             }),
             Layer.mock(TerminalManager.TerminalManager)({
               hasRunningSession: () => Effect.succeed(false),
@@ -275,8 +291,8 @@ it.effect("uses runtime session state when removing the oldest archived worktree
         ),
       );
 
-      assert.equal(cleanedCount, 10);
-      const expectedRemovedPaths = [worktreePaths[0]!, ...worktreePaths.slice(2, 11)];
+      assert.equal(cleanedCount, 11);
+      const expectedRemovedPaths = worktreePaths.slice(2, 12);
       assert.deepEqual(
         removeWorktree.mock.calls.map(([input]) => input),
         expectedRemovedPaths.map((worktreePath) => ({
@@ -284,6 +300,16 @@ it.effect("uses runtime session state when removing the oldest archived worktree
           path: worktreePath,
           force: true,
         })),
+      );
+      assert.deepEqual(
+        dispatchedCommands.map((command) => command.type),
+        Array.from({ length: 11 }, () => "thread.delete"),
+      );
+      assert.deepEqual(
+        dispatchedCommands.map((command) =>
+          command.type === "thread.delete" ? command.threadId : null,
+        ),
+        [archivedThreads[0]!.id, ...archivedThreads.slice(2, 12).map((thread) => thread.id)],
       );
     }),
   ).pipe(Effect.provide(NodeServices.layer)),

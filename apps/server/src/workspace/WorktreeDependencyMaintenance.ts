@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - Electron's original-fs avoids patched .asar traversal.
+import { CommandId } from "@t3tools/contracts";
 import { setupProjectScript } from "@t3tools/shared/projectScripts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -13,6 +14,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProviderSessionDirectory from "../provider/Services/ProviderSessionDirectory.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
@@ -93,6 +95,7 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
   const providerSessionDirectory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const terminalManager = yield* TerminalManager.TerminalManager;
   const git = yield* GitVcsDriver.GitVcsDriver;
@@ -124,6 +127,17 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
   const projectsById = new Map(
     archivedSnapshot.projects.map((project) => [project.id, project] as const),
   );
+  const deleteArchivedThreads = (threads: (typeof archivedSnapshot.threads)[number][]) =>
+    Effect.forEach(
+      threads,
+      (thread) =>
+        orchestrationEngine.dispatch({
+          type: "thread.delete",
+          commandId: CommandId.make(`server:archived-worktree-delete:${thread.id}`),
+          threadId: thread.id,
+        }),
+      { concurrency: 1, discard: true },
+    );
   const threadsByWorktreePath = new Map<string, (typeof archivedSnapshot.threads)[number][]>();
 
   for (const thread of archivedSnapshot.threads) {
@@ -152,7 +166,6 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
       if (
         path.dirname(worktreePath) === worktreePath ||
         activeWorktreePaths.has(worktreePath) ||
-        !(yield* fileSystem.exists(worktreePath)) ||
         threads.some((thread) => {
           const archivedAt =
             thread.archivedAt === null ? Number.NaN : Date.parse(thread.archivedAt);
@@ -179,21 +192,26 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
         return false;
       }
 
-      const canonicalWorktreePath = yield* fileSystem.realPath(worktreePath);
+      const worktreeExists = yield* fileSystem.exists(worktreePath);
+      const canonicalWorktreePath = worktreeExists
+        ? yield* fileSystem.realPath(worktreePath)
+        : path.resolve(worktreePath);
       const workspaceRoots = new Set<string>();
       for (const project of projects) {
         if (project === undefined) return false;
         const workspaceRoot = yield* fileSystem.realPath(path.resolve(project.workspaceRoot));
         workspaceRoots.add(workspaceRoot);
-        if (canonicalWorktreePath === workspaceRoot) {
+        if (worktreeExists && canonicalWorktreePath === workspaceRoot) {
           return false;
         }
       }
       if (workspaceRoots.size !== 1) return false;
 
-      const dependencyState = yield* inspectWorktreeNodeDependencies(canonicalWorktreePath);
       let didClean = false;
-      if (dependencyState.hasPackageManifest && dependencyState.hasNodeModules) {
+      const dependencyState = worktreeExists
+        ? yield* inspectWorktreeNodeDependencies(canonicalWorktreePath)
+        : null;
+      if (dependencyState?.hasPackageManifest && dependencyState.hasNodeModules) {
         const ignored = yield* git.execute({
           operation: "WorktreeDependencyMaintenance.checkIgnored",
           cwd: canonicalWorktreePath,
@@ -227,6 +245,15 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
         return didClean;
       }
 
+      if (!worktreeExists) {
+        yield* deleteArchivedThreads(threads);
+        yield* Effect.logInfo("retired archived worktree threads deleted", {
+          worktreePath: canonicalWorktreePath,
+          threadIds: threads.map((thread) => thread.id),
+        });
+        return true;
+      }
+
       const branch = threads[0]?.branch;
       if (!branch || threads.some((thread) => thread.branch !== branch)) return didClean;
 
@@ -256,6 +283,7 @@ export const sweepArchivedWorktreeDependencies = Effect.gen(function* () {
         force: true,
       });
       removedWorktreeCount += 1;
+      yield* deleteArchivedThreads(threads);
       yield* Effect.logInfo("archived worktree removed", {
         worktreePath: canonicalWorktreePath,
         threadIds: threads.map((thread) => thread.id),
