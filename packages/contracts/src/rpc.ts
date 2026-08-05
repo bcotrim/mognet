@@ -45,6 +45,8 @@ import {
   VcsStatusStreamEvent,
 } from "./git.ts";
 import {
+  ReviewDiffFileContentsInput,
+  ReviewDiffFileContentsResult,
   ReviewDiffPreviewError,
   ReviewDiffPreviewInput,
   ReviewDiffPreviewResult,
@@ -210,6 +212,7 @@ export const WS_METHODS = {
   reviewGetSnapshot: "review.getSnapshot",
   reviewListSnapshots: "review.listSnapshots",
   reviewRefreshSnapshot: "review.refreshSnapshot",
+  reviewGetDiffFileContents: "review.getDiffFileContents",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -615,6 +618,12 @@ export const WsReviewRefreshSnapshotRpc = Rpc.make(WS_METHODS.reviewRefreshSnaps
   error: Schema.Union([ReviewSnapshotRpcError, EnvironmentAuthorizationError]),
 });
 
+export const WsReviewGetDiffFileContentsRpc = Rpc.make(WS_METHODS.reviewGetDiffFileContents, {
+  payload: ReviewDiffFileContentsInput,
+  success: ReviewDiffFileContentsResult,
+  error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
@@ -890,6 +899,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsReviewGetSnapshotRpc,
   WsReviewListSnapshotsRpc,
   WsReviewRefreshSnapshotRpc,
+  WsReviewGetDiffFileContentsRpc,
   WsTerminalOpenRpc,
   WsTerminalAttachRpc,
   WsTerminalWriteRpc,
