@@ -4,7 +4,11 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { EditorId, ExternalTerminalId } from "./editor.ts";
-import { DEFAULT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
+import {
+  DEFAULT_TEXT_GENERATION_MODEL,
+  DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
+  ProviderOptionSelections,
+} from "./model.ts";
 import { ModelSelection } from "./orchestration.ts";
 import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance.ts";
 
@@ -509,6 +513,12 @@ export const ServerSettings = Schema.Struct({
       Effect.succeed({
         instanceId: ProviderInstanceId.make("codex"),
         model: DEFAULT_TEXT_GENERATION_MODEL,
+        options: [
+          {
+            id: "reasoningEffort",
+            value: DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
+          },
+        ],
       }),
     ),
   ),
