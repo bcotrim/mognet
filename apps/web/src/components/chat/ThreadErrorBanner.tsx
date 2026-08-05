@@ -13,7 +13,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   if (!error) return null;
   return (
     <div className="mx-auto w-full max-w-5xl px-3 pt-3 sm:px-5">
-      <Alert variant="error" className="[&>div]:items-start">
+      <Alert variant="error" controlAlignment="first-line">
         <CircleAlertIcon />
         <AlertTitle>Message failed</AlertTitle>
         <AlertDescription className="whitespace-pre-wrap leading-relaxed wrap-anywhere">
