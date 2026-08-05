@@ -39,7 +39,11 @@ import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { cn } from "../../lib/utils";
 import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestampFormat";
 import { resolveDesktopPairingUrl } from "./pairingUrls";
-import { applyWslEnableSelection } from "./ConnectionsSettings.logic";
+import {
+  applyWslEnableSelection,
+  isQrShareableEndpoint,
+  selectQrEndpointOption,
+} from "./ConnectionsSettings.logic";
 import {
   SettingsPageContainer,
   SettingsRow,
@@ -542,6 +546,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
     [pairingLink.expiresAt],
   );
   const [isRevealDialogOpen, setIsRevealDialogOpen] = useState(false);
+  const [qrEndpointId, setQrEndpointId] = useState<string | null>(null);
 
   const currentOriginPairingUrl = useMemo(
     () => resolveCurrentOriginPairingUrl(pairingLink.credential),
@@ -554,9 +559,12 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   const endpointCopyOptions = useMemo(() => {
     const options: Array<{
       readonly key: string;
+      readonly id: string;
+      readonly preferenceKey: string;
       readonly label: string;
       readonly url: string;
       readonly detail: string;
+      readonly qrShareable: boolean;
     }> = [];
     for (const endpoint of endpoints) {
       if (endpoint.status === "unavailable") {
@@ -565,9 +573,12 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       const url = resolveAdvertisedEndpointPairingUrl(endpoint, pairingLink.credential);
       options.push({
         key: endpointDefaultPreferenceKey(endpoint),
+        id: endpoint.id,
+        preferenceKey: endpointDefaultPreferenceKey(endpoint),
         label: endpoint.label,
         url,
         detail: "Backend pairing URL",
+        qrShareable: isQrShareableEndpoint(endpoint),
       });
     }
     return options;
@@ -579,6 +590,12 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       : isLoopbackHostname(window.location.hostname)
         ? null
         : currentOriginPairingUrl);
+  const selectedQrOption = selectQrEndpointOption(
+    endpointCopyOptions,
+    qrEndpointId,
+    defaultEndpointKey,
+  );
+  const qrPairingUrl = selectedQrOption?.url ?? shareablePairingUrl;
   const revealValue = shareablePairingUrl ?? pairingLink.credential;
   const canCopyToClipboard =
     typeof window !== "undefined" &&
@@ -715,7 +732,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
             />
             <h3 className="text-sm font-medium text-foreground">{primaryLabel}</h3>
             <Popover>
-              {shareablePairingUrl ? (
+              {qrPairingUrl ? (
                 <>
                   <PopoverTrigger
                     openOnHover
@@ -731,14 +748,34 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                   >
                     <QrCodeIcon aria-hidden className="size-3" />
                   </PopoverTrigger>
-                  <PopoverPopup side="top" align="start" tooltipStyle className="w-max">
+                  <PopoverPopup side="top" align="start" className="w-64 space-y-3 p-3">
+                    {endpointCopyOptions.length > 1 ? (
+                      <select
+                        aria-label="Endpoint used by the pairing QR code"
+                        value={selectedQrOption?.id ?? ""}
+                        onChange={(event) => setQrEndpointId(event.target.value)}
+                        className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+                      >
+                        {endpointCopyOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                    {selectedQrOption?.qrShareable ?? true ? (
                     <QRCodeSvg
-                      value={shareablePairingUrl}
-                      size={88}
+                      value={qrPairingUrl}
+                      size={216}
                       level="M"
-                      marginSize={2}
+                      marginSize={1}
                       title="Pairing link — scan to open on another device"
                     />
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Loopback links only work on this machine. Choose another endpoint to scan.
+                      </p>
+                    )}
                   </PopoverPopup>
                 </>
               ) : null}
