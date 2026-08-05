@@ -10,6 +10,7 @@ vi.mock("@pierre/diffs/react", () => ({
     testState.codeViewOptions = props.options;
     return null;
   },
+  useWorkerPool: () => null,
 }));
 
 vi.mock("~/composerDraftStore", () => ({

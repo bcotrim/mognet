@@ -763,14 +763,14 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                         ))}
                       </select>
                     ) : null}
-                    {selectedQrOption?.qrShareable ?? true ? (
-                    <QRCodeSvg
-                      value={qrPairingUrl}
-                      size={216}
-                      level="M"
-                      marginSize={1}
-                      title="Pairing link — scan to open on another device"
-                    />
+                    {(selectedQrOption?.qrShareable ?? true) ? (
+                      <QRCodeSvg
+                        value={qrPairingUrl}
+                        size={216}
+                        level="M"
+                        marginSize={1}
+                        title="Pairing link — scan to open on another device"
+                      />
                     ) : (
                       <p className="text-xs text-muted-foreground">
                         Loopback links only work on this machine. Choose another endpoint to scan.

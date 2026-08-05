@@ -561,7 +561,7 @@ export const make = Effect.gen(function* () {
   const resolveReviewSource = Effect.fn("ReviewService.resolveReviewSource")(function* (
     input: ReviewOpenSnapshotInput,
   ) {
-    yield* assertWorkspaceBoundCwd(input.cwd).pipe(
+    yield* assertWorkspaceBoundCwd("ReviewService.getDiffPreview", input.cwd).pipe(
       Effect.mapError((cause) =>
         reviewError("ReviewService.resolveReviewSource", "Invalid review workspace.", {
           threadId: input.threadId,
@@ -966,6 +966,8 @@ export const make = Effect.gen(function* () {
       },
       true,
     );
+  });
+
   const getDiffFileContents: ReviewService["Service"]["getDiffFileContents"] = Effect.fn(
     "ReviewService.getDiffFileContents",
   )(function* (input) {

@@ -613,7 +613,8 @@ export default function DiffPanel({
 
   const loadDiffFiles = useMemo<FileDiffContentsLoader | undefined>(() => {
     const preview = branchDiffPreviewData;
-    if (selectedTurnId !== null || !activeThread || !preview || !selectedGitSource) return undefined;
+    if (selectedTurnId !== null || !activeThread || !preview || !selectedGitSource)
+      return undefined;
 
     const source = selectedGitSource;
     return async (fileDiff) => {

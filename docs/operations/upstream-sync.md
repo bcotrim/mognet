@@ -16,12 +16,29 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `a261a6440`
-- Reviewed on: `2026-08-04`
+- Last reviewed upstream commit: `9697b765e5c32232e96514e38b6ecfac351d5a8f`
+- Reviewed on: `2026-08-05`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
 not merged by ancestry.
+
+### 2026-08-05 review
+
+- Ported desktop/web/server fixes through `9697b765e`, including thread pinning,
+  configurable fonts, browser and diff-panel improvements, durable titles,
+  pairing QR endpoint selection, project grouping, and terminal reliability.
+- Kept `apps/mobile` deleted while reviewing mobile-only commits `94331c58e`,
+  `70de6e178`, and `e0c85a20e`, plus the mobile portions of `da6e1a967` and
+  `47dfc6526`.
+- Skipped `2b1d4fecb` because the fork remains on Effect beta.78; a beta.103
+  upgrade needs a dedicated dependency migration rather than a broad lockfile
+  rewrite.
+- Skipped upstream self-update and release automation from `7b38fb5c6` and
+  `9697b765e` because their cloud launcher, hosted app, relay, and release
+  workflow surfaces are intentionally removed here.
+- Skipped the portal-specific composer menu change from `9235c83eb`; Mognet's
+  menu is already anchored inside the composer with CSS positioning.
 
 Every sync, including scheduled task runs, must:
 
