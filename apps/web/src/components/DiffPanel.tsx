@@ -13,7 +13,12 @@ import type {
   TurnId,
 } from "@t3tools/contracts";
 import { REVIEW_DIFF_PREVIEW_MAX_OUTPUT_BYTES } from "@t3tools/contracts";
-import type { FileDiffMetadata, SelectedLineRange, SelectionSide } from "@pierre/diffs";
+import type {
+  FileDiffContentsLoader,
+  FileDiffMetadata,
+  SelectedLineRange,
+  SelectionSide,
+} from "@pierre/diffs";
 import {
   ArrowRightIcon,
   BookOpenTextIcon,
@@ -27,6 +32,7 @@ import {
   FolderIcon,
   MessageSquareIcon,
   PilcrowIcon,
+  RefreshCwIcon,
   Rows3Icon,
   SearchIcon,
   TextWrapIcon,
@@ -98,6 +104,7 @@ import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
+import { useAtomCommand } from "../state/use-atom-command";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
 
 type DiffRenderMode = "stacked" | "split";
@@ -321,7 +328,12 @@ export default function DiffPanel({
   const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null);
   const [interactiveReviewEnabled, setInteractiveReviewEnabled] = useState(true);
   const [isTourPanelCollapsed, setTourPanelCollapsed] = useState(true);
+  const [codeViewRevision, setCodeViewRevision] = useState(0);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
+  const lastCompletedTurnRefreshRef = useRef<{
+    readonly threadKey: string | null;
+    readonly turnId: TurnId | null;
+  } | null>(null);
 
   const routeThreadRef = useParams({
     strict: false,
@@ -363,6 +375,7 @@ export default function DiffPanel({
     }
     return notesByFilePath;
   }, [activeTourStep]);
+  const getDiffFileContents = useAtomCommand(reviewEnvironment.diffFileContents);
   const gitStatusQuery = useEnvironmentQuery(
     activeThread !== null && activeThread !== undefined && activeCwd != null
       ? vcsEnvironment.status({
@@ -437,6 +450,7 @@ export default function DiffPanel({
   const collapseScopeKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${activeReviewSectionId}`
     : null;
+  const codeViewMountKey = `${collapseScopeKey ?? reviewSectionId}:${codeViewRevision}`;
   const collapsedDiffFileKeys =
     collapsedDiffFiles.scopeKey === collapseScopeKey
       ? collapsedDiffFiles.fileKeys
@@ -570,6 +584,74 @@ export default function DiffPanel({
   const selectedGitSourceForRefs = branchDiffPreviewData?.sources.find(
     (source) => source.kind === (selectedGitScope === "unstaged" ? "working-tree" : "branch-range"),
   );
+  const refreshBranchDiffPreview = branchDiffPreview.refresh;
+  const canRefreshGitDiff =
+    isGitRepo && selectedTurnId === null && activeThread != null && activeCwd != null;
+  const activeThreadRefreshKey = routeThreadRef
+    ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}`
+    : null;
+
+  useEffect(() => {
+    if (!canRefreshGitDiff) return;
+    const refreshOnFocus = () => refreshBranchDiffPreview();
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [canRefreshGitDiff, refreshBranchDiffPreview]);
+
+  useEffect(() => {
+    const current = { threadKey: activeThreadRefreshKey, turnId: latestTurn?.turnId ?? null };
+    const previous = lastCompletedTurnRefreshRef.current;
+    if (!canRefreshGitDiff) return;
+    if (previous === null || previous.threadKey !== current.threadKey) {
+      lastCompletedTurnRefreshRef.current = current;
+      return;
+    }
+    if (previous.turnId === current.turnId) return;
+    refreshBranchDiffPreview();
+    lastCompletedTurnRefreshRef.current = current;
+  }, [activeThreadRefreshKey, canRefreshGitDiff, latestTurn?.turnId, refreshBranchDiffPreview]);
+
+  const loadDiffFiles = useMemo<FileDiffContentsLoader | undefined>(() => {
+    const preview = branchDiffPreviewData;
+    if (selectedTurnId !== null || !activeThread || !preview || !selectedGitSource)
+      return undefined;
+
+    const source = selectedGitSource;
+    return async (fileDiff) => {
+      const newPath = resolveFileDiffPath(fileDiff);
+      const oldPath = fileDiff.prevName
+        ? resolveFileDiffPath({ ...fileDiff, name: fileDiff.prevName })
+        : newPath;
+      const result = await getDiffFileContents({
+        environmentId: activeThread.environmentId,
+        input: {
+          cwd: preview.cwd,
+          sourceKind: source.kind,
+          changeType: fileDiff.type,
+          baseRef: source.baseRef,
+          headRef: source.headRef,
+          oldPath,
+          newPath,
+        },
+      });
+      if (result._tag !== "Success") throw squashAtomCommandFailure(result);
+
+      const newFile = {
+        name: newPath,
+        contents: result.value.newContents,
+        cacheKey: `${source.diffHash}:new:${newPath}`,
+      };
+      if (fileDiff.type === "rename-pure") return { oldFile: null, newFile };
+      return {
+        oldFile: {
+          name: oldPath,
+          contents: result.value.oldContents,
+          cacheKey: `${source.diffHash}:old:${oldPath}`,
+        },
+        newFile,
+      };
+    };
+  }, [activeThread, branchDiffPreviewData, getDiffFileContents, selectedGitSource, selectedTurnId]);
   const localBranchRefs = useEnvironmentQuery(
     selectedTurnId === null &&
       selectedGitScope === "branch" &&
@@ -698,7 +780,7 @@ export default function DiffPanel({
     if (!file) return;
     setNavigatedFileKey(file.fileKey);
     codeViewRef.current?.scrollTo({ type: "item", id: file.fileKey, align: "start" });
-  }, [codeViewFiles, selectedFilePath, selectedFileRevealRequestId]);
+  }, [codeViewFiles, codeViewMountKey, selectedFilePath, selectedFileRevealRequestId]);
 
   const scrollToDiffFile = useCallback((fileKey: string) => {
     setNavigatedFileKey(fileKey);
@@ -806,6 +888,7 @@ export default function DiffPanel({
     [collapseScopeKey],
   );
   const toggleDiffFileCollapse = useCallback(() => {
+    setCodeViewRevision((current) => current + 1);
     setCollapsedDiffFiles((current) => {
       const currentKeys =
         current.scopeKey === collapseScopeKey ? current.fileKeys : EMPTY_COLLAPSED_DIFF_FILE_KEYS;
@@ -837,6 +920,28 @@ export default function DiffPanel({
           className="mr-1 text-[11px]"
           layout="inline"
         />
+      )}
+      {canRefreshGitDiff && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                aria-label={branchDiffPreview.isPending ? "Refreshing diff" : "Refresh diff"}
+                onClick={refreshBranchDiffPreview}
+              />
+            }
+          >
+            <RefreshCwIcon
+              className={cn("size-3", branchDiffPreview.isPending && "animate-spin")}
+            />
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            {branchDiffPreview.isPending ? "Refreshing diff…" : "Refresh diff"}
+          </TooltipPopup>
+        </Tooltip>
       )}
       {interactiveReviewTour ? (
         <Tooltip>
@@ -1261,6 +1366,7 @@ export default function DiffPanel({
                   <AnnotatableCodeView
                     viewerRef={codeViewRef}
                     key={collapseScopeKey ?? reviewSectionId}
+                    codeViewKey={codeViewMountKey}
                     className="diff-render-surface h-full min-h-0 overflow-auto"
                     files={codeViewFiles}
                     sectionId={activeReviewSectionId}
@@ -1312,8 +1418,14 @@ export default function DiffPanel({
                       themeType: resolvedTheme as DiffThemeType,
                       unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
                       stickyHeaders: true,
-                      itemMetrics: { diffHeaderHeight: 33 },
-                      layout: { paddingTop: 0, paddingBottom: 8, gap: 8 },
+                      ...(loadDiffFiles ? { loadDiffFiles } : {}),
+                      itemMetrics: {
+                        diffHeaderHeight: 32,
+                        hunkSeparatorHeight: 24,
+                        paddingTop: 0,
+                        paddingBottom: 0,
+                      },
+                      layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
                     }}
                   />
                 </div>

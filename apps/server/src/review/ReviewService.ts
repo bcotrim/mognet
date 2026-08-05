@@ -17,6 +17,8 @@ import {
   VcsRepositoryDetectionError,
   VcsUnsupportedOperationError,
   type ReviewFileContext,
+  type ReviewDiffFileContentsInput,
+  type ReviewDiffFileContentsResult,
   type ReviewDiffPreviewError,
   type ReviewDiffPreviewInput,
   type ReviewDiffPreviewResult,
@@ -87,6 +89,9 @@ export class ReviewService extends Context.Service<
     readonly refreshSnapshot: (
       input: ReviewRefreshSnapshotInput,
     ) => Effect.Effect<ReviewSnapshot, ReviewSnapshotRpcError>;
+    readonly getDiffFileContents: (
+      input: ReviewDiffFileContentsInput,
+    ) => Effect.Effect<ReviewDiffFileContentsResult, ReviewDiffPreviewError>;
   }
 >()("t3/review/ReviewService") {}
 
@@ -384,6 +389,7 @@ export const make = Effect.gen(function* () {
   };
 
   const assertWorkspaceBoundCwd = Effect.fn("ReviewService.assertWorkspaceBoundCwd")(function* (
+    operation: "ReviewService.getDiffPreview" | "ReviewService.getDiffFileContents",
     cwd: string,
   ) {
     const [candidate, workspaceRoot, worktreesRoot] = yield* Effect.all([
@@ -415,17 +421,19 @@ export const make = Effect.gen(function* () {
     }
 
     return yield* new VcsRepositoryDetectionError({
-      operation: "ReviewService.getDiffPreview",
+      operation,
       cwd,
       detail:
-        "Review diff preview cwd must stay within the configured workspace root or a registered project.",
+        operation === "ReviewService.getDiffPreview"
+          ? "Review diff preview cwd must stay within the configured workspace root or a registered project."
+          : "Review diff file contents cwd must stay within the configured workspace root or a registered project.",
     });
   });
 
   const getDiffPreview: ReviewService["Service"]["getDiffPreview"] = Effect.fn(
     "ReviewService.getDiffPreview",
   )(function* (input) {
-    yield* assertWorkspaceBoundCwd(input.cwd);
+    yield* assertWorkspaceBoundCwd("ReviewService.getDiffPreview", input.cwd);
 
     const handle = yield* vcsRegistry.detect({ cwd: input.cwd, requestedKind: "auto" });
     if (!handle) {
@@ -553,7 +561,7 @@ export const make = Effect.gen(function* () {
   const resolveReviewSource = Effect.fn("ReviewService.resolveReviewSource")(function* (
     input: ReviewOpenSnapshotInput,
   ) {
-    yield* assertWorkspaceBoundCwd(input.cwd).pipe(
+    yield* assertWorkspaceBoundCwd("ReviewService.getDiffPreview", input.cwd).pipe(
       Effect.mapError((cause) =>
         reviewError("ReviewService.resolveReviewSource", "Invalid review workspace.", {
           threadId: input.threadId,
@@ -960,12 +968,30 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const getDiffFileContents: ReviewService["Service"]["getDiffFileContents"] = Effect.fn(
+    "ReviewService.getDiffFileContents",
+  )(function* (input) {
+    yield* assertWorkspaceBoundCwd("ReviewService.getDiffFileContents", input.cwd);
+
+    const handle = yield* vcsRegistry.detect({ cwd: input.cwd, requestedKind: "auto" });
+    if (handle?.kind !== "git") {
+      return yield* new VcsUnsupportedOperationError({
+        operation: "ReviewService.getDiffFileContents",
+        kind: handle?.kind ?? "unknown",
+        detail: "Unchanged diff expansion currently requires a Git repository.",
+      });
+    }
+
+    return yield* git.getReviewDiffFileContents(input);
+  });
+
   return ReviewService.of({
     getDiffPreview,
     openSnapshot,
     getSnapshot,
     listSnapshots,
     refreshSnapshot,
+    getDiffFileContents,
   });
 });
 

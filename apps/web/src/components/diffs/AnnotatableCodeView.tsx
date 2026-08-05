@@ -84,6 +84,7 @@ function appendAnnotationEntry(
 }
 
 interface AnnotatableCodeViewProps {
+  codeViewKey: string;
   files: ReadonlyArray<{
     fileDiff: FileDiffMetadata;
     filePath: string;
@@ -116,6 +117,7 @@ interface DiffCodeViewSelection {
 }
 
 export function AnnotatableCodeView({
+  codeViewKey,
   files,
   sectionId,
   sectionTitle,
@@ -141,6 +143,7 @@ export function AnnotatableCodeView({
     fileKey: string;
     annotation: DiffCommentLineAnnotation;
   } | null>(null);
+  const [draftText, setDraftText] = useState("");
 
   const filesByKey = useMemo(() => new Map(files.map((file) => [file.fileKey, file])), [files]);
   const items = useMemo<CodeViewDiffItem<DiffCommentAnnotationGroup>[]>(
@@ -280,6 +283,7 @@ export function AnnotatableCodeView({
       setSelectedLines(null);
       if (draft?.annotation.metadata.entries.some((entry) => entry.id === entryId)) {
         setDraft(null);
+        setDraftText("");
       } else {
         removeReviewComment(composerDraftTarget, entryId);
       }
@@ -306,6 +310,7 @@ export function AnnotatableCodeView({
       if (comment) addReviewComment(composerDraftTarget, comment);
       setSelectedLines(null);
       setDraft(null);
+      setDraftText("");
     },
     [
       addReviewComment,
@@ -337,6 +342,7 @@ export function AnnotatableCodeView({
         text: "",
       });
       if (!comment) return;
+      setDraftText("");
       setDraft({
         fileKey,
         annotation: {
@@ -408,7 +414,8 @@ export function AnnotatableCodeView({
               key={entry.id}
               kind={entry.kind}
               rangeLabel={entry.rangeLabel}
-              text={entry.text}
+              text={entry.kind === "draft" ? draftText : entry.text}
+              {...(entry.kind === "draft" ? { onTextChange: setDraftText } : {})}
               onCancel={() => removeEntry(entry.id)}
               onComment={(text) => submitEntry(entry.id, text)}
               onDelete={() => removeEntry(entry.id)}
@@ -416,13 +423,13 @@ export function AnnotatableCodeView({
           );
       }
     },
-    [adoptFinding, removeEntry, submitEntry],
+    [adoptFinding, draftText, removeEntry, submitEntry],
   );
 
   const hasOpenComment = draft !== null;
   return (
     <CodeView<DiffCommentAnnotationGroup>
-      key={disableWorkerPool ? "code-view-local-renderer" : "code-view-worker-renderer"}
+      key={`${codeViewKey}:${disableWorkerPool ? "local" : "worker"}`}
       {...(viewerRef ? { ref: viewerRef } : {})}
       {...(className ? { className } : {})}
       {...(onScroll ? { onScroll } : {})}
@@ -435,16 +442,22 @@ export function AnnotatableCodeView({
         enableGutterUtility: !hasOpenComment,
         enableLineSelection: !hasOpenComment,
         onGutterUtilityClick: beginComment,
-        onLineSelectionEnd: beginComment,
       }}
       renderHeaderPrefix={(item) =>
         item.type === "diff"
           ? renderHeaderPrefix(item.fileDiff, item.id, item.collapsed === true)
           : null
       }
-      renderAnnotation={(annotation) => (
-        <div className="py-1">{annotation.metadata.entries.map(renderAnnotationEntry)}</div>
-      )}
+      renderAnnotation={(annotation) => {
+        const hasDraft = annotation.metadata.entries.some((entry) => entry.kind === "draft");
+        return (
+          <div
+            className={hasDraft ? "py-1" : "divide-y divide-border/30 border-y border-border/30"}
+          >
+            {annotation.metadata.entries.map(renderAnnotationEntry)}
+          </div>
+        );
+      }}
     />
   );
 }

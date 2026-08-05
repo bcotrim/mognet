@@ -79,6 +79,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.reviewGetSnapshot]: AuthReviewWriteScope,
   [WS_METHODS.reviewListSnapshots]: AuthReviewWriteScope,
   [WS_METHODS.reviewRefreshSnapshot]: AuthReviewWriteScope,
+  [WS_METHODS.reviewGetDiffFileContents]: AuthReviewWriteScope,
   [WS_METHODS.terminalOpen]: AuthTerminalOperateScope,
   [WS_METHODS.terminalAttach]: AuthTerminalOperateScope,
   [WS_METHODS.terminalWrite]: AuthTerminalOperateScope,
