@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `9697b765e5c32232e96514e38b6ecfac351d5a8f`
-- Reviewed on: `2026-08-05`
+- Last reviewed upstream commit: `a483337a02d4ac641db0219517816c300a33be6b`
+- Reviewed on: `2026-08-06`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -39,6 +39,19 @@ not merged by ancestry.
   workflow surfaces are intentionally removed here.
 - Skipped the portal-specific composer menu change from `9235c83eb`; Mognet's
   menu is already anchored inside the composer with CSS positioning.
+
+### 2026-08-06 review
+
+- Ported desktop/server subagent and workflow observability from `a2ca89aa1`,
+  including the Agents panel, background-work liveness, and Codex/Claude
+  collaboration activity ingestion.
+- Ported model-picker shortcut refresh, terminal font reliability and previews,
+  terminal split/loading fixes, MCP payload slimming, persistent plan-sidebar
+  dismissal, and time-format-aware snooze labels through `a483337a0`.
+- Kept `apps/mobile` and `scripts/mobile-showcase-environment.ts` deleted while
+  reviewing the mobile portions of `de592a00e` and `a2ca89aa1`.
+- Skipped `990bb0b68` because it only changes the removed cloud launcher and
+  self-update flow.
 
 Every sync, including scheduled task runs, must:
 
