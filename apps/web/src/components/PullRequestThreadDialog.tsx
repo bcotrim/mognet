@@ -36,7 +36,11 @@ interface PullRequestThreadDialogProps {
   cwd: string | null;
   initialReference: string | null;
   onOpenChange: (open: boolean) => void;
-  onPrepared: (input: { branch: string; worktreePath: string | null }) => Promise<void> | void;
+  onPrepared: (input: {
+    title: string;
+    branch: string;
+    worktreePath: string | null;
+  }) => Promise<void> | void;
 }
 
 export function PullRequestThreadDialog({
@@ -148,6 +152,7 @@ export function PullRequestThreadDialog({
         return;
       }
       await onPrepared({
+        title: result.value.pullRequest.title,
         branch: result.value.branch,
         worktreePath: result.value.worktreePath,
       });

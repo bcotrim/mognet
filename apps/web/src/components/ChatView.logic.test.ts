@@ -24,6 +24,7 @@ import {
   modelSelectionsEqual,
   isBranchMismatchDismissedForSession,
   reconcileRetainedMountedThreadIds,
+  resolveInitialThreadTitle,
   resolveThreadError,
   resolveThreadMetadataUpdateForNextTurn,
   resolveSendEnvMode,
@@ -67,6 +68,26 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     ...overrides,
   };
 }
+
+describe("resolveInitialThreadTitle", () => {
+  it("keeps a draft title custom and leaves generated titles replaceable", () => {
+    expect(
+      resolveInitialThreadTitle({
+        draftTitle: "Fix reconnect handling",
+        generatedTitleSeed: "Review this pull request",
+      }),
+    ).toEqual({ title: "Fix reconnect handling" });
+    expect(
+      resolveInitialThreadTitle({
+        draftTitle: null,
+        generatedTitleSeed: "Review this pull request",
+      }),
+    ).toEqual({
+      title: "Review this pull request",
+      titleSeed: "Review this pull request",
+    });
+  });
+});
 
 const completedTurn = {
   turnId: TurnId.make("turn-1"),
