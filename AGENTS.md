@@ -31,6 +31,7 @@ Long term maintainability is a core priority. If you add new functionality, firs
 - Browser dev is single-origin: Vite proxies `/api`, `/ws`, `/oauth`, and `/.well-known` to the backend. Do not set `VITE_HTTP_URL` or `VITE_WS_URL` for `dev`/`dev:web`.
 - Worktree paths supply stable preferred port offsets. Read the actual server and web ports from the `[dev-runner]` line because occupied ports can still shift them.
 - Before handing off a `--share` URL, open its origin in a controlled browser and confirm the app loads. A successful curl is insufficient because browsers reject some otherwise reachable ports.
+- Hand over the full `pairingUrl:` value, token included, without opening it. If it was consumed, mint a standard-scope replacement with `node apps/server/src/bin.ts pair`; restart for a new admin-scope startup URL when Settings → Connections access is needed.
 
 ## Package Roles
 

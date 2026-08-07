@@ -74,7 +74,6 @@ import * as Socket from "effect/unstable/socket/Socket";
 import { vi } from "vite-plus/test";
 
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
-
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as ServerConfig from "./config.ts";
 import * as HttpResponseCompression from "./httpCompression/HttpResponseCompression.ts";
@@ -619,7 +618,6 @@ const buildAppUnderTest = (options?: {
         ),
       ),
     );
-
     const servedRoutesBaseLayer = HttpRouter.serve(makeRoutesLayer, {
       disableListenLog: true,
       disableLogger: true,
@@ -5680,6 +5678,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             pr: null,
           }),
         );
+        const remoteExists = vi.fn(
+          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["remoteExists"]>[0]) =>
+            Effect.sync(() => {
+              bootstrapGitOperations.push("remote-exists");
+              return true;
+            }),
+        );
         const fetchRemote = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["fetchRemote"]>[0]) =>
             Effect.sync(() => {
@@ -5727,6 +5732,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         yield* buildAppUnderTest({
           layers: {
             gitVcsDriver: {
+              remoteExists,
               fetchRemote,
               resolveRemoteTrackingCommit,
               createWorktree,
@@ -5817,6 +5823,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           fallbackRemoteName: "origin",
         });
         assert.deepEqual(bootstrapGitOperations, [
+          "remote-exists",
           "fetch",
           "resolve-remote-commit",
           "create-worktree",
@@ -6278,6 +6285,110 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(createWorktree.mock.calls.length, 0);
       assert.equal(runForThread.mock.calls.length, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect(
+    "falls back to the local base branch when startFromOrigin is set but no origin remote exists",
+    () =>
+      Effect.gen(function* () {
+        const dispatchedCommands: Array<OrchestrationCommand> = [];
+        const remoteExists = vi.fn(
+          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["remoteExists"]>[0]) =>
+            Effect.succeed(false),
+        );
+        const fetchRemote = vi.fn(
+          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["fetchRemote"]>[0]) => Effect.void,
+        );
+        const resolveRemoteTrackingCommit = vi.fn(
+          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["resolveRemoteTrackingCommit"]>[0]) =>
+            Effect.succeed({
+              commitSha: "0123456789abcdef0123456789abcdef01234567",
+              remoteRefName: "origin/main",
+            }),
+        );
+        const createWorktree = vi.fn(
+          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
+            Effect.succeed({
+              worktree: {
+                refName: "mognet/bootstrap-refName",
+                path: "/tmp/bootstrap-worktree",
+              },
+            }),
+        );
+
+        yield* buildAppUnderTest({
+          layers: {
+            gitVcsDriver: {
+              remoteExists,
+              fetchRemote,
+              resolveRemoteTrackingCommit,
+              createWorktree,
+            },
+            orchestrationEngine: {
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  dispatchedCommands.push(command);
+                  return { sequence: dispatchedCommands.length };
+                }),
+              readEvents: () => Stream.empty,
+            },
+          },
+        });
+
+        const createdAt = "2026-01-01T00:00:00.000Z";
+        const wsUrl = yield* getWsServerUrl("/ws");
+        yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+              type: "thread.turn.start",
+              commandId: CommandId.make("cmd-bootstrap-turn-start-no-origin"),
+              threadId: ThreadId.make("thread-bootstrap-no-origin"),
+              message: {
+                messageId: MessageId.make("msg-bootstrap-no-origin"),
+                role: "user",
+                text: "hello",
+                attachments: [],
+              },
+              modelSelection: defaultModelSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              bootstrap: {
+                createThread: {
+                  projectId: defaultProjectId,
+                  title: "Bootstrap Thread",
+                  modelSelection: defaultModelSelection,
+                  runtimeMode: "full-access",
+                  interactionMode: "default",
+                  branch: "main",
+                  worktreePath: null,
+                  createdAt,
+                },
+                prepareWorktree: {
+                  projectCwd: "/tmp/project",
+                  baseBranch: "main",
+                  branch: "mognet/bootstrap-refName",
+                  startFromOrigin: true,
+                },
+              },
+              createdAt,
+            }),
+          ),
+        );
+
+        assert.deepEqual(remoteExists.mock.calls[0]?.[0], {
+          cwd: "/tmp/project",
+          remoteName: "origin",
+        });
+        assert.equal(fetchRemote.mock.calls.length, 0);
+        assert.equal(resolveRemoteTrackingCommit.mock.calls.length, 0);
+        assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
+          cwd: "/tmp/project",
+          refName: "main",
+          newRefName: "mognet/bootstrap-refName",
+          baseRefName: "main",
+          path: null,
+        });
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("records setup-script failures without aborting bootstrap turn start", () =>

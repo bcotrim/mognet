@@ -341,6 +341,13 @@ export function createDevRunnerEnv({
       delete output.MOGNET_HOME;
     }
 
+    // A dev-runner server is never launcher-managed. When the shell that runs
+    // this script was itself spawned by the machine's managed Mognet service,
+    // these leak through and the child server fails startup with a version mismatch
+    // (serviceLauncherClient.ts resolveStartup).
+    delete output.MOGNET_SERVICE_LAUNCHER_CONTEXT;
+    delete output.MOGNET_BOOT_SERVICE_UNIT;
+
     if (!isDesktopMode) {
       output.MOGNET_PORT = String(serverPort);
       // HOST is Vite's own bind address, and the desktop branch below is the
@@ -780,6 +787,14 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
           // explicit --dev-url still wins.
           if (input.devUrl === undefined) {
             env.VITE_DEV_SERVER_URL = shared.url;
+          }
+          // A shared origin serves a remote browser, where unbundled dev's
+          // per-module requests each pay a tailnet round trip — a cold module
+          // graph takes minutes to first paint. Bundled dev collapses that to
+          // a few chunk requests. Only defaulted, so MOGNET_BUNDLED_DEV=0
+          // still opts a --share run back out.
+          if (env.MOGNET_BUNDLED_DEV === undefined) {
+            env.MOGNET_BUNDLED_DEV = "1";
           }
           yield* Effect.logInfo(`[dev-runner] shared on tailnet: ${shared.url}`);
         }
