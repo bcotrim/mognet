@@ -296,6 +296,7 @@ import {
   readFileAsDataUrl,
   resolveThreadError,
   resolveThreadMetadataUpdateForNextTurn,
+  resolveInitialThreadTitle,
   resolveSendEnvMode,
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
@@ -1403,7 +1404,12 @@ function ChatViewContent(props: ChatViewProps) {
   }, []);
 
   const openOrReuseProjectDraftThread = useCallback(
-    async (input: { branch: string; worktreePath: string | null; envMode: DraftThreadEnvMode }) => {
+    async (input: {
+      title: string;
+      branch: string;
+      worktreePath: string | null;
+      envMode: DraftThreadEnvMode;
+    }) => {
       if (!activeProject) {
         throw new Error("No active project is available for this pull request.");
       }
@@ -1480,8 +1486,9 @@ function ChatViewContent(props: ChatViewProps) {
   );
 
   const handlePreparedPullRequestThread = useCallback(
-    async (input: { branch: string; worktreePath: string | null }) => {
+    async (input: { title: string; branch: string; worktreePath: string | null }) => {
       await openOrReuseProjectDraftThread({
+        title: input.title,
         branch: input.branch,
         worktreePath: input.worktreePath,
         envMode: input.worktreePath ? "worktree" : "local",
@@ -4442,7 +4449,11 @@ function ChatViewContent(props: ChatViewProps) {
         titleSeed = "New thread";
       }
     }
-    const title = truncate(titleSeed);
+    const initialTitle = resolveInitialThreadTitle({
+      draftTitle: draftThread?.title,
+      generatedTitleSeed: titleSeed,
+    });
+    const title = initialTitle.title;
     const threadCreateModelSelection = createModelSelection(
       ctxSelectedModelSelection.instanceId,
       ctxSelectedModel || activeProject?.defaultModelSelection?.model || DEFAULT_MODEL,
@@ -4530,7 +4541,7 @@ function ChatViewContent(props: ChatViewProps) {
             attachments: turnAttachmentsResult.value,
           },
           modelSelection: ctxSelectedModelSelection,
-          titleSeed: title,
+          ...(initialTitle.titleSeed ? { titleSeed: initialTitle.titleSeed } : {}),
           runtimeMode,
           interactionMode,
           ...(bootstrap ? { bootstrap } : {}),
