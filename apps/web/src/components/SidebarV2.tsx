@@ -133,6 +133,7 @@ import {
   settledPrHoverColorClass,
   terminalStatusFromRunningIds,
   type TerminalStatusIndicator,
+  useSyncThreadTitleFromPr,
 } from "./ThreadStatusIndicators";
 import {
   resolveSnoozePresets,
@@ -559,6 +560,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
     gitStatus: gitStatus.data,
     hasDedicatedWorktree: thread.worktreePath !== null,
   });
+  useSyncThreadTitleFromPr(thread, pr);
   const prStatus = prStatusIndicator(pr, gitStatus.data?.sourceControlProvider);
   const settledPrHoverClass = pr ? settledPrHoverColorClass(pr.state) : undefined;
   // Report the PR state up: the parent partitions rows with effectiveSettled,

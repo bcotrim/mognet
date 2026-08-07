@@ -4,13 +4,16 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import type { VcsStatusResult } from "@t3tools/contracts";
+import { truncate } from "@t3tools/shared/String";
 import { CloudIcon, FolderGit2Icon, GitPullRequestIcon, TerminalIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
 import { useProject } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { vcsEnvironment } from "../state/vcs";
+import { threadEnvironment } from "../state/threads";
+import { useAtomCommand } from "../state/use-atom-command";
 import { useUiStateStore } from "../uiStateStore";
 import {
   getChangeRequestStatusDisplay,
@@ -104,6 +107,31 @@ export function resolveThreadPr(input: {
   }
 
   return gitStatus.pr ?? null;
+}
+
+export function resolveAssociatedPrThreadTitle(currentTitle: string, pr: ThreadPr): string | null {
+  if (!pr) return null;
+  const title = truncate(pr.title);
+  return title === currentTitle ? null : title;
+}
+
+export function useSyncThreadTitleFromPr(
+  thread: Pick<SidebarThreadSummary, "environmentId" | "id" | "title">,
+  pr: ThreadPr,
+) {
+  const updateThreadMetadata = useAtomCommand(
+    threadEnvironment.updateMetadata,
+    "thread PR title sync",
+  );
+  const title = resolveAssociatedPrThreadTitle(thread.title, pr);
+
+  useEffect(() => {
+    if (!title) return;
+    void updateThreadMetadata({
+      environmentId: thread.environmentId,
+      input: { threadId: thread.id, title },
+    });
+  }, [thread.environmentId, thread.id, title, updateThreadMetadata]);
 }
 
 export function terminalStatusFromRunningIds(

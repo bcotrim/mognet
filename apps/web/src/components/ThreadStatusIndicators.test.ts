@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   prStatusIndicator,
+  resolveAssociatedPrThreadTitle,
   resolveThreadPr,
   settledPrHoverColorClass,
 } from "./ThreadStatusIndicators";
@@ -75,6 +76,14 @@ describe("resolveThreadPr", () => {
         hasDedicatedWorktree: false,
       }),
     ).toBe(gitStatus.pr);
+  });
+});
+
+describe("resolveAssociatedPrThreadTitle", () => {
+  it("uses an associated PR title only when the thread title differs", () => {
+    expect(resolveAssociatedPrThreadTitle("Generated title", status().pr)).toBe("PR branch");
+    expect(resolveAssociatedPrThreadTitle("PR branch", status().pr)).toBeNull();
+    expect(resolveAssociatedPrThreadTitle("Generated title", null)).toBeNull();
   });
 });
 
