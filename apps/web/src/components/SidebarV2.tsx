@@ -133,6 +133,7 @@ import {
   settledPrHoverColorClass,
   terminalStatusFromRunningIds,
   type TerminalStatusIndicator,
+  useSyncThreadTitleFromPr,
 } from "./ThreadStatusIndicators";
 import {
   resolveSnoozePresets,
@@ -480,6 +481,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
     gitStatus: gitStatus.data,
     hasDedicatedWorktree: thread.worktreePath !== null,
   });
+  useSyncThreadTitleFromPr(thread, pr);
   const prState = pr?.state ?? null;
 
   // Same semantics as v1 (never-visited counts as read): flipping the beta

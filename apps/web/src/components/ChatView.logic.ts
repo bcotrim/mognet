@@ -10,6 +10,7 @@ import {
   type ThreadId,
   type TurnId,
 } from "@t3tools/contracts";
+import { truncate } from "@t3tools/shared/String";
 import { type ChatMessage, type SessionPhase, type Thread, type ThreadShell } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
 import * as Schema from "effect/Schema";
@@ -72,7 +73,7 @@ export function buildLocalDraftThread(
     id: threadId,
     environmentId: draftThread.environmentId,
     projectId: draftThread.projectId,
-    title: "New thread",
+    title: draftThread.title ?? "New thread",
     modelSelection: fallbackModelSelection,
     runtimeMode: draftThread.runtimeMode,
     interactionMode: draftThread.interactionMode,
@@ -91,6 +92,15 @@ export function buildLocalDraftThread(
     activities: [],
     proposedPlans: [],
   };
+}
+
+export function resolveInitialThreadTitle(input: {
+  draftTitle: string | null | undefined;
+  generatedTitleSeed: string;
+}): { title: string; titleSeed?: string } {
+  const titleSeed = truncate(input.generatedTitleSeed);
+  const draftTitle = input.draftTitle?.trim();
+  return draftTitle ? { title: truncate(draftTitle) } : { title: titleSeed, titleSeed };
 }
 
 export function modelSelectionsEqual(

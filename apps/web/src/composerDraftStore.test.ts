@@ -1012,7 +1012,7 @@ describe("composerDraftStore project draft thread mapping", () => {
     expect(draftByKey(draftId)).toBeUndefined();
   });
 
-  it("updates branch context on an existing draft thread", () => {
+  it("updates title and branch context on an existing draft thread", () => {
     const store = useComposerDraftStore.getState();
     store.setProjectDraftThreadId(projectRef, draftId, {
       threadId,
@@ -1020,6 +1020,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       worktreePath: null,
     });
     store.setDraftThreadContext(draftId, {
+      title: "Fix reconnect handling",
       branch: "feature/next",
       worktreePath: "/tmp/feature-next",
     });
@@ -1029,6 +1030,7 @@ describe("composerDraftStore project draft thread mapping", () => {
     expect(useComposerDraftStore.getState().getDraftThread(draftId)).toMatchObject({
       environmentId: TEST_ENVIRONMENT_ID,
       projectId,
+      title: "Fix reconnect handling",
       branch: "feature/next",
       worktreePath: "/tmp/feature-next",
       envMode: "worktree",
