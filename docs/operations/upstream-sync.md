@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `a483337a02d4ac641db0219517816c300a33be6b`
-- Reviewed on: `2026-08-06`
+- Last reviewed upstream commit: `8100062a78f1e1942663a0cea9ddc42d2f835525`
+- Reviewed on: `2026-08-07`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -52,6 +52,27 @@ not merged by ancestry.
   reviewing the mobile portions of `de592a00e` and `a2ca89aa1`.
 - Skipped `990bb0b68` because it only changes the removed cloud launcher and
   self-update flow.
+
+### 2026-08-07 review
+
+- Ported thread reliability and UX improvements through `8100062a7`: reconnect
+  recovery, activity deduplication, Claude and ACP lifecycle fixes, turn
+  pagination, plan-mode improvements, Done/Woke behavior, bulk snooze feedback,
+  branch/worktree safeguards, and lower transfer overhead.
+- Ported per-device provider settings, the custom theme library/editor, and
+  faster shared development startup with prewarmed dependencies, bundled dev
+  defaults, and Brotli compression. All incoming names, storage keys, env vars,
+  fixtures, and UI strings were adapted to Mognet.
+- Preserved the project's configured model and provider options as the source of
+  truth for both fresh and reused new-thread drafts, with focused regression
+  coverage retained in `useHandleNewThread.test.ts`.
+- Kept `apps/mobile`, `apps/marketing`, removed cloud/self-update code, and T3
+  Connect configuration deleted. Skipped their dedicated commits and pruned the
+  removed-surface portions of mixed commits.
+- Kept Effect at beta.78, backported the stalled-connection heartbeat tolerance
+  to its existing patch, and skipped the upstream beta.103 migration plus its
+  transfer-budget CI harness. The broader runtime upgrade remains a separate,
+  deliberate dependency change.
 
 Every sync, including scheduled task runs, must:
 

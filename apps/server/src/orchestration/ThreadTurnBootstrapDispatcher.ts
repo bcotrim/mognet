@@ -387,7 +387,13 @@ export const make = Effect.gen(function* () {
 
       if (bootstrap?.prepareWorktree) {
         let worktreeBaseRef = bootstrap.prepareWorktree.baseBranch;
-        if (bootstrap.prepareWorktree.startFromOrigin) {
+        const startFromOrigin =
+          bootstrap.prepareWorktree.startFromOrigin === true &&
+          (yield* gitWorkflow.remoteExists({
+            cwd: bootstrap.prepareWorktree.projectCwd,
+            remoteName: "origin",
+          }));
+        if (startFromOrigin) {
           yield* gitWorkflow.fetchRemote({
             cwd: bootstrap.prepareWorktree.projectCwd,
             remoteName: "origin",

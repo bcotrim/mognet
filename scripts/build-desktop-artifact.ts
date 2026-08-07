@@ -934,11 +934,9 @@ const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* (input:
 });
 
 function generateMacIcns(sourcePng: string, targetIcns: string, verbose: boolean) {
-  return Effect.gen(function* () {
-    yield* runCommand(ChildProcess.make({})`sips -s format icns ${sourcePng} --out ${targetIcns}`, {
-      label: "sips mac icns",
-      verbose,
-    });
+  return runCommand(ChildProcess.make({})`sips -s format icns ${sourcePng} --out ${targetIcns}`, {
+    label: "sips mac icns",
+    verbose,
   });
 }
 

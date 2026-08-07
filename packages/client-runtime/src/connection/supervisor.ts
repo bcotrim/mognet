@@ -27,7 +27,7 @@ import * as RpcSession from "../rpc/session.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import * as ConnectionWakeups from "./wakeups.ts";
 
-const RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000] as const;
+const RETRY_DELAYS_MS = [3_000, 4_000, 8_000, 16_000] as const;
 const CONNECTION_ESTABLISHMENT_TIMEOUT = "15 seconds";
 const CONNECTION_PROBE_TIMEOUT = "15 seconds";
 const BACKOFF_RESET_AFTER_MS = 30_000;
@@ -217,6 +217,11 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   };
   const intent = yield* Ref.make(initialIntent);
   const signals = yield* Queue.unbounded<SupervisorSignal>();
+  const resetRetryState = yield* Ref.make(false);
+  // Set when a foreground wake probe fails or times out: the user is actively
+  // returning to the app on a dead transport, so the follow-up reconnect skips
+  // the first backoff rung instead of sleeping.
+  const wakeProbeFailed = yield* Ref.make(false);
   const state = yield* SubscriptionRef.make<SupervisorConnectionState>(
     !initialIntent.desired
       ? availableState(initialIntent, 0)
@@ -342,6 +347,11 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
                 ),
               );
               if (probeEvent._tag === "ProbeCompleted") {
+                if (Exit.isFailure(probeEvent.exit)) {
+                  yield* Ref.set(wakeProbeFailed, true);
+                } else {
+                  yield* Ref.set(resetRetryState, false);
+                }
                 yield* probeEvent.exit;
                 break;
               }
@@ -498,8 +508,15 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     let failureCount = 0;
     let generation = 0;
     let latestFailure: ConnectionAttemptError | null = null;
+    const resetRetryLadder = () => {
+      failureCount = 0;
+    };
 
     for (;;) {
+      if (yield* Ref.getAndSet(resetRetryState, false)) {
+        resetRetryLadder();
+        latestFailure = null;
+      }
       const currentIntent = yield* Ref.get(intent);
       if (!currentIntent.desired) {
         failureCount = 0;
@@ -521,6 +538,9 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
       const outcome: AttemptOutcome = yield* Effect.scoped(
         runAttempt(attempt, nextGeneration, latestFailure),
       );
+      // Consumed on every iteration so a stale marker can never leak into a
+      // later, unrelated failure.
+      const failedWakeProbe = yield* Ref.getAndSet(wakeProbeFailed, false);
       if (outcome.established) {
         generation = nextGeneration;
         if (outcome.stable) {
@@ -547,6 +567,16 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
           retryAt: null,
         });
         yield* waitForSignal;
+        continue;
+      }
+
+      if (failedWakeProbe) {
+        // The wake probe found a dead transport while the user is returning to
+        // the app, so reconnect immediately instead of sleeping the first
+        // backoff rung. Only this first attempt skips the ladder; if it fails
+        // too, normal backoff resumes.
+        resetRetryLadder();
+        yield* setState(connectingState(yield* Ref.get(intent), generation, 1, error));
         continue;
       }
 
@@ -580,7 +610,9 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     Effect.forkScoped,
   );
   yield* wakeups.changes.pipe(
-    Stream.runForEach((reason) => signal({ _tag: "Wakeup", reason })),
+    Stream.runForEach((reason) =>
+      Ref.set(resetRetryState, true).pipe(Effect.andThen(signal({ _tag: "Wakeup", reason }))),
+    ),
     Effect.forkScoped,
   );
   yield* run().pipe(Effect.forkScoped);
@@ -601,7 +633,8 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     Effect.withSpan("EnvironmentSupervisor.disconnect"),
   );
 
-  const retryNow = signal({ _tag: "RetryRequested" }).pipe(
+  const retryNow = Ref.set(resetRetryState, true).pipe(
+    Effect.andThen(signal({ _tag: "RetryRequested" })),
     Effect.withSpan("EnvironmentSupervisor.retryNow"),
   );
 

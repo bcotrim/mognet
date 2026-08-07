@@ -17,6 +17,7 @@ function makeTestLayer(confirm: ElectronDialog.ElectronDialog["Service"]["confir
       Layer.mergeAll(
         Layer.succeed(ElectronDialog.ElectronDialog, {
           pickFolder: () => Effect.succeed(Option.none()),
+          pickFiles: () => Effect.succeed([]),
           confirm,
           showMessageBox: () => Effect.die("unexpected showMessageBox"),
           showErrorBox: () => Effect.void,

@@ -20,12 +20,22 @@ import { buildEnvironmentAuthHeaders, withEnvironmentCredentials } from "./envir
 // delays the transition to live data on the first open, not the initial paint.
 const DEFAULT_THREAD_SNAPSHOT_TIMEOUT_MS = 6_000;
 
+/**
+ * Optional turn window for a snapshot fetch. Only send a window to servers
+ * that advertise `threadSnapshotPagination`; older servers reject unknown
+ * query parameters.
+ */
+export interface ThreadSnapshotWindow {
+  readonly turnLimit: number;
+  readonly beforeCursor?: string;
+}
 export const fetchEnvironmentThreadSnapshot = Effect.fn(
   "clientRuntime.state.fetchEnvironmentThreadSnapshot",
 )(function* (input: {
   readonly prepared: PreparedConnection;
   readonly threadId: ThreadId;
   readonly timeoutMs?: number;
+  readonly window?: ThreadSnapshotWindow;
 }) {
   const requestUrl = environmentEndpointUrl(
     input.prepared.httpBaseUrl,
@@ -44,6 +54,12 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
       input.prepared.httpAuthorization,
       client.orchestration.threadSnapshot({
         params: { threadId: input.threadId },
+        payload: {
+          ...(input.window !== undefined ? { turnLimit: input.window.turnLimit } : {}),
+          ...(input.window?.beforeCursor !== undefined
+            ? { beforeCursor: input.window.beforeCursor }
+            : {}),
+        },
         headers,
       }),
     ),
@@ -58,6 +74,7 @@ export class ThreadSnapshotLoader extends Context.Service<
     readonly load: (
       prepared: PreparedConnection,
       threadId: ThreadId,
+      window?: ThreadSnapshotWindow,
     ) => Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>>;
   }
 >()("@t3tools/client-runtime/state/threadSnapshotHttp/ThreadSnapshotLoader") {}
@@ -71,8 +88,12 @@ export const threadSnapshotLoaderLayer: Layer.Layer<
   Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
     return ThreadSnapshotLoader.of({
-      load: (prepared: PreparedConnection, threadId: ThreadId) =>
-        fetchEnvironmentThreadSnapshot({ prepared, threadId }).pipe(
+      load: (prepared: PreparedConnection, threadId: ThreadId, window?: ThreadSnapshotWindow) =>
+        fetchEnvironmentThreadSnapshot({
+          prepared,
+          threadId,
+          ...(window !== undefined ? { window } : {}),
+        }).pipe(
           Effect.map(Option.some<OrchestrationThreadDetailSnapshot>),
           Effect.provideService(HttpClient.HttpClient, httpClient),
           // A genuinely missing thread (404) is expected — the socket

@@ -27,7 +27,10 @@ import {
   type DesktopWslState,
   type EnvironmentId,
 } from "@t3tools/contracts";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
+import {
+  connectionStatusText,
+  type EnvironmentConnectionPhase,
+} from "@t3tools/client-runtime/connection";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -239,7 +242,25 @@ type ConnectionStatusDotProps = {
   pingClassName?: string | null;
 };
 
-function ConnectionStatusDot({
+export function connectionPhaseDotClassName(phase: EnvironmentConnectionPhase): string {
+  switch (phase) {
+    case "connected":
+      return "bg-success";
+    case "connecting":
+    case "reconnecting":
+      return "bg-warning";
+    case "error":
+      return "bg-destructive";
+    default:
+      return "bg-muted-foreground/40";
+  }
+}
+
+export function connectionPhasePingClassName(phase: EnvironmentConnectionPhase): string | null {
+  return phase === "connecting" || phase === "reconnecting" ? "bg-warning/60 duration-2000" : null;
+}
+
+export function ConnectionStatusDot({
   tooltipText,
   dotClassName,
   pingClassName,

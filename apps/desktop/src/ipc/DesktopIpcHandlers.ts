@@ -39,6 +39,7 @@ import {
   openExternal,
   pickFolder,
   setRunningSessionCount,
+  pickThemeFiles,
   setTheme,
   showContextMenu,
 } from "./methods/window.ts";
@@ -80,6 +81,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setWslOnly);
 
   yield* ipc.handle(pickFolder);
+  yield* ipc.handle(pickThemeFiles);
   yield* ipc.handle(confirm);
   yield* ipc.handle(setRunningSessionCount);
   yield* ipc.handle(setTheme);
