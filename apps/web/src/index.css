@@ -934,8 +934,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(mognet-m
   background-color: var(--card);
 }
 
-.dark [data-sidebar-version="v1"],
-.dark [data-sidebar-version="v2"] {
+.dark [data-app-sidebar] {
   --background: var(--ink-900);
   --foreground: var(--ink-50);
   --card: var(--ink-850);
@@ -1232,8 +1231,7 @@ html[data-theme-id] .chat-markdown .chat-markdown-chrome-action[aria-pressed="tr
   color: var(--code-foreground);
 }
 
-html[data-theme-id] [data-sidebar-version="v1"],
-html[data-theme-id] [data-sidebar-version="v2"] {
+html[data-theme-id] [data-app-sidebar] {
   --background: var(--app-theme-canvas);
   --foreground: var(--app-theme-text);
   --card: var(--app-theme-surface);

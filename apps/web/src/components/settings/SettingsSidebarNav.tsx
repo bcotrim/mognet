@@ -11,7 +11,6 @@ import {
   ArchiveIcon,
   ArrowLeftIcon,
   BotIcon,
-  FlaskConicalIcon,
   FolderKanbanIcon,
   GitBranchIcon,
   KeyboardIcon,
@@ -53,7 +52,6 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/projects": FolderKanbanIcon,
   "/settings/source-control": GitBranchIcon,
   "/settings/connections": Link2Icon,
-  "/settings/beta": FlaskConicalIcon,
   "/settings/archived": ArchiveIcon,
 };
 
