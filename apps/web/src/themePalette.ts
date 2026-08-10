@@ -566,7 +566,7 @@ const MOGNET_DARK_THEME_COLORS: ThemeColors = {
   warningForeground: "#ffb900",
   warningSurface: "#312108",
   update: "#366ffb",
-  updateForeground: "#366ffb",
+  updateForeground: "#51a2ff",
   updateSurface: "#121c35",
   accentSurface: "#141414",
   accentSurfaceForeground: "#f5f5f5",

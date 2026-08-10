@@ -16,7 +16,7 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `1a003e383ac6b10258b8100c2617d938c4f06c69`
+- Last reviewed upstream commit: `fbcae59ef57f28cc51956ca47c0838298b24e79c`
 - Reviewed on: `2026-08-10`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
@@ -102,6 +102,19 @@ not merged by ancestry.
   cloud boot, and hosted-preview changes. Mognet's existing per-project workspace
   mode remains richer than upstream's fallback migration, so only its useful
   draft-race protections and settings UI were ported.
+
+### 2026-08-10 follow-up review
+
+- Ported contextual project settings, shared project renaming, per-checkout
+  actions, settings/thread breadcrumbs, back-navigation retention, themed
+  confirmations, SVG sandboxing, bounded favicon/file-link parsing, Windows
+  `~/.local/bin` discovery, and the remaining theme/sidebar polish.
+- Preserved Mognet's project defaults for new threads, including provider
+  options, default branches, worktree-origin behavior, text-generation models,
+  and `mognet.json` imports.
+- Kept Clerk, Usage, `apps/mobile`, and mobile EAS automation removed; their
+  dedicated commits and the Usage portion of the breadcrumb change were
+  intentionally skipped.
 
 Every sync, including scheduled task runs, must:
 

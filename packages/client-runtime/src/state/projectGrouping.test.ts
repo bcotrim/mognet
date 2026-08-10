@@ -81,6 +81,28 @@ describe("buildProjectGroups", () => {
     }
   });
 
+  it("uses a shared custom title as the repository group's label", () => {
+    const projects = [
+      makeProject("first", "/work/mognet", { title: "Custom project" }),
+      makeProject("second", "/work/mognet-2", { title: "Custom project" }),
+    ];
+
+    expect(buildProjectGroups({ projects, settings: settings("repository") })[0]?.label).toBe(
+      "Custom project",
+    );
+  });
+
+  it("keeps the repository label when shared titles match its repository name", () => {
+    const projects = [
+      makeProject("first", "/work/mognet", { title: "mognet" }),
+      makeProject("second", "/work/mognet-2", { title: "mognet" }),
+    ];
+
+    expect(buildProjectGroups({ projects, settings: settings("repository") })[0]?.label).toBe(
+      "Mognet",
+    );
+  });
+
   it("keeps physical clones in separate groups when requested", () => {
     const projects = [
       makeProject("mognet", "/work/mognet"),
