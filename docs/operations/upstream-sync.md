@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `8100062a78f1e1942663a0cea9ddc42d2f835525`
-- Reviewed on: `2026-08-07`
+- Last reviewed upstream commit: `1a003e383ac6b10258b8100c2617d938c4f06c69`
+- Reviewed on: `2026-08-10`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -73,6 +73,35 @@ not merged by ancestry.
   to its existing patch, and skipped the upstream beta.103 migration plus its
   transfer-budget CI harness. The broader runtime upgrade remains a separate,
   deliberate dependency change.
+
+### 2026-08-09 review
+
+- Ported the promoted sidebar, ordered pinned threads, chat-header thread
+  actions, theme-aware artwork, browser history, timeline stabilization,
+  pending-input Stop state, composer seam fix, and legacy feature settings.
+- Ported GitHub PR lookup backoff, delayed reconnect warnings, terminal font
+  inheritance, background-agent reaper protection, and desktop zoom shortcuts.
+- Preserved Mognet's standalone Chat, project grouping, terminal actions, and
+  project-configured model/provider options for both fresh and reused drafts.
+- Kept `apps/mobile` deleted and skipped mobile-only, release, vouch, analytics,
+  and self-update changes. Analytics and self-update infrastructure remain
+  intentionally outside this fork's reduced scope.
+
+### 2026-08-10 review
+
+- Ported persistent diff layouts, running-agent badges, unsent draft previews,
+  manual project icons, pinned-project reordering, branch-label fixes, and the
+  consolidated project settings screen.
+- Ported Claude resume and Codex queued-follow-up fixes, pasted-image path
+  access, cleanup of monitors and development servers after settling, and the
+  development-database migration helper.
+- Preserved each project's configured model and provider options as authoritative
+  for fresh, open, reused, and raced new-thread drafts, with focused regression
+  coverage retained in `useHandleNewThread.test.ts`.
+- Kept `apps/mobile` deleted and skipped mobile-only, usage analytics, vouch,
+  cloud boot, and hosted-preview changes. Mognet's existing per-project workspace
+  mode remains richer than upstream's fallback migration, so only its useful
+  draft-race protections and settings UI were ported.
 
 Every sync, including scheduled task runs, must:
 

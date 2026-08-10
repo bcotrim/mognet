@@ -31,6 +31,7 @@ export const ProjectionProject = Schema.Struct({
   defaultThreadEnvMode: ProjectDefaultThreadEnvMode,
   newWorktreesStartFromOrigin: Schema.Boolean,
   textGenerationModelSelection: ModelSelection,
+  faviconPath: Schema.optional(Schema.NullOr(Schema.String)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

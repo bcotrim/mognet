@@ -8,3 +8,5 @@
 - [Providers](./providers/codex.md)
 - [Reference](./reference/encyclopedia.md)
 - [User guides](./user/keybindings.md)
+- [Organizing threads](./user/thread-sidebar.md)
+- [Customize a project icon](./user/project-settings.md)

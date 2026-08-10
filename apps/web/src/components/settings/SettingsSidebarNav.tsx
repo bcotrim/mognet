@@ -11,7 +11,6 @@ import {
   ArchiveIcon,
   ArrowLeftIcon,
   BotIcon,
-  FlaskConicalIcon,
   FolderKanbanIcon,
   GitBranchIcon,
   KeyboardIcon,
@@ -53,7 +52,6 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/projects": FolderKanbanIcon,
   "/settings/source-control": GitBranchIcon,
   "/settings/connections": Link2Icon,
-  "/settings/beta": FlaskConicalIcon,
   "/settings/archived": ArchiveIcon,
 };
 
@@ -282,7 +280,9 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                 ))
               : SETTINGS_NAV_ITEMS.map((item) => {
                   const Icon = item.icon;
-                  const isActive = pathname === item.to;
+                  // Prefix match keeps the section active on nested routes
+                  // like /settings/projects/$projectKey.
+                  const isActive = pathname === item.to || pathname.startsWith(`${item.to}/`);
                   return (
                     <SidebarMenuItem key={item.to}>
                       <SidebarMenuButton

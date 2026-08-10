@@ -232,6 +232,11 @@ export const DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION: ModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: DEFAULT_TEXT_GENERATION_MODEL,
 };
+export const ProjectFaviconPath = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(1024),
+  Schema.isPattern(/\.(?:avif|gif|ico|jpe?g|png|svg|webp)$/i),
+);
+export type ProjectFaviconPath = typeof ProjectFaviconPath.Type;
 
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
@@ -250,6 +255,7 @@ export const OrchestrationProject = Schema.Struct({
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION)),
   ),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -413,6 +419,11 @@ export const OrchestrationThread = Schema.Struct({
   // thread renders in the pinned block and never classifies into a shelf.
   // Optional so payloads from pre-pinning servers still decode.
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Fractional index for user-arranged pinned order. Keyed threads sort by
+  // string comparison ahead of keyless ones (which keep creation order), so
+  // servers never need each other's threads to agree on the merged list.
+  // Optional so payloads from pre-reorder servers still decode.
+  pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   // Pending-only state. Optional so older servers remain compatible.
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   deletedAt: Schema.NullOr(IsoDateTime),
@@ -451,6 +462,7 @@ export const OrchestrationProjectShell = Schema.Struct({
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION)),
   ),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -480,6 +492,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   snoozedUntil: Schema.optional(Schema.NullOr(IsoDateTime)),
   snoozedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   session: Schema.NullOr(OrchestrationSession),
   latestUserMessageAt: Schema.NullOr(IsoDateTime),
@@ -672,6 +685,7 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   defaultThreadEnvMode: Schema.optional(ProjectDefaultThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optional(Schema.Boolean),
   textGenerationModelSelection: Schema.optional(ModelSelection),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
 });
 
@@ -758,12 +772,27 @@ const ThreadPinCommand = Schema.Struct({
   type: Schema.Literal("thread.pin"),
   commandId: CommandId,
   threadId: ThreadId,
+  // Initial slot in the user-arranged pinned order (see ThreadPinReorderCommand).
+  // Optional: clients on pre-reorder servers omit it, and the pinned block
+  // falls back to creation order for keyless threads.
+  orderKey: Schema.optional(TrimmedNonEmptyString),
 });
 
 const ThreadUnpinCommand = Schema.Struct({
   type: Schema.Literal("thread.unpin"),
   commandId: CommandId,
   threadId: ThreadId,
+});
+
+const ThreadPinReorderCommand = Schema.Struct({
+  type: Schema.Literal("thread.pin.reorder"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  // Fractional index key: pinned threads sort by plain string comparison of
+  // these keys, so a drag writes one key to one thread — neighbors (possibly
+  // on other servers) are never touched. Clients compute a key that sorts
+  // between the dropped position's neighbors.
+  orderKey: TrimmedNonEmptyString,
 });
 
 const ThreadMetaUpdateCommand = Schema.Struct({
@@ -907,6 +936,12 @@ const ThreadSessionStopCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   createdAt: IsoDateTime,
+  // Settle-cleanup stops are conditional: the decider drops the stop if the
+  // thread was re-engaged (unsettled, session starting/running, or a queued
+  // turn start) between the settle and this command. Guarding in the decider
+  // closes the race a post-settle snapshot read cannot: commands are decided
+  // serially against the authoritative read model.
+  onlyIfSettled: Schema.optional(Schema.Boolean),
 });
 
 const DispatchableClientOrchestrationCommand = Schema.Union([
@@ -923,6 +958,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUnsnoozeCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
+  ThreadPinReorderCommand,
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
@@ -950,6 +986,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUnsnoozeCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
+  ThreadPinReorderCommand,
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
@@ -1067,6 +1104,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.unsnoozed",
   "thread.pinned",
   "thread.unpinned",
+  "thread.pin-reordered",
   "thread.meta-updated",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
@@ -1100,6 +1138,7 @@ export const ProjectCreatedPayload = Schema.Struct({
   defaultThreadEnvMode: Schema.optionalKey(ProjectDefaultThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelection),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1115,6 +1154,7 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   defaultThreadEnvMode: Schema.optional(ProjectDefaultThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optional(Schema.Boolean),
   textGenerationModelSelection: Schema.optional(ModelSelection),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   updatedAt: IsoDateTime,
 });
@@ -1188,11 +1228,20 @@ export const ThreadUnsnoozedPayload = Schema.Struct({
 export const ThreadPinnedPayload = Schema.Struct({
   threadId: ThreadId,
   pinnedAt: IsoDateTime,
+  // Absent on re-pins of an already-pinned thread (the existing key wins)
+  // and on pins from clients that predate reordering.
+  pinOrderKey: Schema.optional(TrimmedNonEmptyString),
   updatedAt: IsoDateTime,
 });
 
 export const ThreadUnpinnedPayload = Schema.Struct({
   threadId: ThreadId,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadPinReorderedPayload = Schema.Struct({
+  threadId: ThreadId,
+  orderKey: TrimmedNonEmptyString,
   updatedAt: IsoDateTime,
 });
 
@@ -1399,6 +1448,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.unpinned"),
     payload: ThreadUnpinnedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.pin-reordered"),
+    payload: ThreadPinReorderedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
