@@ -508,6 +508,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             textGenerationModelSelection:
               event.payload.textGenerationModelSelection ??
               DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+            faviconPath: event.payload.faviconPath ?? null,
             scripts: event.payload.scripts,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -542,6 +543,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               : {}),
             ...(event.payload.textGenerationModelSelection !== undefined
               ? { textGenerationModelSelection: event.payload.textGenerationModelSelection }
+              : {}),
+            ...(event.payload.faviconPath !== undefined
+              ? { faviconPath: event.payload.faviconPath }
               : {}),
             ...(event.payload.scripts !== undefined ? { scripts: event.payload.scripts } : {}),
             updatedAt: event.payload.updatedAt,

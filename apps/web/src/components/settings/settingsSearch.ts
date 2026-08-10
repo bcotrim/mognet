@@ -2,6 +2,7 @@ export type SettingsPath =
   | "/settings/general"
   | "/settings/appearance"
   | "/settings/keybindings"
+  | "/settings/projects"
   | "/settings/providers"
   | "/settings/projects"
   | "/settings/source-control"
@@ -23,8 +24,8 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
   "/settings/keybindings": "Keybindings",
-  "/settings/providers": "Providers",
   "/settings/projects": "Projects",
+  "/settings/providers": "Providers",
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",
   "/settings/archived": "Archive",
@@ -146,13 +147,17 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Delete confirmation",
     to: "/settings/general",
   },
-  { id: "project-new-threads", title: "New threads", to: "/settings/projects" },
+  {
+    id: "project-new-threads",
+    title: "New threads",
+    to: "/settings/projects",
+    targetId: "project-new-thread-workspace",
+  },
   { id: "project-default-branch", title: "Default branch", to: "/settings/projects" },
   {
     id: "project-start-from-origin",
     title: "Start from origin",
     to: "/settings/projects",
-    targetId: "project-new-threads",
   },
   { id: "project-default-model", title: "Default model", to: "/settings/projects" },
   {
@@ -184,6 +189,26 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "keybindings",
     title: "Keybindings",
     to: "/settings/keybindings",
+  },
+  {
+    id: "projects",
+    title: "Projects",
+    to: "/settings/projects",
+  },
+  {
+    id: "project-new-thread-workspace",
+    title: "Project new-thread workspace",
+    to: "/settings/projects",
+  },
+  {
+    id: "project-scripts",
+    title: "Project scripts",
+    to: "/settings/projects",
+  },
+  {
+    id: "project-checkouts",
+    title: "Project checkouts",
+    to: "/settings/projects",
   },
   {
     id: "providers",

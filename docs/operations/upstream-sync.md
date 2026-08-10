@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `06404107261cae24394d6abe39984fb445c5aff5`
-- Reviewed on: `2026-08-09`
+- Last reviewed upstream commit: `1a003e383ac6b10258b8100c2617d938c4f06c69`
+- Reviewed on: `2026-08-10`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -86,6 +86,22 @@ not merged by ancestry.
 - Kept `apps/mobile` deleted and skipped mobile-only, release, vouch, analytics,
   and self-update changes. Analytics and self-update infrastructure remain
   intentionally outside this fork's reduced scope.
+
+### 2026-08-10 review
+
+- Ported persistent diff layouts, running-agent badges, unsent draft previews,
+  manual project icons, pinned-project reordering, branch-label fixes, and the
+  consolidated project settings screen.
+- Ported Claude resume and Codex queued-follow-up fixes, pasted-image path
+  access, cleanup of monitors and development servers after settling, and the
+  development-database migration helper.
+- Preserved each project's configured model and provider options as authoritative
+  for fresh, open, reused, and raced new-thread drafts, with focused regression
+  coverage retained in `useHandleNewThread.test.ts`.
+- Kept `apps/mobile` deleted and skipped mobile-only, usage analytics, vouch,
+  cloud boot, and hosted-preview changes. Mognet's existing per-project workspace
+  mode remains richer than upstream's fallback migration, so only its useful
+  draft-race protections and settings UI were ported.
 
 Every sync, including scheduled task runs, must:
 

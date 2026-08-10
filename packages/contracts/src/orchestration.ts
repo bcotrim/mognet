@@ -232,6 +232,11 @@ export const DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION: ModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: DEFAULT_TEXT_GENERATION_MODEL,
 };
+export const ProjectFaviconPath = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(1024),
+  Schema.isPattern(/\.(?:avif|gif|ico|jpe?g|png|svg|webp)$/i),
+);
+export type ProjectFaviconPath = typeof ProjectFaviconPath.Type;
 
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
@@ -250,6 +255,7 @@ export const OrchestrationProject = Schema.Struct({
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION)),
   ),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -456,6 +462,7 @@ export const OrchestrationProjectShell = Schema.Struct({
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION)),
   ),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -678,6 +685,7 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   defaultThreadEnvMode: Schema.optional(ProjectDefaultThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optional(Schema.Boolean),
   textGenerationModelSelection: Schema.optional(ModelSelection),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
 });
 
@@ -928,6 +936,12 @@ const ThreadSessionStopCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   createdAt: IsoDateTime,
+  // Settle-cleanup stops are conditional: the decider drops the stop if the
+  // thread was re-engaged (unsettled, session starting/running, or a queued
+  // turn start) between the settle and this command. Guarding in the decider
+  // closes the race a post-settle snapshot read cannot: commands are decided
+  // serially against the authoritative read model.
+  onlyIfSettled: Schema.optional(Schema.Boolean),
 });
 
 const DispatchableClientOrchestrationCommand = Schema.Union([
@@ -1124,6 +1138,7 @@ export const ProjectCreatedPayload = Schema.Struct({
   defaultThreadEnvMode: Schema.optionalKey(ProjectDefaultThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelection),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1139,6 +1154,7 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   defaultThreadEnvMode: Schema.optional(ProjectDefaultThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optional(Schema.Boolean),
   textGenerationModelSelection: Schema.optional(ModelSelection),
+  faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   updatedAt: IsoDateTime,
 });

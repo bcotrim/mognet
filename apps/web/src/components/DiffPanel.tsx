@@ -108,7 +108,6 @@ import { vcsEnvironment } from "../state/vcs";
 import { useAtomCommand } from "../state/use-atom-command";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
 
-type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
 const AUTOMATIC_BASE_REF = "__automatic_base_ref__";
 
@@ -428,7 +427,8 @@ export default function DiffPanel({
   const { resolvedTheme } = useTheme();
   const settings = useClientSettings();
   const [initialGitScope] = useState(initialGitScopeProp);
-  const [diffRenderMode, setDiffRenderMode] = useState<DiffRenderMode>("stacked");
+  const diffRenderMode = useDiffPanelStore((state) => state.diffRenderMode);
+  const setDiffRenderMode = useDiffPanelStore((state) => state.setDiffRenderMode);
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
   const [diffIgnoreWhitespace, setDiffIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   const [baseRefQuery, setBaseRefQuery] = useState("");

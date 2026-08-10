@@ -5377,6 +5377,11 @@ function ChatViewContent(props: ChatViewProps) {
       rightPanelAvailable={hasWorkspaceProject}
       rightPanelOpen={rightPanelOpen}
       rightPanelShortcutLabel={shortcutLabelForCommand(keybindings, "rightPanel.toggle")}
+      // Suppressed while the Agents surface is visible: the roster itself is
+      // on screen, so the toggle badge would be pointing at nothing.
+      liveAgentCount={
+        rightPanelOpen && activeRightPanelSurface?.kind === "agents" ? 0 : agentPanelModel.liveCount
+      }
       onToggleRightPanel={toggleRightPanel}
     />
   );
@@ -5509,6 +5514,9 @@ function ChatViewContent(props: ChatViewProps) {
             changeRequestState={activeThreadPr?.state ?? null}
             activeProjectName={hasWorkspaceProject ? activeProject?.title : undefined}
             activeProjectCwd={hasWorkspaceProject ? (activeProject?.workspaceRoot ?? null) : null}
+            activeProjectFaviconPath={
+              hasWorkspaceProject ? (activeProject?.faviconPath ?? null) : null
+            }
             openInCwd={hasWorkspaceProject ? gitCwd : null}
             activeProjectScripts={hasWorkspaceProject ? activeProject?.scripts : undefined}
             preferredScriptId={
@@ -5858,6 +5866,7 @@ function ChatViewContent(props: ChatViewProps) {
           browserAvailable={hasWorkspaceProject && isPreviewSupportedInRuntime()}
           diffAvailable={hasWorkspaceProject && isServerThread && isGitRepo}
           filesAvailable={hasWorkspaceProject}
+          liveAgentCount={agentPanelModel.liveCount}
         >
           {rightPanelContent}
         </RightPanelTabs>
@@ -5886,6 +5895,7 @@ function ChatViewContent(props: ChatViewProps) {
             browserAvailable={hasWorkspaceProject && isPreviewSupportedInRuntime()}
             diffAvailable={hasWorkspaceProject && isServerThread && isGitRepo}
             filesAvailable={hasWorkspaceProject}
+            liveAgentCount={agentPanelModel.liveCount}
           >
             {rightPanelContent}
           </RightPanelTabs>

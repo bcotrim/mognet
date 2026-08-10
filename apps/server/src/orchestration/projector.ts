@@ -226,6 +226,7 @@ export function projectEvent(
             textGenerationModelSelection:
               payload.textGenerationModelSelection ??
               DEFAULT_PROJECT_TEXT_GENERATION_MODEL_SELECTION,
+            faviconPath: payload.faviconPath ?? null,
             scripts: payload.scripts,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
@@ -269,6 +270,9 @@ export function projectEvent(
                     : {}),
                   ...(payload.textGenerationModelSelection !== undefined
                     ? { textGenerationModelSelection: payload.textGenerationModelSelection }
+                    : {}),
+                  ...(payload.faviconPath !== undefined
+                    ? { faviconPath: payload.faviconPath }
                     : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
                   updatedAt: payload.updatedAt,
