@@ -6,12 +6,7 @@ import type {
   FileDiffMetadata,
   SelectedLineRange,
 } from "@pierre/diffs";
-import {
-  CodeView,
-  type CodeViewHandle,
-  type CodeViewProps,
-  useWorkerPool,
-} from "@pierre/diffs/react";
+import { type CodeViewHandle, useWorkerPool } from "@pierre/diffs/react";
 import type { ReviewFileContext, ReviewFinding, ScopedThreadRef } from "@t3tools/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
@@ -24,8 +19,9 @@ import {
   type ReviewCommentContext,
 } from "~/reviewCommentContext";
 
-import { LocalCommentAnnotation } from "../files/LocalCommentAnnotation";
 import { nextFileCommentId } from "../files/fileCommentAnnotations";
+import { DiffCommentAnnotation } from "./DiffCommentAnnotation";
+import { StyledDiffCodeView, type StyledDiffCodeViewOptions } from "./StyledDiffCodeView";
 
 interface DiffCommentAnnotationEntry {
   id: string;
@@ -96,7 +92,7 @@ interface AnnotatableCodeViewProps {
   composerDraftTarget: ScopedThreadRef | DraftId;
   reviewFileContextByPath?: ReadonlyMap<string, ReviewFileContext>;
   reviewFindingsByFilePath?: ReadonlyMap<string, ReadonlyArray<ReviewFinding>>;
-  options: NonNullable<CodeViewProps<DiffCommentAnnotationGroup>["options"]>;
+  options: StyledDiffCodeViewOptions<DiffCommentAnnotationGroup>;
   viewerRef?: Ref<AnnotatableCodeViewHandle>;
   className?: string;
   onScroll?: (scrollTop: number, viewer: AnnotatableCodeViewScrollViewer) => void;
@@ -410,7 +406,7 @@ export function AnnotatableCodeView({
         case "draft":
         case "comment":
           return (
-            <LocalCommentAnnotation
+            <DiffCommentAnnotation
               key={entry.id}
               kind={entry.kind}
               rangeLabel={entry.rangeLabel}
@@ -428,9 +424,9 @@ export function AnnotatableCodeView({
 
   const hasOpenComment = draft !== null;
   return (
-    <CodeView<DiffCommentAnnotationGroup>
+    <StyledDiffCodeView<DiffCommentAnnotationGroup>
       key={`${codeViewKey}:${disableWorkerPool ? "local" : "worker"}`}
-      {...(viewerRef ? { ref: viewerRef } : {})}
+      {...(viewerRef ? { viewerRef } : {})}
       {...(className ? { className } : {})}
       {...(onScroll ? { onScroll } : {})}
       disableWorkerPool={disableWorkerPool}

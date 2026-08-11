@@ -614,9 +614,9 @@ export function BranchToolbarBranchSelector({
   // Action-oriented tooltip (the pill opens the PR), distinct from the sidebar's
   // state-description tooltip.
   const branchPrTooltip = branchPr
-    ? `Open ${sourceControlPresentation.terminology.singular} #${branchPr.number} (${branchPr.state}) in browser`
+    ? `Open ${sourceControlPresentation.terminology.singular} #${branchPr.number} (${branchPr.state})`
     : "";
-  const openPrLink = useOpenPrLink();
+  const openPrLink = useOpenPrLink(threadRef);
   const toggleStartFromOriginFromRow = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       if ((event.target as Element | null)?.closest('[role="switch"]')) {

@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `fbcae59ef57f28cc51956ca47c0838298b24e79c`
-- Reviewed on: `2026-08-10`
+- Last reviewed upstream commit: `9c7622dac3d1a385351e6c74354a9e6b9c2037d5`
+- Reviewed on: `2026-08-11`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -115,6 +115,21 @@ not merged by ancestry.
 - Kept Clerk, Usage, `apps/mobile`, and mobile EAS automation removed; their
   dedicated commits and the Usage portion of the breadcrumb change were
   intentionally skipped.
+
+### 2026-08-11 review
+
+- Ported multi-provider pull-request browsing and in-app reviews for GitHub,
+  GitLab, Bitbucket, and Azure DevOps, adapted to Mognet's existing project,
+  diff-review, standalone Chat, and reduced server surfaces.
+- Ported Windows shell startup and terminal-color improvements, OpenCode model
+  parsing, theme contrast and duplication, three-hour snoozing, persisted
+  sidebar shelves, oversized-image handling, resource-monitor platform
+  detection, and unborn-repository status handling.
+- Preserved each project's configured model and provider options as authoritative
+  for fresh, open, reused, and raced new-thread drafts, with focused regression
+  coverage retained in `useHandleNewThread.test.ts`.
+- Kept `apps/mobile`, mobile EAS automation, removed cloud/self-update code, and
+  release-only versioning changes deleted or skipped.
 
 Every sync, including scheduled task runs, must:
 
