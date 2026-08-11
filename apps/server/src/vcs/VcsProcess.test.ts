@@ -145,7 +145,7 @@ describe("VcsProcess.run", () => {
       const secretArgument = "--token=super-secret-token";
       const error = yield* run({
         operation: "test.spawn",
-        command: "definitely-not-a-t3code-executable",
+        command: "definitely-not-a-mognet-executable",
         args: [secretArgument],
         cwd: process.cwd(),
       }).pipe(Effect.flip);
@@ -153,7 +153,7 @@ describe("VcsProcess.run", () => {
       expect(error).toBeInstanceOf(VcsProcessSpawnError);
       expect(error).toMatchObject({
         operation: "test.spawn",
-        command: "definitely-not-a-t3code-executable",
+        command: "definitely-not-a-mognet-executable",
         argumentCount: 1,
       });
       expect(error).toHaveProperty("cause");
@@ -192,6 +192,8 @@ describe("VcsProcess.run", () => {
           timedOut: false,
           stdoutTruncated: false,
           stderrTruncated: false,
+          stdoutInvalidUtf8: false,
+          stderrInvalidUtf8: false,
         }),
       );
 

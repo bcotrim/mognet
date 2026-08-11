@@ -26,32 +26,32 @@ const bitbucketPullRequest = {
   updated_on: "2026-01-02T00:00:00.000Z",
   links: {
     html: {
-      href: "https://bitbucket.org/pingdotgg/t3code/pull-requests/42",
+      href: "https://bitbucket.org/bcotrim/mognet/pull-requests/42",
     },
   },
   source: {
     branch: { name: "feature/source-control" },
     repository: {
-      full_name: "octocat/t3code",
+      full_name: "octocat/mognet",
       workspace: { slug: "octocat" },
     },
   },
   destination: {
     branch: { name: "main" },
     repository: {
-      full_name: "pingdotgg/t3code",
-      workspace: { slug: "pingdotgg" },
+      full_name: "bcotrim/mognet",
+      workspace: { slug: "bcotrim" },
     },
   },
 };
 
 const repositoryJson = {
-  full_name: "pingdotgg/t3code",
+  full_name: "bcotrim/mognet",
   links: {
-    html: { href: "https://bitbucket.org/pingdotgg/t3code" },
+    html: { href: "https://bitbucket.org/bcotrim/mognet" },
     clone: [
-      { name: "https", href: "https://bitbucket.org/pingdotgg/t3code.git" },
-      { name: "ssh", href: "git@bitbucket.org:pingdotgg/t3code.git" },
+      { name: "https", href: "https://bitbucket.org/bcotrim/mognet.git" },
+      { name: "ssh", href: "git@bitbucket.org:bcotrim/mognet.git" },
     ],
   },
   mainbranch: { name: "main" },
@@ -71,7 +71,7 @@ function makeLayer(input: {
   );
   const gitMock = {
     readConfigValue: vi.fn<GitVcsDriver.GitVcsDriver["Service"]["readConfigValue"]>(() =>
-      Effect.succeed<string | null>("git@bitbucket.org:pingdotgg/t3code.git"),
+      Effect.succeed<string | null>("git@bitbucket.org:bcotrim/mognet.git"),
     ),
     resolvePrimaryRemoteName: vi.fn<
       GitVcsDriver.GitVcsDriver["Service"]["resolvePrimaryRemoteName"]
@@ -106,7 +106,7 @@ function makeLayer(input: {
         remotes: [
           {
             name: "origin",
-            url: "git@bitbucket.org:pingdotgg/t3code.git",
+            url: "git@bitbucket.org:bcotrim/mognet.git",
             pushUrl: Option.none(),
             isPrimary: true,
           },
@@ -181,18 +181,18 @@ it.effect("parses pull request responses from the Bitbucket REST API", () => {
     assert.deepStrictEqual(result, {
       number: 42,
       title: "Add Bitbucket provider",
-      url: "https://bitbucket.org/pingdotgg/t3code/pull-requests/42",
+      url: "https://bitbucket.org/bcotrim/mognet/pull-requests/42",
       baseRefName: "main",
       headRefName: "feature/source-control",
       state: "open",
       updatedAt: Option.some(DateTime.makeUnsafe("2026-01-02T00:00:00.000Z")),
       isCrossRepository: true,
-      headRepositoryNameWithOwner: "octocat/t3code",
+      headRepositoryNameWithOwner: "octocat/mognet",
       headRepositoryOwnerLogin: "octocat",
     });
     assert.strictEqual(
       execute.mock.calls[0]?.[0].url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests/42",
+      "https://api.test.local/2.0/repositories/bcotrim/mognet/pullrequests/42",
     );
   }).pipe(Effect.provide(layer));
 });
@@ -208,7 +208,7 @@ it.effect("lists pull requests with Bitbucket state and source branch query para
             state: "MERGED",
             source: {
               branch: { name: "feature/merged" },
-              repository: { full_name: "pingdotgg/t3code" },
+              repository: { full_name: "bcotrim/mognet" },
             },
           },
         ],
@@ -228,7 +228,7 @@ it.effect("lists pull requests with Bitbucket state and source branch query para
     const request = execute.mock.calls[0]?.[0];
     assert.strictEqual(
       request?.url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests",
+      "https://api.test.local/2.0/repositories/bcotrim/mognet/pullrequests",
     );
     assert.deepStrictEqual(request?.urlParams.params, [
       ["pagelen", "10"],
@@ -321,14 +321,14 @@ it.effect("reads repository clone URLs and default branch", () => {
     const bitbucket = yield* BitbucketApi.BitbucketApi;
     const cloneUrls = yield* bitbucket.getRepositoryCloneUrls({
       cwd: "/repo",
-      repository: "pingdotgg/t3code",
+      repository: "bcotrim/mognet",
     });
     const defaultBranch = yield* bitbucket.getDefaultBranch({ cwd: "/repo" });
 
     assert.deepStrictEqual(cloneUrls, {
-      nameWithOwner: "pingdotgg/t3code",
-      url: "https://bitbucket.org/pingdotgg/t3code.git",
-      sshUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+      nameWithOwner: "bcotrim/mognet",
+      url: "https://bitbucket.org/bcotrim/mognet.git",
+      sshUrl: "git@bitbucket.org:bcotrim/mognet.git",
     });
     assert.strictEqual(defaultBranch, "main");
   }).pipe(Effect.provide(layer));
@@ -360,8 +360,8 @@ it.effect(
       assert.deepStrictEqual(
         execute.mock.calls.map((call) => call[0].url).toSorted(),
         [
-          "https://api.test.local/2.0/repositories/pingdotgg/t3code",
-          "https://api.test.local/2.0/repositories/pingdotgg/t3code/branching-model",
+          "https://api.test.local/2.0/repositories/bcotrim/mognet",
+          "https://api.test.local/2.0/repositories/bcotrim/mognet/branching-model",
         ].toSorted(),
       );
     }).pipe(Effect.provide(layer));
@@ -423,18 +423,18 @@ it.effect("creates repositories through the Bitbucket REST API", () => {
     const bitbucket = yield* BitbucketApi.BitbucketApi;
     const cloneUrls = yield* bitbucket.createRepository({
       cwd: "/repo",
-      repository: "pingdotgg/t3code",
+      repository: "bcotrim/mognet",
       visibility: "private",
     });
 
     assert.deepStrictEqual(cloneUrls, {
-      nameWithOwner: "pingdotgg/t3code",
-      url: "https://bitbucket.org/pingdotgg/t3code.git",
-      sshUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+      nameWithOwner: "bcotrim/mognet",
+      url: "https://bitbucket.org/bcotrim/mognet.git",
+      sshUrl: "git@bitbucket.org:bcotrim/mognet.git",
     });
 
     const request = execute.mock.calls[0]?.[0];
-    assert.strictEqual(request?.url, "https://api.test.local/2.0/repositories/pingdotgg/t3code");
+    assert.strictEqual(request?.url, "https://api.test.local/2.0/repositories/bcotrim/mognet");
     assert.strictEqual(request?.method, "POST");
     assert.ok(request);
     const rawBody = (request.body as { readonly body?: Uint8Array }).body;
@@ -469,7 +469,7 @@ it.effect("creates pull requests using the official REST payload shape", () => {
     const request = execute.mock.calls[0]?.[0];
     assert.strictEqual(
       request?.url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests",
+      "https://api.test.local/2.0/repositories/bcotrim/mognet/pullrequests",
     );
     assert.strictEqual(request?.method, "POST");
     assert.ok(request);
@@ -481,7 +481,7 @@ it.effect("creates pull requests using the official REST payload shape", () => {
       description: "PR body",
       source: {
         branch: { name: "feature/provider" },
-        repository: { full_name: "owner/t3code" },
+        repository: { full_name: "owner/mognet" },
       },
       destination: {
         branch: { name: "main" },
@@ -590,8 +590,7 @@ it.effect("preserves Bitbucket response body read failures as their immediate ca
     assert.instanceOf(error, BitbucketApi.BitbucketResponseBodyReadError);
     assert.strictEqual(error.operation, "getPullRequest");
     assert.strictEqual(error.status, 502);
-    assert.instanceOf(error.cause, HttpClientError.HttpClientError);
-    assert.strictEqual(error.cause.cause, cause);
+    assert.strictEqual(error.cause, cause);
     assert.strictEqual(
       error.message,
       "Bitbucket API failed in getPullRequest: Bitbucket returned HTTP 502.",
@@ -607,8 +606,8 @@ it.effect("checks out same-repository pull requests with the existing Bitbucket 
         source: {
           branch: { name: "feature/source-control" },
           repository: {
-            full_name: "pingdotgg/t3code",
-            workspace: { slug: "pingdotgg" },
+            full_name: "bcotrim/mognet",
+            workspace: { slug: "bcotrim" },
           },
         },
       }),
@@ -625,7 +624,7 @@ it.effect("checks out same-repository pull requests with the existing Bitbucket 
           baseUrl: "https://bitbucket.org",
         },
         remoteName: "origin",
-        remoteUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+        remoteUrl: "git@bitbucket.org:bcotrim/mognet.git",
       },
       reference: "42",
       force: true,
@@ -665,8 +664,8 @@ it.effect("preserves Git checkout failures without deriving the domain message f
         source: {
           branch: { name: "feature/source-control" },
           repository: {
-            full_name: "pingdotgg/t3code",
-            workspace: { slug: "pingdotgg" },
+            full_name: "bcotrim/mognet",
+            workspace: { slug: "bcotrim" },
           },
         },
       }),
@@ -699,15 +698,15 @@ it.effect("preserves Git checkout failures without deriving the domain message f
 it.effect("checks out fork pull requests through an ensured fork remote", () => {
   const { git, layer } = makeLayer({
     response: (request) => {
-      if (request.url.endsWith("/repositories/octocat/t3code")) {
+      if (request.url.endsWith("/repositories/octocat/mognet")) {
         return Response.json({
           ...repositoryJson,
-          full_name: "octocat/t3code",
+          full_name: "octocat/mognet",
           links: {
-            html: { href: "https://bitbucket.org/octocat/t3code" },
+            html: { href: "https://bitbucket.org/octocat/mognet" },
             clone: [
-              { name: "https", href: "https://bitbucket.org/octocat/t3code.git" },
-              { name: "ssh", href: "git@bitbucket.org:octocat/t3code.git" },
+              { name: "https", href: "https://bitbucket.org/octocat/mognet.git" },
+              { name: "ssh", href: "git@bitbucket.org:octocat/mognet.git" },
             ],
           },
         });
@@ -717,7 +716,7 @@ it.effect("checks out fork pull requests through an ensured fork remote", () => 
         source: {
           branch: { name: "main" },
           repository: {
-            full_name: "octocat/t3code",
+            full_name: "octocat/mognet",
             workspace: { slug: "octocat" },
           },
         },
@@ -736,23 +735,133 @@ it.effect("checks out fork pull requests through an ensured fork remote", () => 
     assert.deepStrictEqual(git.ensureRemote.mock.calls[0]?.[0], {
       cwd: "/repo",
       preferredName: "octocat",
-      url: "git@bitbucket.org:octocat/t3code.git",
+      url: "git@bitbucket.org:octocat/mognet.git",
     });
     assert.deepStrictEqual(git.fetchRemoteBranch.mock.calls[0]?.[0], {
       cwd: "/repo",
       remoteName: "octocat",
       remoteBranch: "main",
-      localBranch: "t3code/pr-42/main",
+      localBranch: "mognet/pr-42/main",
     });
     assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
       cwd: "/repo",
-      branch: "t3code/pr-42/main",
+      branch: "mognet/pr-42/main",
       remoteName: "octocat",
       remoteBranch: "main",
     });
     assert.deepStrictEqual(git.switchRef.mock.calls[0]?.[0], {
       cwd: "/repo",
-      refName: "t3code/pr-42/main",
+      refName: "mognet/pr-42/main",
     });
   }).pipe(Effect.provide(layer));
 });
+
+it.effect("refuses a url that points away from the configured Bitbucket", () => {
+  // A whole url reaches `request` from inside a response — a pagination cursor, say — so
+  // following one off-host would hand the account's credentials to whoever wrote it.
+  const { layer, execute } = makeLayer({ response: () => new Response("{}", { status: 200 }) });
+  return Effect.gen(function* () {
+    const bitbucket = yield* BitbucketApi.BitbucketApi;
+
+    const error = yield* Effect.flip(
+      bitbucket.request({ method: "GET", url: "https://attacker.example/2.0/repositories" }),
+    );
+
+    assert.strictEqual(error._tag, "BitbucketUntrustedUrlError");
+    // Nothing was sent at all, so no header travelled anywhere.
+    assert.strictEqual(execute.mock.calls.length, 0);
+  }).pipe(Effect.provide(layer));
+});
+
+it.effect("keeps only the host of a url it refuses, never its query", () =>
+  Effect.gen(function* () {
+    const bitbucket = yield* BitbucketApi.BitbucketApi;
+
+    const error = yield* Effect.flip(
+      bitbucket.request({
+        method: "GET",
+        // A signed link, whose query is the credential.
+        url: "https://attacker.example/asset?signature=secret-token",
+      }),
+    );
+
+    assert.strictEqual(error._tag, "BitbucketUntrustedUrlError");
+    assert.strictEqual(
+      error._tag === "BitbucketUntrustedUrlError" ? error.host : "",
+      "https://attacker.example",
+    );
+    assert.notInclude(error.message, "secret-token");
+  }).pipe(Effect.provide(makeLayer({ response: () => new Response("{}", { status: 200 }) }).layer)),
+);
+
+it.effect("does not follow a redirect off the configured Bitbucket", () =>
+  Effect.gen(function* () {
+    const bitbucket = yield* BitbucketApi.BitbucketApi;
+
+    const error = yield* Effect.flip(
+      bitbucket.request({ method: "GET", url: "/repositories/acme/web/pullrequests/1/diff" }),
+    );
+
+    // The client would carry every header to the new host, so the hop is checked here instead.
+    assert.strictEqual(error._tag, "BitbucketUntrustedUrlError");
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        response: () =>
+          new Response(null, {
+            status: 302,
+            headers: { location: "https://attacker.example/stolen" },
+          }),
+      }).layer,
+    ),
+  ),
+);
+
+it.effect("follows a redirect that stays on the configured Bitbucket", () =>
+  Effect.gen(function* () {
+    const bitbucket = yield* BitbucketApi.BitbucketApi;
+
+    const result = yield* bitbucket.request({
+      method: "GET",
+      url: "/repositories/acme/web/pullrequests/1/diff",
+    });
+
+    // Bitbucket serves a diff as a redirect to a commit range, so the hop has to be followed.
+    assert.strictEqual(result.body, "diff --git a/a.ts b/a.ts");
+    assert.isFalse(result.truncated);
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        response: (request) =>
+          request.url.endsWith("/pullrequests/1/diff")
+            ? new Response(null, {
+                status: 302,
+                // The same host the harness configures, which is not bitbucket.org: a
+                // self-hosted base url has to be trusted on its own terms.
+                headers: { location: "https://api.test.local/2.0/repositories/acme/web/diff/abc" },
+              })
+            : new Response("diff --git a/a.ts b/a.ts", { status: 200 }),
+      }).layer,
+    ),
+  ),
+);
+
+it.effect("cuts a response short rather than reading an unbounded diff into memory", () =>
+  Effect.gen(function* () {
+    const bitbucket = yield* BitbucketApi.BitbucketApi;
+
+    const result = yield* bitbucket.request({
+      method: "GET",
+      url: "/repositories/acme/web/pullrequests/1/diff",
+      maxBytes: 8,
+    });
+
+    assert.strictEqual(result.body, "12345678");
+    assert.isTrue(result.truncated);
+    // Bounded as the body arrives, so an oversized diff is never held whole.
+  }).pipe(
+    Effect.provide(
+      makeLayer({ response: () => new Response("1234567890", { status: 200 }) }).layer,
+    ),
+  ),
+);
