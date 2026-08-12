@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `9c7622dac3d1a385351e6c74354a9e6b9c2037d5`
-- Reviewed on: `2026-08-11`
+- Last reviewed upstream commit: `b54bfc9312b030bad9d89771fbf561ccbfb2d315`
+- Reviewed on: `2026-08-12`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -130,6 +130,23 @@ not merged by ancestry.
   coverage retained in `useHandleNewThread.test.ts`.
 - Kept `apps/mobile`, mobile EAS automation, removed cloud/self-update code, and
   release-only versioning changes deleted or skipped.
+
+### 2026-08-12 review
+
+- Ported self-hosted GitLab pull-request routing, Azure DevOps SSH detection,
+  Windows drive-root normalization, and clearer pull/push action icons.
+- Ported Shift-click new-thread creation, thread ID copying, durable error-banner
+  dismissal, typography reset fixes, composer/model-picker polish, compact
+  sidebar controls, and the right-panel surface launcher.
+- Ported theme-aware environment artwork, OKLCH theme palettes, and guarded Open
+  VSX theme search/import, adapting the flagship theme IDs, colors, and UI to
+  Mognet.
+- Preserved each project's configured model and provider options as authoritative
+  for fresh and reused new-thread drafts, including the new Shift-click path,
+  with focused regression coverage retained in `useHandleNewThread.test.ts`.
+- Kept `apps/mobile` and Usage deleted, skipped mobile-only, mobile release,
+  Usage, and vouch-only commits, and omitted the Usage portions of mixed sidebar
+  changes.
 
 Every sync, including scheduled task runs, must:
 

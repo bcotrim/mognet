@@ -389,6 +389,7 @@ const RuntimeServicesLive = ServerRuntimeStartup.layer.pipe(
 const PullRequestServiceLive = PullRequestService.layer.pipe(
   // One registry entry per supported host; the service only knows the registry.
   Layer.provide(PullRequestProviderRegistry.layer),
+  Layer.provide(SourceControlProviderRegistryLayerLive),
   Layer.provide(VcsProcess.layer),
 );
 
