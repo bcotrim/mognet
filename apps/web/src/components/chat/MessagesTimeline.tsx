@@ -108,6 +108,7 @@ import {
   stripInteractiveReviewTourPrompt,
 } from "~/lib/interactiveReviewTour";
 import { cn } from "~/lib/utils";
+import { serializeRenderedMarkdownFragment } from "~/markdown-clipboard";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
@@ -1176,7 +1177,19 @@ function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "messa
     return null;
   }
 
-  return <MessageCopyButton text={assistantCopyState.text ?? ""} variant="ghost" />;
+  const text = assistantCopyState.text ?? "";
+  return (
+    <MessageCopyButton
+      text={text}
+      resolveText={(button) => {
+        const markdown = button
+          .closest('[data-message-role="assistant"]')
+          ?.querySelector(".chat-markdown");
+        return markdown ? serializeRenderedMarkdownFragment(markdown) : text;
+      }}
+      variant="ghost"
+    />
+  );
 }
 
 function ProposedPlanTimelineRow({

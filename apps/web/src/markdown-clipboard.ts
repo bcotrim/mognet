@@ -8,6 +8,8 @@
 
 const SKIPPED_TAGS = new Set(["BUTTON", "INPUT", "SCRIPT", "STYLE", "TEMPLATE"]);
 const SKIPPED_CLASS_NAMES = ["select-none", "sr-only"];
+const BLOCK_TAG_PATTERN =
+  /^(?:ARTICLE|BLOCKQUOTE|DETAILS|DIV|H[1-6]|HR|LI|OL|P|PRE|SECTION|TABLE|UL)$/;
 const SANITIZED_HTML_SELECTOR = [
   "button",
   "input",
@@ -170,13 +172,32 @@ function serializeChildren(node: Node): string {
   return out;
 }
 
+function adjacentTag(node: Node | null): string | null {
+  return node?.nodeType === Node.ELEMENT_NODE ? (node as Element).tagName : null;
+}
+
+function serializeTextNode(node: Node): string {
+  let text = node.textContent ?? "";
+  if (!text.includes("\n")) return text;
+
+  const previousTag = adjacentTag(node.previousSibling);
+  const nextTag = adjacentTag(node.nextSibling);
+  if (previousTag === "BR") text = text.replace(/^[ \t]*\n[ \t]*/, "");
+  if (nextTag === "BR") text = text.replace(/[ \t]*\n[ \t]*$/, "");
+  if (!text) return "";
+  if (!text.trim()) {
+    return previousTag && BLOCK_TAG_PATTERN.test(previousTag)
+      ? "\n"
+      : nextTag && BLOCK_TAG_PATTERN.test(nextTag)
+        ? "\n"
+        : " ";
+  }
+  return text.replace(/(?:[ \t]*\n[ \t]*)+/g, " ");
+}
+
 function serializeNode(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
-    const text = node.textContent ?? "";
-    // Inter-block formatting whitespace from the renderer collapses to a
-    // newline; real inline whitespace passes through untouched.
-    if (text.includes("\n") && text.trim().length === 0) return "\n";
-    return text;
+    return serializeTextNode(node);
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return "";
   const element = node as Element;
