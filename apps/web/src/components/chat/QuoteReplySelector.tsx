@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { cn, randomUUID } from "~/lib/utils";
+import { chatMarkdownClipboardPayload } from "~/markdown-clipboard";
 import { buildQuotedReviewComment } from "~/reviewCommentContext";
 
 import { Button } from "../ui/button";
@@ -170,7 +171,9 @@ export function QuoteReplySelector({
         return;
       }
 
-      const quote = normalizeQuoteText(activeSelection.toString());
+      const quote = normalizeQuoteText(
+        chatMarkdownClipboardPayload(activeSelection)?.text ?? activeSelection.toString(),
+      );
       if (quote.length === 0) {
         clearSelection();
         return;
