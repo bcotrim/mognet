@@ -134,6 +134,11 @@ export const OrchestrationThreadOrigin = Schema.Union([
     scheduledTaskId: TrimmedNonEmptyString,
     scheduledTaskTitle: TrimmedNonEmptyString,
   }),
+  Schema.Struct({
+    type: Schema.Literal("plan-implementation"),
+    sourceThreadId: ThreadId,
+    planId: TrimmedNonEmptyString,
+  }),
 ]);
 export type OrchestrationThreadOrigin = typeof OrchestrationThreadOrigin.Type;
 export const ProviderRequestKind = Schema.Literals(["command", "file-read", "file-change"]);

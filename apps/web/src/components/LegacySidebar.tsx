@@ -47,7 +47,6 @@ import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import {
   type ContextMenuItem,
-  type OrchestrationThreadOrigin,
   ProjectId,
   STANDALONE_CHAT_PROJECT_ID,
   type ScopedThreadRef,
@@ -202,7 +201,7 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import type { SidebarThreadSummary } from "../types";
-import { resolveScheduledThreadOrigin } from "../scheduledTaskOrigin";
+import { resolveScheduledThreadOrigin, type ScheduledThreadOrigin } from "../scheduledTaskOrigin";
 import {
   buildPhysicalToLogicalProjectKeyMap,
   buildSidebarProjectSnapshots,
@@ -233,7 +232,7 @@ const SIDEBAR_ICON_ACTION_BUTTON_CLASS =
 export const SIDEBAR_SECTION_ACTIONS_CLASS =
   "pointer-events-none opacity-0 transition-opacity duration-150 group-hover/sidebar-section:pointer-events-auto group-hover/sidebar-section:opacity-100 group-focus-within/sidebar-section:pointer-events-auto group-focus-within/sidebar-section:opacity-100";
 
-function useScheduledThreadOrigin(thread: SidebarThreadSummary): OrchestrationThreadOrigin | null {
+function useScheduledThreadOrigin(thread: SidebarThreadSummary): ScheduledThreadOrigin | null {
   const scheduledTasks = useAtomValue(primaryServerScheduledTasksAtom);
   return resolveScheduledThreadOrigin({ thread, scheduledTasks });
 }
@@ -247,7 +246,7 @@ function ThreadRunMeta({
   readonly className?: string;
   readonly isHighlighted: boolean;
   readonly isoDate: string;
-  readonly origin: OrchestrationThreadOrigin | null;
+  readonly origin: ScheduledThreadOrigin | null;
 }) {
   const label = formatCompactRelativeTimeLabel(isoDate);
 
@@ -265,7 +264,7 @@ function ThreadRunMeta({
   );
 }
 
-function ScheduledRunClock({ origin }: { readonly origin: OrchestrationThreadOrigin | null }) {
+function ScheduledRunClock({ origin }: { readonly origin: ScheduledThreadOrigin | null }) {
   if (!origin) return null;
 
   return (
