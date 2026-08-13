@@ -1636,7 +1636,7 @@ it.effect("refuses to react on a host with no reactions", () =>
   Effect.gen(function* () {
     const service = yield* makeService({
       projects: [
-        project({ id: "p1", title: "t3code", workspaceRoot: "/a", repository: "pingdotgg/t3code" }),
+        project({ id: "p1", title: "mognet", workspaceRoot: "/a", repository: "bcotrim/mognet" }),
       ],
       providers: [
         fakeProvider("github", {
@@ -1658,7 +1658,7 @@ it.effect("refuses to react on a host with no reactions", () =>
     const error = yield* Effect.flip(
       service.setReaction({
         projectId: "p1" as ProjectId,
-        repository: "pingdotgg/t3code",
+        repository: "bcotrim/mognet",
         number: 1,
         content: "heart",
         reacted: true,
@@ -1673,7 +1673,7 @@ it.effect("refuses to react on a host whose capabilities omit reactions entirely
   Effect.gen(function* () {
     const service = yield* makeService({
       projects: [
-        project({ id: "p1", title: "t3code", workspaceRoot: "/a", repository: "pingdotgg/t3code" }),
+        project({ id: "p1", title: "mognet", workspaceRoot: "/a", repository: "bcotrim/mognet" }),
       ],
       providers: [
         fakeProvider("github", {
@@ -1694,7 +1694,7 @@ it.effect("refuses to react on a host whose capabilities omit reactions entirely
     const error = yield* Effect.flip(
       service.setReaction({
         projectId: "p1" as ProjectId,
-        repository: "pingdotgg/t3code",
+        repository: "bcotrim/mognet",
         number: 1,
         content: "heart",
         reacted: true,
@@ -1714,7 +1714,7 @@ it.effect("passes a reaction through with its subject id on a host that has them
     } | null = null;
     const service = yield* makeService({
       projects: [
-        project({ id: "p1", title: "t3code", workspaceRoot: "/a", repository: "pingdotgg/t3code" }),
+        project({ id: "p1", title: "mognet", workspaceRoot: "/a", repository: "bcotrim/mognet" }),
       ],
       providers: [
         fakeProvider("github", {
@@ -1732,7 +1732,7 @@ it.effect("passes a reaction through with its subject id on a host that has them
 
     yield* service.setReaction({
       projectId: "p1" as ProjectId,
-      repository: "pingdotgg/t3code",
+      repository: "bcotrim/mognet",
       number: 1,
       subjectId: "IC_1",
       content: "heart",

@@ -147,12 +147,12 @@ describe("pull request search decoding", () => {
           nodes: rollupStates.map((state, index) => ({
             number: index + 1,
             title: "Add the pull requests page",
-            url: "https://github.com/pingdotgg/t3code/pull/1",
+            url: "https://github.com/bcotrim/mognet/pull/1",
             headRefName: "feat/page",
             baseRefName: "main",
             createdAt: "2026-07-01T00:00:00Z",
             updatedAt: "2026-07-02T00:00:00Z",
-            repository: { nameWithOwner: "pingdotgg/t3code" },
+            repository: { nameWithOwner: "bcotrim/mognet" },
             commits: {
               nodes: [{ commit: { statusCheckRollup: state === null ? null : { state } } }],
             },

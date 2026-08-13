@@ -745,11 +745,11 @@ describe("merging the environments' own listings", () => {
 
   it("keeps each environment's continuation to itself", () => {
     const merged = mergePullRequestLists([
-      [ENV_1, answer({ nextCursors: { "github.com pingdotgg/t3code": "cursor-1" } })],
+      [ENV_1, answer({ nextCursors: { "github.com bcotrim/mognet": "cursor-1" } })],
       [ENV_2, answer()],
     ]);
     expect(merged?.nextCursors).toEqual({
-      [ENV_1]: { "github.com pingdotgg/t3code": "cursor-1" },
+      [ENV_1]: { "github.com bcotrim/mognet": "cursor-1" },
     });
   });
 
@@ -958,9 +958,9 @@ describe("colon-namespaced labels typed as a search", () => {
   });
 
   it("leaves a pasted link alone rather than naming a label after its scheme", () => {
-    const parsed = parsePullRequestQuery("https://github.com/pingdotgg/t3code/pull/1");
+    const parsed = parsePullRequestQuery("https://github.com/bcotrim/mognet/pull/1");
     expect(parsed.filters.labels).toBeUndefined();
-    expect(parsed.text).toBe("https://github.com/pingdotgg/t3code/pull/1");
+    expect(parsed.text).toBe("https://github.com/bcotrim/mognet/pull/1");
   });
 
   it("mixes with the keys it does know, and with plain words", () => {

@@ -446,7 +446,7 @@ describe("rightPanelStore", () => {
     const local = {
       environmentId: "local",
       projectId: "project-a",
-      repository: "pingdotgg/t3code",
+      repository: "bcotrim/mognet",
       number: 4909,
     };
     const remote = { ...local, environmentId: "remote" };
@@ -471,13 +471,13 @@ describe("rightPanelStore", () => {
     const fromServerA = {
       environmentId: "server-a",
       projectId: "project-a",
-      repository: "pingdotgg/t3code",
+      repository: "bcotrim/mognet",
       number: 1,
     };
     const fromServerB = {
       environmentId: "server-b",
       projectId: "project-b",
-      repository: "pingdotgg/t3code",
+      repository: "bcotrim/mognet",
       number: 2,
     };
 
@@ -510,7 +510,7 @@ describe("rightPanelStore", () => {
   describe("updatePullRequestTabStatus", () => {
     const status = (isDraft: boolean) => ({
       projectId: "project-a",
-      repository: "pingdotgg/t3code",
+      repository: "bcotrim/mognet",
       number: 4909,
       state: "open" as const,
       isDraft,
@@ -522,7 +522,7 @@ describe("rightPanelStore", () => {
       const target = {
         environmentId: "remote",
         projectId: "project-a",
-        repository: "pingdotgg/t3code",
+        repository: "bcotrim/mognet",
         number: 4909,
       };
       useRightPanelStore.getState().openPullRequest(refA, target);
@@ -537,7 +537,7 @@ describe("rightPanelStore", () => {
     });
 
     it("keys a status under the same id a thread surface with no environment carries", () => {
-      const target = { projectId: "project-a", repository: "pingdotgg/t3code", number: 4909 };
+      const target = { projectId: "project-a", repository: "bcotrim/mognet", number: 4909 };
       useRightPanelStore.getState().openPullRequest(refA, target);
       const surface = selectSelectedRightPanelSurface(
         useRightPanelStore.getState().byThreadKey,

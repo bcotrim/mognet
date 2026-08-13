@@ -144,14 +144,14 @@ describe("pull request filters menu", () => {
         {
           id: projectId,
           environmentId: "env-1" as EnvironmentId,
-          title: "T3 Code · one",
-          workspaceRoot: "/work/t3code-1",
+          title: "Mognet · one",
+          workspaceRoot: "/work/mognet-1",
         },
         {
           id: projectId,
           environmentId: "env-2" as EnvironmentId,
-          title: "T3 Code · two",
-          workspaceRoot: "/work/t3code-2",
+          title: "Mognet · two",
+          workspaceRoot: "/work/mognet-2",
         },
       ],
       onProject,

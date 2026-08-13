@@ -267,7 +267,7 @@ describe("buildThreadActionItems", () => {
   it("prefers renderDescription when provided", () => {
     const [item] = buildThreadActionItems({
       threads: [makeThread({ branch: "feat/search", worktreePath: "/tmp/wt" })],
-      projectTitleById: new Map([[PROJECT_ID, "T3 Code"]]),
+      projectTitleById: new Map([[PROJECT_ID, "Mognet"]]),
       sortOrder: "updated_at",
       icon: null,
       renderDescription: (thread, { projectTitle }) =>
@@ -275,7 +275,7 @@ describe("buildThreadActionItems", () => {
       runThread: async (_thread) => undefined,
     });
 
-    expect(item?.description).toBe("T3 Code:feat/search:wt");
+    expect(item?.description).toBe("Mognet:feat/search:wt");
   });
 
   it("filters archived threads out of thread search items", () => {

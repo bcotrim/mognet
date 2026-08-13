@@ -1468,7 +1468,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
 
   it.effect("status logs actionable provider detail without exposing the upstream cause", () =>
     Effect.gen(function* () {
-      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      const repoDir = yield* makeTempDir("mognet-git-manager-");
       yield* initRepo(repoDir);
       yield* runGit(repoDir, ["checkout", "-b", "feature/status-rate-limited"]);
       const remoteDir = yield* createBareRemote();

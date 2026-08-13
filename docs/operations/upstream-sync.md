@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `b54bfc9312b030bad9d89771fbf561ccbfb2d315`
-- Reviewed on: `2026-08-12`
+- Last reviewed upstream commit: `5015d7cf9f98fe551115b625031f01e3f022cd2d`
+- Reviewed on: `2026-08-13`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -147,6 +147,22 @@ not merged by ancestry.
 - Kept `apps/mobile` and Usage deleted, skipped mobile-only, mobile release,
   Usage, and vouch-only commits, and omitted the Usage portions of mixed sidebar
   changes.
+
+### 2026-08-13 review
+
+- Ported pull-request filters, all-environment listing, branch updates, checks,
+  reactions, in-place editing, smarter diff ordering, and browser-opening
+  modifier clicks across GitHub, GitLab, Bitbucket, and Azure DevOps.
+- Ported changed-file and diff scrolling fixes, stable timeline minimaps,
+  project/provider metadata in command-palette thread results, theme-mode
+  preservation, sidebar width reset, tooltip layering, source-control discovery,
+  preview zoom feedback, and tighter Codex collaboration prompts.
+- Ported draft repository switching with prompt and image preservation while
+  retaining each project's configured model and provider options as authoritative
+  for fresh, open, reused, and raced new-thread drafts.
+- Kept `apps/mobile`, Clerk, T3 Connect, hosted onboarding, account-environment
+  management, and mobile showcase fixtures deleted or skipped. Retained Mognet
+  names, URLs, storage keys, and test fixtures throughout the incoming changes.
 
 Every sync, including scheduled task runs, must:
 
