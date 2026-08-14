@@ -86,7 +86,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       <MognetBrandMark onBackdrop={onBackdrop} />
       <span
         className={cn(
-          "truncate text-sm font-medium tracking-normal",
+          "-translate-y-px truncate text-sm font-medium tracking-normal",
           onBackdrop ? "text-white/70" : "text-muted-foreground",
         )}
       >
