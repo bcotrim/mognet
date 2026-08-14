@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `5015d7cf9f98fe551115b625031f01e3f022cd2d`
-- Reviewed on: `2026-08-13`
+- Last reviewed upstream commit: `038560e58036d51b2576b3c2cd9170a194cefe9e`
+- Reviewed on: `2026-08-14`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -163,6 +163,19 @@ not merged by ancestry.
 - Kept `apps/mobile`, Clerk, T3 Connect, hosted onboarding, account-environment
   management, and mobile showcase fixtures deleted or skipped. Retained Mognet
   names, URLs, storage keys, and test fixtures throughout the incoming changes.
+
+### 2026-08-14 review
+
+- Ported pull-request panel sizing, environment-scoped errors, latency tracking,
+  merge-settling preferences, IME-safe renaming, sidebar artwork/alignment, and
+  titlebar control consistency.
+- Ported Browser panel favicons, browser-ready local-server discovery, and leaner
+  Windows desktop packaging, adapting new storage and temporary-file names to Mognet.
+- Preserved project-configured model and provider options as authoritative for fresh
+  and reused new-thread drafts, with focused regression coverage retained in
+  `useHandleNewThread.test.ts`.
+- Kept `apps/mobile`, Clerk, cloud/Live Activity publishing, removed self-update
+  helpers, and upstream-only contributor/instruction metadata deleted or skipped.
 
 Every sync, including scheduled task runs, must:
 
