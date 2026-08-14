@@ -44,7 +44,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
               variant="ghost"
               size="sm"
             >
-              <PanelRightIcon className="size-3.5" />
+              <PanelRightIcon className="size-4" />
               {liveAgentCount > 0 ? (
                 <span
                   aria-hidden
@@ -89,9 +89,9 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
             size="sm"
           >
             {maximized ? (
-              <Minimize2Icon className="size-3.5" />
+              <Minimize2Icon className="size-4" />
             ) : (
-              <Maximize2Icon className="size-3.5" />
+              <Maximize2Icon className="size-4" />
             )}
           </Toggle>
         }
