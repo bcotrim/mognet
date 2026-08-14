@@ -4,6 +4,8 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 
+export type ScheduledThreadOrigin = Extract<OrchestrationThreadOrigin, { type: "scheduled-task" }>;
+
 export function resolveScheduledThreadOrigin(input: {
   readonly thread:
     | {
@@ -13,7 +15,7 @@ export function resolveScheduledThreadOrigin(input: {
     | null
     | undefined;
   readonly scheduledTasks: ReadonlyArray<ScheduledTaskSnapshot>;
-}): OrchestrationThreadOrigin | null {
+}): ScheduledThreadOrigin | null {
   const thread = input.thread;
   if (!thread) return null;
   if (thread.origin?.type === "scheduled-task") return thread.origin;
