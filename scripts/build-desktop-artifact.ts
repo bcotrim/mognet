@@ -1023,9 +1023,7 @@ const hasNativeLoaderMarkers = Effect.fn("hasNativeLoaderMarkers")(function* (pa
   if (!(yield* exists(manifestPath))) return false;
   const source = yield* fs.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""));
   if (source === "") return false;
-  const manifest = yield* Effect.try(() => decodeNativeMarkerManifest(source)).pipe(
-    Effect.orElseSucceed(() => null),
-  );
+  const manifest = Option.getOrNull(Option.liftThrowable(decodeNativeMarkerManifest)(source));
   if (manifest === null) return false;
   return Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies }).some(
     (dependency) => dependency.startsWith("node-gyp-build"),
