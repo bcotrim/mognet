@@ -283,7 +283,10 @@ import {
   shouldShowThreadErrorBanner,
   ThreadErrorBanner,
 } from "./chat/ThreadErrorBanner";
-import { resolveThreadPr } from "./ThreadStatusIndicators";
+import {
+  resolveDisplayedThreadPr,
+  threadChangeRequestSnapshotsAtom,
+} from "./ThreadStatusIndicators";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { resolveScheduledThreadOrigin } from "../scheduledTaskOrigin";
 import { ThreadSyncStatusPill } from "./chat/ThreadSyncStatusPill";
@@ -1230,6 +1233,7 @@ function ChatViewContent(props: ChatViewProps) {
     () => formatInteractiveReviewDiffScope(diffSelection),
     [diffSelection],
   );
+  const changeRequestSnapshotByKey = useAtomValue(threadChangeRequestSnapshotsAtom);
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
     readonly messageId: MessageId | null;
@@ -3592,10 +3596,11 @@ function ChatViewContent(props: ChatViewProps) {
   const activeThreadShell = useThreadShell(isServerThread ? activeThreadRef : null);
   const autoSettleAfterDays = useClientSettings((settings) => settings.sidebarAutoSettleAfterDays);
   const autoSettleOnMerge = useClientSettings((settings) => settings.sidebarAutoSettleOnMerge);
-  const activeThreadPr = resolveThreadPr({
+  const activeThreadPr = resolveDisplayedThreadPr({
     threadBranch: activeThread?.branch ?? null,
     gitStatus: gitStatusQuery.data ?? null,
-    hasDedicatedWorktree: (activeThread?.worktreePath ?? null) !== null,
+    snapshot: activeThreadKey ? changeRequestSnapshotByKey.get(activeThreadKey) : undefined,
+    retainTerminalOnBranchMismatch: activeThread?.worktreePath === null,
   });
   // The right panel offers the thread's own change request, so it can only offer it once the
   // branch has one; until then the picker says so rather than opening an empty panel.
@@ -3677,6 +3682,7 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadShell,
     autoSettleAfterDays,
     autoSettleOnMerge,
+    changeRequestSnapshotByKey,
     nowMinute,
     supportsSettlement,
   ]);
