@@ -160,7 +160,11 @@ import {
 import { ProjectFavicon } from "./ProjectFavicon";
 import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelLabel } from "./chat/providerIconUtils";
-import { deriveProviderInstanceEntries, type ProviderInstanceEntry } from "../providerInstances";
+import {
+  deriveProviderInstanceEntries,
+  shouldShowInstanceBadge,
+  type ProviderInstanceEntry,
+} from "../providerInstances";
 import { primaryServerProvidersAtom } from "../state/server";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -249,7 +253,8 @@ function SidebarThreadTooltip({
   projectCwd,
   projectFaviconPath,
   environmentLabel,
-  driverKind,
+  providerEntry,
+  showInstanceBadge,
   modelInstanceId,
   modelLabel,
   branchMismatch,
@@ -261,7 +266,8 @@ function SidebarThreadTooltip({
   projectCwd: string | null;
   projectFaviconPath: string | null;
   environmentLabel: string | null;
-  driverKind: ProviderInstanceEntry["driverKind"] | null;
+  providerEntry: ProviderInstanceEntry | null;
+  showInstanceBadge: boolean;
   modelInstanceId: string;
   modelLabel: string;
   branchMismatch: {
@@ -271,6 +277,7 @@ function SidebarThreadTooltip({
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
 }) {
+  const driverKind = providerEntry?.driverKind ?? null;
   return (
     <TooltipPopup
       side="right"
@@ -317,10 +324,21 @@ function SidebarThreadTooltip({
             <div className="flex min-w-0 items-center gap-2">
               <ProviderInstanceIcon
                 driverKind={driverKind}
-                displayName={thread.session?.providerName ?? modelInstanceId}
+                displayName={
+                  providerEntry?.displayName ?? thread.session?.providerName ?? modelInstanceId
+                }
+                accentColor={providerEntry?.accentColor}
+                // Initials would swallow a small glyph: accent dot, name in label.
+                showBadge={showInstanceBadge && providerEntry?.accentColor !== undefined}
+                badgeContent="none"
+                badgeClassName="h-2 min-w-2 px-0"
                 iconClassName="size-4 shrink-0"
               />
-              <div className="min-w-0 wrap-break-word text-foreground/90">{modelLabel}</div>
+              <div className="min-w-0 wrap-break-word text-foreground/90">
+                {showInstanceBadge && providerEntry
+                  ? `${modelLabel} · ${providerEntry.displayName}`
+                  : modelLabel}
+              </div>
             </div>
           ) : null}
           {terminalStatus ? (
@@ -869,6 +887,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const modelInstanceId = thread.session?.providerInstanceId ?? thread.modelSelection.instanceId;
   const providerEntry = props.providerEntryByInstanceId.get(modelInstanceId) ?? null;
   const driverKind = providerEntry?.driverKind ?? null;
+  const showInstanceBadge =
+    providerEntry !== null &&
+    shouldShowInstanceBadge(providerEntry, props.providerEntryByInstanceId.values());
   const selectedModel = providerEntry?.models.find(
     (model) => model.slug === thread.modelSelection.model,
   );
@@ -886,7 +907,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       projectCwd={props.projectCwd}
       projectFaviconPath={props.projectFaviconPath}
       environmentLabel={props.environmentLabel}
-      driverKind={driverKind}
+      providerEntry={providerEntry}
+      showInstanceBadge={showInstanceBadge}
       modelInstanceId={modelInstanceId}
       modelLabel={modelLabel}
       branchMismatch={branchMismatch}
@@ -1480,11 +1502,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   </span>
                 ) : null}
                 {driverKind ? (
-                  <span className="inline-flex shrink-0 items-center opacity-60">
+                  <span className="inline-flex shrink-0 items-center">
                     <ProviderInstanceIcon
                       driverKind={driverKind}
-                      displayName={thread.session?.providerName ?? modelInstanceId}
+                      displayName={
+                        providerEntry?.displayName ??
+                        thread.session?.providerName ??
+                        modelInstanceId
+                      }
+                      accentColor={providerEntry?.accentColor}
+                      showBadge={showInstanceBadge}
                       iconClassName="size-4"
+                      badgeClassName="right-[-0.1875rem] bottom-[-0.1875rem] h-3 min-w-3 px-0.5 text-[7px]"
                     />
                   </span>
                 ) : null}
@@ -1541,7 +1570,9 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   });
   const modelInstanceId = thread.session?.providerInstanceId ?? thread.modelSelection.instanceId;
   const providerEntry = props.providerEntryByInstanceId.get(modelInstanceId) ?? null;
-  const driverKind = providerEntry?.driverKind ?? null;
+  const showInstanceBadge =
+    providerEntry !== null &&
+    shouldShowInstanceBadge(providerEntry, props.providerEntryByInstanceId.values());
   const selectedModel = providerEntry?.models.find(
     (model) => model.slug === thread.modelSelection.model,
   );
@@ -1599,7 +1630,8 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           projectCwd={props.projectCwd}
           projectFaviconPath={props.projectFaviconPath}
           environmentLabel={props.environmentLabel}
-          driverKind={driverKind}
+          providerEntry={providerEntry}
+          showInstanceBadge={showInstanceBadge}
           modelInstanceId={modelInstanceId}
           modelLabel={modelLabel}
           branchMismatch={branchMismatch}
