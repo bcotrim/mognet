@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `038560e58036d51b2576b3c2cd9170a194cefe9e`
-- Reviewed on: `2026-08-14`
+- Last reviewed upstream commit: `d8a6dfd3159e6a1c47ecb2cb0d2f5c8e9b3c6649`
+- Reviewed on: `2026-08-15`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -176,6 +176,38 @@ not merged by ancestry.
   `useHandleNewThread.test.ts`.
 - Kept `apps/mobile`, Clerk, cloud/Live Activity publishing, removed self-update
   helpers, and upstream-only contributor/instruction metadata deleted or skipped.
+
+### 2026-08-15 review
+
+- Ported opening remote environments in a local editor over SSH, including the
+  server's advertised SSH targets, the desktop remote-editor probe, and the
+  Open In picker's deep-link and unavailable states.
+- Ported the terminal subprocess-polling fix that no longer floods the PID
+  space, ctrl+c copying of terminal selections in the web app, git status for
+  files literally named `HEAD`, and bounded OKLCH gamut mapping.
+- Ported day-aware chat timestamps, sidebar action tooltips, pull-request action
+  menu alignment, clearer desktop update status, and preview-browser zoom that
+  no longer follows app zoom.
+- Preserved each project's configured model and provider options as
+  authoritative for new-thread drafts; no incoming commit touched thread
+  creation or model selection, and `useHandleNewThread.test.ts` coverage is
+  unchanged.
+- Kept `apps/mobile` and Usage deleted. Skipped mobile-only `184d8ef33`, the
+  Usage-only Codex graph contrast fix `f0ebc628c`, upstream AUR packaging
+  `e25021af7`, and upstream issue-template/contributing docs `e9ae134c5`.
+  `d7abd7f3b` was reverted upstream by `804cba430`, so both were skipped as a
+  no-op pair.
+- Skipped `9885a845c` (global styling refactor). It is a pure refactor that
+  rewrites the composer-glass, titlebar, and stage-art blocks this fork has
+  diverged on, with twelve conflicts in `index.css` alone and class renames
+  across sixty-nine files. Merging it risks silently breaking Mognet theming
+  with no user-visible gain.
+- Skipped `c9063f03e` (Windows `server.asar` sidecar packaging). Its
+  `build-desktop-artifact.ts` rewrite is interleaved with Clerk relay auth and
+  mac passkey signing, both removed here, and it needs an `@electron/asar`
+  dependency plus lockfile work against upstream's Effect beta.103 while this
+  fork stays on beta.78. This fork's own Windows file-count reduction already
+  landed in the previous sync.
 
 Every sync, including scheduled task runs, must:
 
