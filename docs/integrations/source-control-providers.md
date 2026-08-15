@@ -95,13 +95,23 @@ That's it—you can now clone, publish, and create pull requests.
 
 Bitbucket uses API tokens instead of a CLI tool:
 
-1. Create an API token in your Atlassian account with read/write access to pull requests and repositories
-2. Add these environment variables to the environment running Mognet:
-   ```bash
-   export MOGNET_BITBUCKET_EMAIL="you@example.com"
-   export MOGNET_BITBUCKET_API_TOKEN="your-token"
-   ```
-3. Restart Mognet and verify the connection in **Source Control settings**
+Recommended, a Bitbucket access token:
+
+```bash
+export MOGNET_BITBUCKET_ACCESS_TOKEN="your-access-token"
+```
+
+Or an Atlassian account email plus API token, with read/write access to pull requests and
+repositories, plus read access to your user account (`read:user:bitbucket`, used to verify the
+connection):
+
+```bash
+export MOGNET_BITBUCKET_EMAIL="you@example.com"
+export MOGNET_BITBUCKET_API_TOKEN="your-token"
+```
+
+If both are set, the access token wins. Restart Mognet and verify the connection in **Source
+Control settings**.
 
 ### For Azure DevOps
 
