@@ -555,6 +555,7 @@ function toStatusPr(pr: PullRequestInfo): {
   mergeStatus?: ChangeRequest["mergeStatus"] | undefined;
   reviewDecision?: ChangeRequest["reviewDecision"] | undefined;
   checks?: ChangeRequest["checks"] | undefined;
+  updatedAt: string | null;
 } {
   return {
     number: pr.number,
@@ -567,6 +568,10 @@ function toStatusPr(pr: PullRequestInfo): {
     ...(pr.mergeStatus !== undefined ? { mergeStatus: pr.mergeStatus } : {}),
     ...(pr.reviewDecision !== undefined ? { reviewDecision: pr.reviewDecision } : {}),
     ...(pr.checks !== undefined ? { checks: pr.checks } : {}),
+    updatedAt: Option.match(pr.updatedAt, {
+      onNone: () => null,
+      onSome: (updatedAt) => DateTime.formatIso(updatedAt),
+    }),
   };
 }
 
