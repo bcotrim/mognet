@@ -1824,9 +1824,31 @@ function LegacyFeaturesSection() {
               control={
                 <Switch
                   checked={settings.planModeEnabled}
-                  onCheckedChange={(checked) =>
-                    updateSettings({ planModeEnabled: Boolean(checked) })
-                  }
+                  onCheckedChange={(checked) => {
+                    const planModeEnabled = Boolean(checked);
+                    const textGenerationModelSelection = withoutPlanAgentSelection(
+                      settings.textGenerationModelSelection,
+                    );
+                    const sourceControlWriterModelSelection = withoutPlanAgentSelection(
+                      settings.sourceControlWriterModelSelection,
+                    );
+                    updateSettings({
+                      planModeEnabled,
+                      ...(planModeEnabled
+                        ? {}
+                        : {
+                            ...(textGenerationModelSelection &&
+                            textGenerationModelSelection !== settings.textGenerationModelSelection
+                              ? { textGenerationModelSelection }
+                              : {}),
+                            ...(sourceControlWriterModelSelection &&
+                            sourceControlWriterModelSelection !==
+                              settings.sourceControlWriterModelSelection
+                              ? { sourceControlWriterModelSelection }
+                              : {}),
+                          }),
+                    });
+                  }}
                   aria-label="Plan mode (legacy)"
                 />
               }

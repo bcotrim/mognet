@@ -29,6 +29,7 @@ import {
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
 import { useClientSettings } from "../hooks/useSettings";
+import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
@@ -118,6 +119,7 @@ function RootRouteView() {
         <ConfirmDialogHost />
         <SlowRpcRequestToastCoordinator />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
+        {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
         {appShell}
         {/* Above the router: a theme draft is judged by walking the app, so the
