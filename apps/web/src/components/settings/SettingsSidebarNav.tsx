@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   ArchiveIcon,
+  ArrowLeftIcon,
   BlocksIcon,
   BotIcon,
   GitBranchIcon,
@@ -19,7 +20,7 @@ import {
   Settings2Icon,
   XIcon,
 } from "lucide-react";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useCanGoBack, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -72,6 +73,7 @@ function SettingsSectionIcon({ to }: { to: SettingsPath }) {
 export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const navigate = useNavigate();
   const currentHash = useLocation({ select: (location) => location.hash });
+  const canGoBack = useCanGoBack();
   const { isMobile, setOpenMobile, open, setOpen } = useSidebar();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -175,6 +177,17 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
     },
     [activeResultIndex, clearSearch, handleSearchResultClick, isSearching, results],
   );
+  const handleBackClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    if (canGoBack) {
+      window.history.back();
+      return;
+    }
+    void navigate({ to: "/" });
+  }, [canGoBack, isMobile, navigate, setOpenMobile]);
+
   return (
     <>
       <SidebarContent className="overflow-x-hidden">

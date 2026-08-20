@@ -52,6 +52,18 @@ class FakeElement {
   hasAttribute(): boolean {
     return false;
   }
+
+  closest(): FakeElement | null {
+    return null;
+  }
+
+  querySelector(): FakeElement | null {
+    return null;
+  }
+
+  querySelectorAll(): ReadonlyArray<FakeElement> {
+    return [];
+  }
 }
 
 function asNode(element: FakeElement): Node {

@@ -1183,7 +1183,6 @@ function PullRequestsRouteView() {
         : null,
     [search.number, search.repository, selectedProject],
   );
-  const rightPanelAvailable = selectedPullRequestSurface !== null;
   useEffect(() => {
     if (!pullRequestsSupported || rightPanelRef === null || linkedSelection === null) return;
     useRightPanelStore.getState().openPullRequest(rightPanelRef, linkedSelection);

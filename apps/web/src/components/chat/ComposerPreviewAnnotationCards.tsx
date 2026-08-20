@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import type { ComposerImageAttachment } from "~/composerDraftStore";
 import { formatElementContextLabel, normalizeElementContextSelection } from "~/lib/elementContext";
 import { cn } from "~/lib/utils";
-import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 interface ComposerPreviewAnnotationCardsProps {

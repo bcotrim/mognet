@@ -12,7 +12,6 @@ import type {
 } from "@t3tools/contracts";
 import {
   ApprovalRequestId,
-  EnvironmentId,
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -1974,7 +1973,6 @@ describe("agent browser access", () => {
         Layer.provide(directoryLayer),
         Layer.provide(ServerSettings.ServerSettingsService.layerTest({ enableAgentBrowserAccess })),
         Layer.provide(serverConfigTestLayer),
-        Layer.provide(AnalyticsService.layerTest),
         Layer.provide(
           Layer.succeed(
             ProviderEventLoggers.ProviderEventLoggers,

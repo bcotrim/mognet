@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `d8a6dfd3159e6a1c47ecb2cb0d2f5c8e9b3c6649`
-- Reviewed on: `2026-08-15`
+- Last reviewed upstream commit: `105cd5e0c57ab8b6df3bd8af5b534a5bc682fdce`
+- Reviewed on: `2026-08-20`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -271,3 +271,46 @@ Every sync, including scheduled task runs, must:
 - Keep `@t3tools/*` package names unless doing a deliberate package rename.
 - Treat deleted mobile/marketing files as deleted when resolving conflicts.
 - If upstream changes are mostly in pruned surfaces, skip them.
+
+### 2026-08-20 review
+
+Reviewed `d8a6dfd31..105cd5e0c` (144 commits) and ported 115. The previous
+marker recorded a malformed SHA (`d8a6dfd315...9b3c6649`); the real commit is
+`d8a6dfd31539a86d08bd4fbd030f8252b3c405ac`, and the range was walked from there.
+
+- Ported server reliability: SQLite `busy_timeout` instead of `SQLITE_BUSY`
+  failures, bounded thread activity hydration, snoozed threads settling
+  immediately, pending user-input requests settling when a Claude session stops,
+  long-running git pushes, provider notification consumers surviving
+  `startSession`, and a wire projection persisted for streaming `tool.updated`.
+- Ported pull-request work: provider API budget guards with `Retry-After`
+  handling, PRs no longer inherited from default upstreams, a merged PR settling
+  its thread only once (change requests now carry `updatedAt`), GitLab review
+  comments on context lines, and legible review verdicts in the detail panel.
+- Ported web UX: file drops across the chat workspace, oversized prompts rejected
+  before a provider turn starts, terminal close confirmation, right-click and
+  Shift+Insert terminal paste, terminal PR badges retained across checkout
+  switches via a parent-held snapshot atom, the unified `WorkspacePageHeader`
+  navigation, and the styled-Tooltip lint rule (`no-native-title-tooltip`) with
+  this fork's remaining native `title` tooltips migrated.
+- Ported desktop: Chrome-style hold-to-quit, windows destroyed before quit
+  cleanup, OS-locale timestamps, browser tab muting, hidden preview throttling,
+  unthrottled cold-start boot, and mouse thumb buttons routed to the in-app
+  browser.
+- Preserved this fork's new-thread model defaults. Only `80c37f1a7` touched model
+  selection, and it changes which trait options render, not where a new thread's
+  model comes from; `resolveNewDraftModelSelection` coverage for fresh and reused
+  drafts is unchanged and passing.
+- Kept `apps/mobile`, `apps/marketing`, Usage, the cloud/T3 Connect and Clerk
+  surfaces, the background-service CLI, `infra/relay`, and `packaging/aur`
+  deleted. Skipped `a7c5ad5db`, `efe1773e9`, `6a687ee43`, `7441b3692`,
+  `f2d5fc91e` (cloud/Clerk), `684d703b0`, `a4cc1367b`, `8c85b4933`, `62654d279`
+  (Usage), `2aa5f095f` (launchd service), `db0659fea` (AUR), and `d23b181da`
+  (mobile themes; its web half is only a shared-package extraction serving
+  `apps/mobile`).
+- Skipped `ad117235b`: it deletes this fork's Mognet desktop icons in favour of
+  upstream `blueprint`/`black` assets and adds T3-branded DMG art.
+- Skipped `324ddda31` (`npx t3 triage`): it funnels bug reports into
+  `pingdotgg/t3code` issues, which is upstream support infrastructure.
+- Skipped `d79f975d0`: it tunes `chat-composer-glass-shell-with-context`, a class
+  this fork replaced when it rebuilt the composer glass.

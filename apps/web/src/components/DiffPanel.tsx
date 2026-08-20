@@ -1495,12 +1495,16 @@ function InteractiveReviewTourPanel({
           <p className="text-[9px] font-semibold tracking-[0.11em] text-primary uppercase">
             {isSidebar ? "Review notes" : "Review note"}
           </p>
-          <p
-            className="truncate text-xs font-medium text-foreground/85"
-            title={isSidebar ? tour.title : activeStep.title}
-          >
-            {isSidebar ? tour.title : activeStep.title}
-          </p>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <p className="truncate text-xs font-medium text-foreground/85">
+                  {isSidebar ? tour.title : activeStep.title}
+                </p>
+              }
+            />
+            <TooltipPopup side="top">{isSidebar ? tour.title : activeStep.title}</TooltipPopup>
+          </Tooltip>
         </div>
         <Tooltip>
           <TooltipTrigger
@@ -1654,7 +1658,6 @@ function InteractiveReviewTourPanel({
                     <span
                       key={filePath}
                       className="block truncate rounded-md border border-border/60 bg-muted/15 px-2.5 py-2 font-mono text-[10px] text-muted-foreground"
-                      title={filePath}
                     >
                       {filePath}
                     </span>
@@ -1981,7 +1984,7 @@ function DiffFileNavigator({
             className="flex min-w-0 cursor-pointer items-center gap-1.5 py-1.5 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             style={{ paddingLeft: `${leftPadding}px` }}
             aria-current={isActive ? "true" : undefined}
-            title={file.filePath}
+            aria-label={file.filePath}
             onClick={() => onSelectFile(file.fileKey)}
           >
             <PierreEntryIcon
@@ -2027,7 +2030,7 @@ function DiffFileNavigator({
                   "rounded-sm border px-1 py-0.5 text-[10px] leading-none font-medium tabular-nums",
                   reviewSeverityClassName(highestSeverity),
                 )}
-                title={`${findingCount} review finding${findingCount === 1 ? "" : "s"}`}
+                aria-label={`${findingCount} review finding${findingCount === 1 ? "" : "s"}`}
               >
                 {findingCount}
               </span>

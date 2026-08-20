@@ -1,5 +1,4 @@
 import { assert, describe, it } from "@effect/vitest";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -82,89 +81,6 @@ function makeHarness(confirmClose: Effect.Effect<boolean>) {
   );
 
   return { events, layer, listeners, quitCompleted };
-}
-
-function makeElectronAppLayer(
-  appListeners: Map<string, (...args: readonly unknown[]) => void>,
-  quit: Effect.Effect<void> = Effect.void,
-) {
-  const registerListener = (eventName: string, listener: (...args: readonly unknown[]) => void) =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        appListeners.set(eventName, listener);
-      }),
-      () =>
-        Effect.sync(() => {
-          appListeners.delete(eventName);
-        }),
-    ).pipe(Effect.asVoid);
-
-  return Layer.succeed(ElectronApp.ElectronApp, {
-    metadata: Effect.die("unexpected metadata read"),
-    name: Effect.succeed("T3 Code"),
-    systemLocale: Effect.succeed("en-US"),
-    whenReady: Effect.void,
-    quit,
-    exit: () => Effect.void,
-    relaunch: () => Effect.void,
-    setPath: () => Effect.void,
-    setName: () => Effect.void,
-    setAboutPanelOptions: () => Effect.void,
-    setAppUserModelId: () => Effect.void,
-    getAppMetrics: Effect.succeed([]),
-    isDefaultProtocolClient: () => Effect.succeed(false),
-    setAsDefaultProtocolClient: () => Effect.succeed(true),
-    setDesktopName: () => Effect.void,
-    setDockIcon: () => Effect.void,
-    appendCommandLineSwitch: () => Effect.void,
-    removeCommandLineSwitch: () => Effect.void,
-    onBeforeQuitForUpdate: (listener) => registerListener("before-quit-for-update", listener),
-    on: (eventName, listener) =>
-      registerListener(eventName, listener as unknown as (...args: readonly unknown[]) => void),
-  } satisfies ElectronApp.ElectronApp["Service"]);
-}
-
-const electronThemeLayer = Layer.succeed(ElectronTheme.ElectronTheme, {
-  shouldUseDarkColors: Effect.succeed(false),
-  setSource: () => Effect.void,
-  onUpdated: () => Effect.void,
-});
-
-function makeElectronWindowLayer(destroyAll: Effect.Effect<void> = Effect.void) {
-  return Layer.succeed(ElectronWindow.ElectronWindow, {
-    create: () => Effect.die("unexpected window creation"),
-    main: Effect.die("unexpected main window read"),
-    currentMainOrFirst: Effect.die("unexpected current window read"),
-    focusedMainOrFirst: Effect.die("unexpected focused window read"),
-    setMain: () => Effect.void,
-    clearMain: () => Effect.void,
-    reveal: () => Effect.void,
-    sendAll: () => Effect.void,
-    destroyAll,
-    syncAllAppearance: () => Effect.void,
-  });
-}
-
-function makeDesktopWindowLayer(
-  input: {
-    readonly activate?: Effect.Effect<void>;
-    readonly flushMainWindowBounds?: Effect.Effect<void>;
-  } = {},
-) {
-  return Layer.succeed(DesktopWindow.DesktopWindow, {
-    createMain: Effect.die("unexpected window creation"),
-    ensureMain: Effect.die("unexpected window creation"),
-    revealOrCreateMain: Effect.die("unexpected window creation"),
-    activate: input.activate ?? Effect.void,
-    createMainIfBackendReady: Effect.void,
-    showConnectingSplash: Effect.void,
-    handleBackendReady: () => Effect.void,
-    handleBackendNotReady: Effect.void,
-    flushMainWindowBounds: input.flushMainWindowBounds ?? Effect.void,
-    dispatchMenuAction: () => Effect.void,
-    zoomMain: () => Effect.void,
-    syncAppearance: Effect.void,
-  });
 }
 
 describe("DesktopLifecycle", () => {

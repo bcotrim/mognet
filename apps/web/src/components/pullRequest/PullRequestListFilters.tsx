@@ -24,7 +24,6 @@ import type { ElementType } from "react";
 import { cn } from "~/lib/utils";
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 import { Button } from "../ui/button";
 
 import {

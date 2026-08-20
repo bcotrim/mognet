@@ -1225,7 +1225,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         yield* runGit(repoDir, ["remote", "set-head", "origin", "main"]);
         yield* runGit(repoDir, ["remote", "add", "fork-seed", forkDir]);
         yield* runGit(repoDir, ["push", "fork-seed", "main"]);
-        yield* runGit(repoDir, ["checkout", "-b", "t3code/pr-777/main"]);
+        yield* runGit(repoDir, ["checkout", "-b", "mognet/pr-777/main"]);
         yield* runGit(repoDir, ["branch", "--set-upstream-to", "fork-seed/main"]);
         yield* configureVisibleRemoteUrlWithLocalRewrite(
           repoDir,
@@ -1261,7 +1261,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         });
 
         const status = yield* manager.status({ cwd: repoDir });
-        expect(status.refName).toBe("t3code/pr-777/main");
+        expect(status.refName).toBe("mognet/pr-777/main");
         expect(status.pr).toEqual({
           number: 777,
           title: "Fork PR from main",
@@ -1272,7 +1272,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           updatedAt: "2026-03-10T07:00:00.000Z",
         });
         expect(ghCalls).toContain(
-          "pr list --head contributor:main --state all --limit 20 --json number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner",
+          "pr list --head contributor:main --state all --limit 20 --json number,title,url,baseRefName,headRefName,state,mergedAt,updatedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup",
         );
       }),
     20_000,

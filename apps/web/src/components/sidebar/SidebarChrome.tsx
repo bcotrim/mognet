@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, GitPullRequestIcon, SettingsIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useCanGoBack, useLocation, useNavigate } from "@tanstack/react-router";
 
@@ -194,11 +195,6 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               onClick={handlePullRequestsClick}
             />
           ) : null}
-          <SidebarUtilityItem
-            icon={<ChartNoAxesColumnIcon />}
-            label="Usage"
-            onClick={handleUsageClick}
-          />
         </>
       )}
       <SidebarUpdatePill />
@@ -211,54 +207,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     <SidebarFooter className="p-[var(--sidebar-content-inset)]">
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarMenu className="flex-row items-center">
-        {currentFooterPage ? (
-          <SidebarMenuItem className="min-w-0 flex-1">
-            <SidebarMenuButton onClick={handleBackClick}>
-              <ArrowLeftIcon />
-              <span>Back</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ) : (
-          <>
-            <SidebarMenuItem className="shrink-0">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <SidebarMenuButton
-                      aria-label="Settings"
-                      onClick={handleSettingsClick}
-                      size="icon"
-                    >
-                      <SettingsIcon />
-                    </SidebarMenuButton>
-                  }
-                />
-                <TooltipPopup side="top">Settings</TooltipPopup>
-              </Tooltip>
-            </SidebarMenuItem>
-            {pullRequestsSupported ? (
-              <SidebarMenuItem className="shrink-0">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <SidebarMenuButton
-                        aria-label="Pull Requests"
-                        onClick={handlePullRequestsClick}
-                        size="icon"
-                      >
-                        <GitPullRequestIcon />
-                      </SidebarMenuButton>
-                    }
-                  />
-                  <TooltipPopup side="top">Pull Requests</TooltipPopup>
-                </Tooltip>
-              </SidebarMenuItem>
-            ) : null}
-          </>
-        )}
-        <SidebarUpdatePill />
-      </SidebarMenu>
+      <SidebarUtilityMenu />
     </SidebarFooter>
   );
 });

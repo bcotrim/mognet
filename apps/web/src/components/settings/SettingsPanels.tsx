@@ -66,6 +66,7 @@ import { useThreadActions } from "../../hooks/useThreadActions";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import { isMacPlatform } from "../../lib/utils";
+import { withoutPlanAgentSelection } from "../../modelSelection";
 import {
   primaryServerAvailableEditorsAtom,
   primaryServerAvailableTerminalsAtom,
