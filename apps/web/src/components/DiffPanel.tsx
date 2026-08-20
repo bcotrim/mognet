@@ -253,6 +253,9 @@ export default function DiffPanel({
       : null,
   );
   const activeCwd = activeThread?.worktreePath ?? activeProject?.workspaceRoot;
+  const activeRepositoryRoot = activeThread?.worktreePath
+    ? undefined
+    : activeProject?.repositoryIdentity?.rootPath;
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(activeThread?.environmentId ?? null),
   );
@@ -754,6 +757,7 @@ export default function DiffPanel({
         threadRef: routeThreadRef,
         filePath,
         activeCwd,
+        repositoryRoot: activeRepositoryRoot,
         openInEditor: (targetPath) => {
           void (async () => {
             const result = await openInPreferredEditor(targetPath);
@@ -773,7 +777,7 @@ export default function DiffPanel({
         },
       });
     },
-    [activeCwd, openInPreferredEditor, routeThreadRef],
+    [activeCwd, activeRepositoryRoot, openInPreferredEditor, routeThreadRef],
   );
   const toggleDiffFileCollapsed = useCallback(
     (fileKey: string) => {
@@ -1031,11 +1035,19 @@ export default function DiffPanel({
         {selectedTurnId === null && selectedGitScope === "branch" && selectedGitSource?.baseRef && (
           <div
             className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"
-            title={`${selectedGitSource.headRef ?? "HEAD"} → ${selectedGitSource.baseRef}`}
             aria-label={`Comparing ${selectedGitSource.headRef ?? "HEAD"} against ${selectedGitSource.baseRef}`}
           >
-            <span className="min-w-0 max-w-48 truncate">{selectedGitSource.headRef ?? "HEAD"}</span>
-            <ArrowRightIcon className="size-3.5 shrink-0 opacity-70" />
+            <Tooltip>
+              <TooltipTrigger render={<span className="flex min-w-0 items-center gap-2" />}>
+                <span className="min-w-0 max-w-48 truncate">
+                  {selectedGitSource.headRef ?? "HEAD"}
+                </span>
+                <ArrowRightIcon className="size-3.5 shrink-0 opacity-70" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {`${selectedGitSource.headRef ?? "HEAD"} → ${selectedGitSource.baseRef}`}
+              </TooltipPopup>
+            </Tooltip>
             <Combobox
               items={baseRefItems}
               filteredItems={filteredBaseRefItems}
@@ -1125,12 +1137,20 @@ export default function DiffPanel({
                               />
                             </div>
                           ) : choice.remote ? (
-                            <span
-                              className="flex justify-end text-muted-foreground"
-                              title="Remote only"
-                            >
-                              <CheckIcon aria-hidden="true" className="size-3" />
-                            </span>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <span className="flex justify-end text-muted-foreground">
+                                    <CheckIcon
+                                      role="img"
+                                      aria-label="Remote only"
+                                      className="size-3"
+                                    />
+                                  </span>
+                                }
+                              />
+                              <TooltipPopup side="top">Remote only</TooltipPopup>
+                            </Tooltip>
                           ) : null}
                         </div>
                       </ComboboxItem>
@@ -1475,12 +1495,16 @@ function InteractiveReviewTourPanel({
           <p className="text-[9px] font-semibold tracking-[0.11em] text-primary uppercase">
             {isSidebar ? "Review notes" : "Review note"}
           </p>
-          <p
-            className="truncate text-xs font-medium text-foreground/85"
-            title={isSidebar ? tour.title : activeStep.title}
-          >
-            {isSidebar ? tour.title : activeStep.title}
-          </p>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <p className="truncate text-xs font-medium text-foreground/85">
+                  {isSidebar ? tour.title : activeStep.title}
+                </p>
+              }
+            />
+            <TooltipPopup side="top">{isSidebar ? tour.title : activeStep.title}</TooltipPopup>
+          </Tooltip>
         </div>
         <Tooltip>
           <TooltipTrigger
@@ -1634,7 +1658,6 @@ function InteractiveReviewTourPanel({
                     <span
                       key={filePath}
                       className="block truncate rounded-md border border-border/60 bg-muted/15 px-2.5 py-2 font-mono text-[10px] text-muted-foreground"
-                      title={filePath}
                     >
                       {filePath}
                     </span>
@@ -1961,7 +1984,7 @@ function DiffFileNavigator({
             className="flex min-w-0 cursor-pointer items-center gap-1.5 py-1.5 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             style={{ paddingLeft: `${leftPadding}px` }}
             aria-current={isActive ? "true" : undefined}
-            title={file.filePath}
+            aria-label={file.filePath}
             onClick={() => onSelectFile(file.fileKey)}
           >
             <PierreEntryIcon
@@ -2007,7 +2030,7 @@ function DiffFileNavigator({
                   "rounded-sm border px-1 py-0.5 text-[10px] leading-none font-medium tabular-nums",
                   reviewSeverityClassName(highestSeverity),
                 )}
-                title={`${findingCount} review finding${findingCount === 1 ? "" : "s"}`}
+                aria-label={`${findingCount} review finding${findingCount === 1 ? "" : "s"}`}
               >
                 {findingCount}
               </span>

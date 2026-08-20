@@ -92,6 +92,7 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
@@ -327,6 +328,7 @@ const makeWsRpcLayer = (
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
+      const remoteOpenTargets = yield* RemoteOpenTargets.RemoteOpenTargets;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
       const review = yield* ReviewService.ReviewService;
       const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
@@ -701,13 +703,17 @@ const makeWsRpcLayer = (
         const scheduledTaskList = yield* scheduledTasks.list;
         const environment = yield* serverEnvironment.getDescriptor;
         const auth = yield* serverAuth.getDescriptor();
-        const [availableEditors, availableTerminals] = yield* Effect.all(
-          [
-            resolveAvailableLaunchersForConfig(externalLauncher.resolveAvailableEditors()),
-            resolveAvailableLaunchersForConfig(externalLauncher.resolveAvailableTerminals()),
-          ],
-          { concurrency: "unbounded" },
-        );
+        const [availableEditors, availableTerminals, availableRemoteOpenTargets] =
+          yield* Effect.all(
+            [
+              resolveAvailableLaunchersForConfig(externalLauncher.resolveAvailableEditors()),
+              resolveAvailableLaunchersForConfig(externalLauncher.resolveAvailableTerminals()),
+              // Same discovery-with-timeout treatment as editors: a slow probe
+              // must not stall server.getConfig, so it degrades to no targets.
+              resolveAvailableLaunchersForConfig(remoteOpenTargets.resolveTargets()),
+            ],
+            { concurrency: "unbounded" },
+          );
 
         return {
           environment,
@@ -720,6 +726,7 @@ const makeWsRpcLayer = (
           scheduledTasks: scheduledTaskList.tasks,
           availableEditors,
           availableTerminals,
+          remoteOpenTargets: availableRemoteOpenTargets,
           observability: {
             logsDirectoryPath: config.logsDir,
             localTracingEnabled: true,
@@ -1314,6 +1321,14 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.pullRequestsActivity, pullRequests.activity(input), {
             "rpc.aggregate": "pull-requests",
           }),
+        [WS_METHODS.pullRequestsThreadComments]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.pullRequestsThreadComments,
+            pullRequests.threadComments(input),
+            {
+              "rpc.aggregate": "pull-requests",
+            },
+          ),
         [WS_METHODS.pullRequestsDiffFileContents]: (input) =>
           observeRpcEffect(
             WS_METHODS.pullRequestsDiffFileContents,

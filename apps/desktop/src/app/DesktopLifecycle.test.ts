@@ -7,6 +7,7 @@ import type * as Electron from "electron";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as DesktopCloseGuard from "./DesktopCloseGuard.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -72,6 +73,11 @@ function makeHarness(confirmClose: Effect.Effect<boolean>) {
     Layer.mock(ElectronTheme.ElectronTheme)({
       onUpdated: () => Effect.void,
     }),
+    Layer.mock(ElectronWindow.ElectronWindow)({
+      destroyAll: Effect.sync(() => {
+        events.push("destroy-windows");
+      }),
+    }),
   );
 
   return { events, layer, listeners, quitCompleted };
@@ -125,6 +131,7 @@ describe("DesktopLifecycle", () => {
           "prevent",
           "confirm",
           "flush-bounds",
+          "destroy-windows",
           "shutdown-request",
           "shutdown-complete",
           "allow-quit",

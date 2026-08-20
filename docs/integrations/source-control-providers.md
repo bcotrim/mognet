@@ -67,7 +67,7 @@ Run a quick **Rescan** after setting up a new machine or changing credentials.
 
 ### For GitHub (Recommended for most users)
 
-1. Install the GitHub CLI on the machine running Mognet:
+1. Install the GitHub CLI (version 2.81.0 or newer) on the machine running Mognet:
    ```bash
    brew install gh
    ```
@@ -95,13 +95,23 @@ That's it—you can now clone, publish, and create pull requests.
 
 Bitbucket uses API tokens instead of a CLI tool:
 
-1. Create an API token in your Atlassian account with read/write access to pull requests and repositories
-2. Add these environment variables to the environment running Mognet:
-   ```bash
-   export MOGNET_BITBUCKET_EMAIL="you@example.com"
-   export MOGNET_BITBUCKET_API_TOKEN="your-token"
-   ```
-3. Restart Mognet and verify the connection in **Source Control settings**
+Recommended, a Bitbucket access token:
+
+```bash
+export MOGNET_BITBUCKET_ACCESS_TOKEN="your-access-token"
+```
+
+Or an Atlassian account email plus API token, with read/write access to pull requests and
+repositories, plus read access to your user account (`read:user:bitbucket`, used to verify the
+connection):
+
+```bash
+export MOGNET_BITBUCKET_EMAIL="you@example.com"
+export MOGNET_BITBUCKET_API_TOKEN="your-token"
+```
+
+If both are set, the access token wins. Restart Mognet and verify the connection in **Source
+Control settings**.
 
 ### For Azure DevOps
 
@@ -129,6 +139,7 @@ Bitbucket uses API tokens instead of a CLI tool:
 **Common issues:**
 
 - **Provider shows "Not authenticated"** – Run the login command for that provider (e.g., `gh auth login`) in a terminal on the server, then rescan in Settings
+- **GitHub says it could not verify sign-in status** – Mognet needs GitHub CLI 2.81.0 or newer to check sign-in status. Update `gh` (e.g., `brew upgrade gh`), then rescan
 - **Bitbucket not connecting** – Double-check your environment variables are set in the correct shell profile and the server was restarted
 - **Can't push to a remote** – Verify your Git remote URL matches the provider you've authenticated with (SSH vs HTTPS remotes may need different credentials)
 

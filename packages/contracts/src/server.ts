@@ -17,7 +17,7 @@ import {
   KeybindingWhen,
   ResolvedKeybindingsConfig,
 } from "./keybindings.ts";
-import { EditorId, ExternalTerminalId } from "./editor.ts";
+import { EditorId, ExternalTerminalId, RemoteOpenTarget } from "./editor.ts";
 import { ModelCapabilities } from "./model.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { ServerSettings } from "./settings.ts";
@@ -430,6 +430,12 @@ export const ServerConfig = Schema.Struct({
   // failing the whole config decode.
   availableEditors: ForwardCompatibleArray(EditorId),
   availableTerminals: ForwardCompatibleArray(ExternalTerminalId),
+  /**
+   * SSH hosts this environment advertises for remote open-in-editor links.
+   * Absent on servers that predate the feature; empty when the machine has no
+   * sshd or no advertisable name.
+   */
+  remoteOpenTargets: Schema.optionalKey(ForwardCompatibleArray(RemoteOpenTarget)),
   observability: ServerObservability,
   settings: ServerSettings,
   scheduledTasks: Schema.Array(ScheduledTaskSnapshot),

@@ -211,6 +211,14 @@ const VcsStatusChangeRequest = Schema.Struct({
   mergeStatus: Schema.optional(ChangeRequestMergeStatus),
   reviewDecision: Schema.optional(ChangeRequestReviewDecision),
   checks: Schema.optional(ChangeRequestChecksSummary),
+  /**
+   * Last provider-side activity (ISO). For a merged/closed change request
+   * this bounds when it reached that state, so clients can tell a PR that
+   * terminated during a thread's life from one that was already history
+   * when the thread was created. Optional for old servers and providers
+   * whose lookups do not report it.
+   */
+  updatedAt: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 const VcsStatusLocalShape = {
