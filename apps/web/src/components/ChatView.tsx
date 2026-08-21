@@ -618,8 +618,10 @@ function useLocalDispatchState(input: {
   threadError: string | null | undefined;
 }) {
   const [localDispatch, setLocalDispatch] = useState<LocalDispatchSnapshot | null>(null);
-  const latestUserMessageId =
-    input.activeThread?.messages.findLast((message) => message.role === "user")?.id ?? null;
+  const latestUserMessage = input.activeThread?.messages.findLast(
+    (message) => message.role === "user",
+  );
+  const latestUserMessageId = latestUserMessage?.id ?? null;
 
   const resetLocalDispatch = useCallback(() => {
     setLocalDispatch(null);
@@ -669,6 +671,7 @@ function useLocalDispatchState(input: {
     beginLocalDispatch,
     resetLocalDispatch,
     localDispatchStartedAt: activeLocalDispatch?.startedAt ?? null,
+    latestUserMessageAt: latestUserMessage?.createdAt ?? null,
     isPreparingWorktree: activeLocalDispatch?.preparingWorktree ?? false,
     isSendBusy: activeLocalDispatch !== null,
   };
@@ -1872,6 +1875,7 @@ function ChatViewContent(props: ChatViewProps) {
     beginLocalDispatch,
     resetLocalDispatch,
     localDispatchStartedAt,
+    latestUserMessageAt,
     isPreparingWorktree,
     isSendBusy,
   } = useLocalDispatchState({
@@ -1887,6 +1891,7 @@ function ChatViewContent(props: ChatViewProps) {
     activeLatestTurn,
     activeThread?.session ?? null,
     localDispatchStartedAt,
+    latestUserMessageAt,
   );
   useEffect(() => {
     attachmentPreviewHandoffByMessageIdRef.current = attachmentPreviewHandoffByMessageId;
@@ -3642,6 +3647,14 @@ function ChatViewContent(props: ChatViewProps) {
   // partition (same shell, same capability gate, same PR auto-settle input)
   // so the banner and the sidebar row never disagree.
   const activeThreadShell = useThreadShell(isServerThread ? activeThreadRef : null);
+  const activeComposerTasksProgress =
+    activeLatestTurn !== null && !latestTurnSettled
+      ? (activeThreadShell?.planProgress ?? null)
+      : null;
+  const activeComposerTaskSteps =
+    activeComposerTasksProgress && activePlan && activePlan.turnId === activeLatestTurn?.turnId
+      ? activePlan.steps
+      : null;
   const autoSettleAfterDays = useClientSettings((settings) => settings.sidebarAutoSettleAfterDays);
   const autoSettleOnMerge = useClientSettings((settings) => settings.sidebarAutoSettleOnMerge);
   const activeThreadPr = resolveDisplayedThreadPr({
@@ -3973,13 +3986,13 @@ function ChatViewContent(props: ChatViewProps) {
       ),
       title: working
         ? liveCount > 0
-          ? `${liveCount} ${liveCount === 1 ? "agent" : "agents"} working in the background`
-          : "Background work running"
-        : "Monitoring in the background",
+          ? `${liveCount} ${liveCount === 1 ? "agent" : "agents"} working`
+          : "Background work"
+        : "Monitoring",
       actions: (
         <Button
           size="xs"
-          variant="outline"
+          variant="ghost"
           disabled={isStoppingBackgroundWork}
           onClick={() => void handleStopBackgroundWork()}
         >
@@ -4131,7 +4144,6 @@ function ChatViewContent(props: ChatViewProps) {
     systemComposerBannerItems,
     wokeThreadBannerItem,
   ]);
-
   useEffect(() => {
     setPendingServerThreadEnvMode(null);
     setPendingServerThreadBranch(undefined);
@@ -5732,6 +5744,8 @@ function ChatViewContent(props: ChatViewProps) {
     setDragActive: setIsWorkspaceFileDragActive,
     addFiles: (files) => composerRef.current?.addDroppedFiles(files),
   });
+  const externalComposerDrawerAttached =
+    composerBannerItems.length > 0 || Boolean(threadSyncPhase && !activeEnvironmentUnavailable);
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
@@ -5861,7 +5875,6 @@ function ChatViewContent(props: ChatViewProps) {
                 key={activeThread.id}
                 isWorking={isWorking}
                 workingStepLabel={workingStepLabel}
-                activeTurnInProgress={isWorking || !latestTurnSettled}
                 activeTurnStartedAt={activeWorkStartedAt}
                 listRef={legendListRef}
                 timelineEntries={timelineEntries}
@@ -5965,7 +5978,10 @@ function ChatViewContent(props: ChatViewProps) {
                   >
                     <div
                       ref={attachDraftHeroComposerAnchorRef}
-                      className="chat-composer-glass-host relative z-10 mx-auto w-full max-w-3xl rounded-[22px]"
+                      className={cn(
+                        "chat-composer-glass-host relative z-10 mx-auto w-full max-w-3xl rounded-[22px]",
+                        externalComposerDrawerAttached && "chat-composer-glass-shell-attached",
+                      )}
                     >
                       <ChatComposer
                         composerRef={composerRef}
@@ -5986,6 +6002,7 @@ function ChatViewContent(props: ChatViewProps) {
                         isSendBusy={isSendBusy}
                         sendDisabledReason={threadDetailLoading ? "Messages loading" : null}
                         isPreparingWorktree={isPreparingWorktree}
+                        externalDrawerAttached={externalComposerDrawerAttached}
                         environmentUnavailable={activeEnvironmentUnavailableState}
                         activePendingApproval={activePendingApproval}
                         pendingApprovals={pendingApprovals}
@@ -5998,6 +6015,8 @@ function ChatViewContent(props: ChatViewProps) {
                         respondingRequestIds={respondingRequestIds}
                         showPlanFollowUpPrompt={showPlanFollowUpPrompt}
                         activeProposedPlan={activeProposedPlan}
+                        activeTasksProgress={activeComposerTasksProgress}
+                        activeTaskSteps={activeComposerTaskSteps}
                         runtimeMode={runtimeMode}
                         interactionMode={interactionMode}
                         lockedProvider={lockedProvider}

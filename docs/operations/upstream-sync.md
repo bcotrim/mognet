@@ -16,7 +16,7 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `105cd5e0c57ab8b6df3bd8af5b534a5bc682fdce`
+- Last reviewed upstream commit: `beab6886f45bf42906d0bd01aefe5dfe9e66a867`
 - Reviewed on: `2026-08-20`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
@@ -314,3 +314,41 @@ marker recorded a malformed SHA (`d8a6dfd315...9b3c6649`); the real commit is
   `pingdotgg/t3code` issues, which is upstream support infrastructure.
 - Skipped `d79f975d0`: it tunes `chat-composer-glass-shell-with-context`, a class
   this fork replaced when it rebuilt the composer glass.
+
+### 2026-08-20 follow-up review
+
+Reviewed `105cd5e0c..beab6886f` (6 commits) and ported 5.
+
+- Ported composer state drawers (`792a1404f`): the command menu, stash menu,
+  banner stack, and thread sync pill now attach to the composer as masked
+  drawers, the stash moves to a shoulder tab, and a new tasks badge/drawer shows
+  live plan progress with per-step durations.
+- Ported the one-line tool activity collapse (`4a9edff4c`): a turn's tool calls
+  fold into a single animated row with a "Worked for" summary.
+- Ported the server-side tool lifecycle identity fix (`b2e2ccfdb`) so
+  `tool.started`/`tool.updated` carry `toolCallId` and Claude/OpenCode command
+  inputs normalize before slimming. This is the wire half the collapsed
+  timeline reads.
+- Ported larger Open VSX import limits (`beab6886f`) and the redundant timestamp
+  assertion cleanup (`f708f63fa`).
+- Preserved this fork's new-thread model defaults. No incoming commit touched
+  thread creation or model selection; `useHandleNewThread.test.ts` and
+  `resolveNewDraftModelSelection` coverage are unchanged and passing.
+- Kept `packages/client-runtime/src/providerSkills.ts` out of the tree.
+  `792a1404f` extracts this fork's `apps/web/src/providerSkillPresentation.ts`
+  into a shared package purely to serve `apps/mobile`; the new
+  `resolveProviderSkillSourceKind` API was applied in place instead.
+- Adapted the drawer CSS to this fork's composer glass. Upstream scopes the
+  attachment rules to `.chat-composer-glass-shell`, a wrapper this fork dropped
+  when it rebuilt the composer glass (`9885a845c` and `d79f975d0` remain
+  skipped). The equivalent rules are scoped to `.chat-composer-glass-host`, and
+  only the `live-activity-focus` utilities were taken from `4a9edff4c`'s CSS —
+  the rest of that hunk was `@utility` refactor fallout.
+- Backfilled the `compact`, `icon-micro`, and `ghost-muted` button variants the
+  new drawer components need, without taking upstream's `glass` variant or its
+  `default`/`outline` restyling, which would overwrite this fork's button look.
+- Rebranded the incoming `html[data-theme-id="t3-chat"]` composer rules to
+  `mognet`, and cleaned the two pre-existing `t3-chat` theme selectors in
+  `index.css` that no longer matched any theme id in this fork.
+- Skipped `9027d6267` (stable Clerk Electron release). Clerk is removed here;
+  the commit only touches `pnpm-workspace.yaml` Clerk overrides and the lockfile.
