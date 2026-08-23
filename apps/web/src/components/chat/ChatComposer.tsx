@@ -2384,6 +2384,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       steps={visibleTaskSteps}
     />
   ) : null;
+  const showShoulderTabs =
+    !props.externalDrawerAttached &&
+    !showComposerTopDrawer &&
+    !isTasksDrawerOpen &&
+    !isComposerCollapsedMobile;
+  const hasShoulderTab =
+    showShoulderTabs &&
+    (stashQueue.length > 0 ||
+      (visibleTasksProgress !== null &&
+        visibleTaskSteps !== null &&
+        visibleTasksProgress.totalSteps > 0));
   useEffect(() => {
     if (visibleTasksProgress === null || visibleTaskSteps === null) {
       setIsTasksDrawerOpen(false);
@@ -2835,7 +2846,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       onDragOverCapture={composerMentionDragHandlers.onDragOver}
       onDragLeaveCapture={onComposerMentionDragLeaveCapture}
       onDropCapture={composerMentionDragHandlers.onDrop}
-      className="mx-auto w-full min-w-0 max-w-3xl"
+      className={cn("mx-auto w-full min-w-0 max-w-3xl", hasShoulderTab && "pt-7")}
       data-chat-composer-form="true"
     >
       {showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer) ? (
@@ -2961,12 +2972,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         />
       ) : null}
       <div className="relative">
-        {visibleTasksProgress &&
-        visibleTaskSteps &&
-        !isTasksDrawerOpen &&
-        !props.externalDrawerAttached &&
-        !showComposerTopDrawer &&
-        !isComposerCollapsedMobile ? (
+        {showShoulderTabs && visibleTasksProgress && visibleTaskSteps ? (
           <ComposerTasksBadge
             expanded={false}
             hasTrailingShoulder={stashQueue.length > 0}
@@ -2976,10 +2982,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             steps={visibleTaskSteps}
           />
         ) : null}
-        {!props.externalDrawerAttached &&
-        !showComposerTopDrawer &&
-        !isTasksDrawerOpen &&
-        !isComposerCollapsedMobile ? (
+        {showShoulderTabs ? (
           <ComposerStashBadge
             count={stashQueue.length}
             menuOpen={isStashMenuOpen}
