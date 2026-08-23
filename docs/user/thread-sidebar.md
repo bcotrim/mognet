@@ -4,6 +4,9 @@ Pin a thread from its context menu to keep it in the pinned section above your a
 Pinned threads are shown independently of their project, including when you connect to more than
 one environment.
 
+Pinned threads still move to **Settled** when they become inactive. They also move when their pull
+request merges if **Auto-settle merged threads** is enabled.
+
 Drag a pinned thread to change its position. The order is stored by the server and appears on your
 other connected devices.
 
