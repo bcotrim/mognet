@@ -447,9 +447,7 @@ export const make = Effect.gen(function* () {
                 threadDeleted
                   ? new OrchestrationDispatchCommandError({
                       message: dispatchError.message,
-                      ...(dispatchError.cause !== undefined
-                        ? { cause: dispatchError.cause }
-                        : {}),
+                      ...(dispatchError.cause !== undefined ? { cause: dispatchError.cause } : {}),
                       bootstrapThreadDisposition: "deleted",
                     })
                   : dispatchError,

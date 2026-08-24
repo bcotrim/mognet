@@ -20,7 +20,6 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { HttpServer } from "effect/unstable/http";
 
 import * as EnvironmentAuth from "../src/auth/EnvironmentAuth.ts";
-import * as ServiceLauncherClient from "../src/cloud/serviceLauncherClient.ts";
 import * as ServerConfig from "../src/config.ts";
 import * as ServerEnvironment from "../src/environment/ServerEnvironment.ts";
 import * as Keybindings from "../src/keybindings.ts";
@@ -38,8 +37,10 @@ import * as ProviderSessionReaper from "../src/provider/Services/ProviderSession
 import * as RepositoryIdentityResolver from "../src/project/RepositoryIdentityResolver.ts";
 import * as ServerLifecycleEvents from "../src/serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "../src/serverRuntimeStartup.ts";
+import * as ScheduledTasks from "../src/scheduledTasks.ts";
 import * as ServerSettings from "../src/serverSettings.ts";
-import * as AnalyticsService from "../src/telemetry/AnalyticsService.ts";
+import * as TerminalManager from "../src/terminal/Manager.ts";
+import * as GitVcsDriver from "../src/vcs/GitVcsDriver.ts";
 
 const providerInstanceId = ProviderInstanceId.make("codex");
 const projectId = ProjectId.make("project-startup-orphan");
@@ -76,6 +77,11 @@ const startupDependencies = Layer.mergeAll(
     start: () => Effect.void,
   }),
   ServerLifecycleEvents.layer,
+  Layer.mock(ScheduledTasks.ScheduledTasks)({
+    start: Effect.void,
+  }),
+  Layer.mock(TerminalManager.TerminalManager)({}),
+  Layer.mock(GitVcsDriver.GitVcsDriver)({}),
   Layer.succeed(ServerEnvironment.ServerEnvironment, {
     getEnvironmentId: Effect.succeed(EnvironmentId.make("environment-startup-orphan")),
     getDescriptor: Effect.succeed({
@@ -92,11 +98,6 @@ const startupDependencies = Layer.mergeAll(
   Layer.mock(ExternalLauncher.ExternalLauncher)({
     launchBrowser: () => Effect.void,
   }),
-  Layer.succeed(ServiceLauncherClient.ServiceLauncherClient, {
-    managed: false,
-    requestUpdate: () => Effect.die("unused"),
-    prepareTrial: Effect.sync(() => undefined),
-  }),
   Layer.succeed(
     HttpServer.HttpServer,
     HttpServer.HttpServer.of({
@@ -104,7 +105,6 @@ const startupDependencies = Layer.mergeAll(
       serve: (() => Effect.void) as HttpServer.HttpServer["Service"]["serve"],
     }),
   ),
-  AnalyticsService.layerTest,
   Layer.succeed(ProviderService.ProviderService, {
     startSession: () => Effect.die("unused"),
     sendTurn: () => Effect.die("unused"),

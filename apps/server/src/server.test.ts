@@ -6883,7 +6883,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
+                branch: "mognet/bootstrap-refName",
               },
               runSetupScript: false,
             },

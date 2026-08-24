@@ -4931,7 +4931,7 @@ function ChatViewContent(props: ChatViewProps) {
       } else {
         turnStartSucceeded = true;
         acknowledgeActiveThreadWoke();
-        if (backgroundThreadRef) {
+        if (backgroundThreadRef && activeProject) {
           markPromotedDraftThreadByRef(backgroundThreadRef);
           try {
             const nextDraft = await handleNewThread(

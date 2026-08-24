@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `beab6886f45bf42906d0bd01aefe5dfe9e66a867`
-- Reviewed on: `2026-08-20`
+- Last reviewed upstream commit: `5a7a7cf2925c88388a023f0d4eb6b9096884e817`
+- Reviewed on: `2026-08-24`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -352,3 +352,68 @@ Reviewed `105cd5e0c..beab6886f` (6 commits) and ported 5.
   `index.css` that no longer matched any theme id in this fork.
 - Skipped `9027d6267` (stable Clerk Electron release). Clerk is removed here;
   the commit only touches `pnpm-workspace.yaml` Clerk overrides and the lockfile.
+
+### 2026-08-24 review
+
+Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
+
+- Ported server reliability: orphaned provider sessions reconciled at startup so a
+  thread that lost its process settles into an actionable error instead of showing
+  as working, failed thread bootstraps now retry with a fresh id (the wire error
+  carries `bootstrapThreadDisposition`), completed Codex threads no longer stay
+  stuck on working, mixed tool runs stop being marked failed, Daybreak models stay
+  out of legacy model lists, HTML assets are served as UTF-8, the Cursor provider is
+  enabled by default like every other provider, and `git worktree add` gets a 300s
+  timeout so large checkouts stop failing at 30s.
+- Ported composer and thread UX: `mod+enter` starts a thread in the background and
+  opens a fresh composer, skills are listed alongside slash commands, the chat header
+  title renames on double-click, messages stay clear of composer banners, follow-up
+  messages stop being pushed to the top, and the stream keeps following after
+  scrolling back to the live edge.
+- Ported sidebar fixes: pinned threads no longer reshuffle after a drop, threads
+  stop jumping after reorder, provider icons resolve from each thread's own
+  environment, jump hints hide while the terminal is focused, and the un-settle
+  button gained a tooltip.
+- Ported terminal fixes: selection copies instead of emptying the clipboard, shifted
+  characters encode correctly, oversized graphemes render without crashing, and mouse
+  motion reports are deduped.
+- Ported markdown work: workspace images render inline in chat, file-link tooltips
+  show the full path, command-clicking folder links with spaces works, and wide
+  ordered-list markers lay out correctly.
+- Ported the appearance contrast control, external project icon picking, theme library
+  polish, GitHub clones defaulting to HTTPS, restricted editor deep links, SSH user
+  PATH restoration for remote servers, tailscale spawn defects no longer breaking
+  advertised endpoints, oversized thread search queries no longer crashing clients,
+  readable Codex service tier labels, and preview loading without rerenders.
+- Preserved this fork's new-thread model defaults. `e0b4f4639` is the only incoming
+  commit touching thread creation: it tightens draft reuse so a draft is only reused
+  when it has no `promotedTo` and no server thread shell, which strengthens rather
+  than weakens the invariant. `useHandleNewThread.test.ts` coverage is unchanged and
+  passing for both fresh and reused draft paths.
+- Adapted `6e9c57f7b` (appearance contrast) to this fork's CSS. Upstream's version is
+  written against the `9885a845c` global-styling refactor this fork skipped, so its
+  `@utility` blocks, `@variant dark` nesting, and `[data-workspace-titlebar-controls]`
+  rename were dropped. Mognet's selectors were kept and repointed at the new
+  `--contrast-*` variables instead. The upstream `glass` button variant and its
+  `default`/`outline` restyling were again left out; only the
+  `--contrast-muted-foreground` icon-color swap was taken.
+- Kept `apps/mobile`, Usage, Clerk, the cloud service launcher, and
+  `telemetry/AnalyticsService` deleted. Dropped the mobile halves of `e72350122`,
+  `549201fcf`, `2274444e9`, `77c9d1eb5`, and `6c693baec`; dropped the Clerk and Usage
+  files from `6e9c57f7b`; and trimmed the removed-surface layers plus the
+  `buildThreadFeed` mobile assertion from the incoming server tests.
+- Skipped `aa17ec6e7` (Usage hourly breakdown revert), `035058a23` and `5a7a7cf29`
+  (mobile-only), `7107a98a2` (upstream vouching), and `45a2c4b2a` (upstream user-count
+  claim in AGENTS.md).
+- Skipped `11f051373` (client attribution for threads and turns). Its only consumer is
+  the analytics surface this fork does not have, and its migration `041` collides with
+  this fork's own `041_ProjectionThreadsPinned`.
+- Skipped `d7b9a689f`, `8f7da3b99`, and `9f12eab38` (CI). This fork's CI is a single
+  `quality` job; upstream's changes restructure `check`/`test`/`rust` jobs and add a
+  mobile-native lint runner and a PR-asset guard that have no counterpart here.
+- Skipped `9167622a4` (moving `.plans/` out of the repository). Deleting 33 tracked
+  planning documents and adopting upstream's agent work-artifact process is a repo
+  content decision for Bernardo, not sync fallout.
+- Skipped `292c6dd8c` (model picker double border). This fork already avoids the double
+  border by neutralizing the popover instead of the content surface; taking upstream's
+  fix would strip Mognet's `dropdown-glass model-picker-surface` styling.
