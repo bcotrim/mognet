@@ -3,7 +3,6 @@ import {
   type EnvironmentId,
   type ExternalTerminalId,
 } from "@t3tools/contracts";
-import { ChevronDownIcon } from "lucide-react";
 import { memo, useCallback, useMemo } from "react";
 import { usePreferredTerminal } from "~/terminalPreferences";
 import { shellEnvironment } from "~/state/shell";
@@ -22,8 +21,7 @@ import {
   type Icon,
 } from "../Icons";
 import { Button } from "../ui/button";
-import { Group, GroupSeparator } from "../ui/group";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 const TERMINAL_ICONS = {
   "terminal-app": TerminalAppIcon,
@@ -52,71 +50,48 @@ export const OpenInTerminalPicker = memo(function OpenInTerminalPicker({
   environmentId,
   availableTerminals,
   openInCwd,
-  compact = false,
 }: {
   environmentId: EnvironmentId;
   availableTerminals: ReadonlyArray<ExternalTerminalId>;
   openInCwd: string | null;
-  compact?: boolean;
 }) {
   const openInTerminalMutation = useAtomCommand(shellEnvironment.openInTerminal, "open terminal");
-  const [preferredTerminal, setPreferredTerminal] = usePreferredTerminal(availableTerminals);
+  const [preferredTerminal] = usePreferredTerminal(availableTerminals);
   const options = useMemo(() => resolveOptions(availableTerminals), [availableTerminals]);
   const primaryOption = options.find(({ id }) => id === preferredTerminal) ?? null;
   const PrimaryIcon = primaryOption?.Icon ?? TerminalAppIcon;
 
-  const openInTerminal = useCallback(
-    (terminalId: ExternalTerminalId | null) => {
-      if (!openInCwd) return;
-      const terminal = terminalId ?? preferredTerminal;
-      if (!terminal) return;
-      const result = openInTerminalMutation({
-        environmentId,
-        input: {
-          cwd: openInCwd,
-          terminal,
-        },
-      });
-      setPreferredTerminal(terminal);
-      return result;
-    },
-    [environmentId, openInCwd, openInTerminalMutation, preferredTerminal, setPreferredTerminal],
-  );
+  const openInTerminal = useCallback(() => {
+    if (!openInCwd || !preferredTerminal) return;
+    return openInTerminalMutation({
+      environmentId,
+      input: {
+        cwd: openInCwd,
+        terminal: preferredTerminal,
+      },
+    });
+  }, [environmentId, openInCwd, openInTerminalMutation, preferredTerminal]);
 
   return (
-    <Group aria-label="Open in terminal">
-      <Button
-        aria-label="Open folder in preferred terminal"
-        size="icon-xs"
-        variant="outline"
-        disabled={!preferredTerminal || !openInCwd}
-        onClick={() => openInTerminal(preferredTerminal)}
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            aria-label={
+              primaryOption ? `Open in ${primaryOption.label}` : "Open folder in preferred terminal"
+            }
+            size="icon-xs"
+            variant="outline"
+            disabled={!preferredTerminal || !openInCwd}
+            onClick={openInTerminal}
+          />
+        }
       >
         <PrimaryIcon aria-hidden="true" className="size-3.5" />
-      </Button>
-      <GroupSeparator {...(!compact ? { className: "hidden @3xl/header-actions:block" } : {})} />
-      <Menu>
-        <MenuTrigger
-          render={
-            <Button
-              aria-label={compact ? "Choose terminal" : "Choose terminal"}
-              size="icon-xs"
-              variant="outline"
-            />
-          }
-        >
-          <ChevronDownIcon aria-hidden="true" className="size-4" />
-        </MenuTrigger>
-        <MenuPopup align="end">
-          {options.length === 0 && <MenuItem disabled>No installed terminals found</MenuItem>}
-          {options.map(({ label, id, Icon }) => (
-            <MenuItem key={id} onClick={() => openInTerminal(id)}>
-              <Icon aria-hidden="true" className="text-muted-foreground" />
-              {label}
-            </MenuItem>
-          ))}
-        </MenuPopup>
-      </Menu>
-    </Group>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">
+        {primaryOption ? `Open in ${primaryOption.label}` : "No terminal configured"}
+      </TooltipPopup>
+    </Tooltip>
   );
 });
