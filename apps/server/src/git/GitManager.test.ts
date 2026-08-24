@@ -1216,7 +1216,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
     "status preserves a fork PR whose head is named after the default branch",
     () =>
       Effect.gen(function* () {
-        const repoDir = yield* makeTempDir("t3code-git-manager-");
+        const repoDir = yield* makeTempDir("mognet-git-manager-");
         yield* initRepo(repoDir);
         const originDir = yield* createBareRemote();
         const forkDir = yield* createBareRemote();
@@ -1468,7 +1468,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
 
   it.effect("status does not inherit a merged PR from a feature branch's default upstream", () =>
     Effect.gen(function* () {
-      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      const repoDir = yield* makeTempDir("mognet-git-manager-");
       yield* initRepo(repoDir);
       const remoteDir = yield* createBareRemote();
       yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
@@ -2518,7 +2518,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
 
   it.effect("create_pr targets the remote default branch when it is not main", () =>
     Effect.gen(function* () {
-      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      const repoDir = yield* makeTempDir("mognet-git-manager-");
       yield* initRepo(repoDir);
       const remoteDir = yield* createBareRemote();
       yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);

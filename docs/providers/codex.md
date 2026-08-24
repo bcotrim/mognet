@@ -30,7 +30,7 @@ codex login
 ## Send feedback to OpenAI
 
 In an existing Codex thread, send `/feedback` or `/feedback` followed by a description of the
-issue. T3 Code uploads the thread and Codex logs to OpenAI and shows a thread ID that you can copy
+issue. Mognet uploads the thread and Codex logs to OpenAI and shows a thread ID that you can copy
 and share with OpenAI employees.
 
 ## I Want Work And Personal Codex Accounts
