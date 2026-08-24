@@ -40,6 +40,7 @@ import {
   probeRemoteEditors,
   pickFolder,
   setRunningSessionCount,
+  pickProjectFavicon,
   pickThemeFiles,
   setTheme,
   showContextMenu,
@@ -83,6 +84,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setWslOnly);
 
   yield* ipc.handle(pickFolder);
+  yield* ipc.handle(pickProjectFavicon);
   yield* ipc.handle(pickThemeFiles);
   yield* ipc.handle(setRunningSessionCount);
   yield* ipc.handle(setTheme);
