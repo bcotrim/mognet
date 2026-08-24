@@ -488,6 +488,7 @@ export function useSettingsRestore(onRestored?: () => void) {
         : []),
       ...(settings.defaultTerminal !== DEFAULT_UNIFIED_SETTINGS.defaultTerminal
         ? ["Default terminal"]
+        : []),
       ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
         ? ["Show skills in slash menu"]
         : []),
