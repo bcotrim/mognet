@@ -16,7 +16,7 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `5a7a7cf2925c88388a023f0d4eb6b9096884e817`
+- Last reviewed upstream commit: `b4be33f0747445f1c9df126e932c7b9792f322d5`
 - Reviewed on: `2026-08-24`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
@@ -208,6 +208,64 @@ not merged by ancestry.
   dependency plus lockfile work against upstream's Effect beta.103 while this
   fork stays on beta.78. This fork's own Windows file-count reduction already
   landed in the previous sync.
+
+### 2026-08-24 follow-up review
+
+Reviewed `5a7a7cf29..b4be33f07` (19 commits) and ported 15. This picks up where the
+`beab6886f..5a7a7cf29` review left off; the three commits that review deliberately
+skipped inside its own range stay skipped here.
+
+- Ported thread reliability: `stop` no longer leaves Claude work running behind a
+  killed session, tool calls stop leaving a blank page in a thread, recovered tool
+  failures stop marking work logs red, and pushes fall back to the remote default
+  branch instead of assuming `main`.
+- Ported the Codex `/feedback` command: a thread and its Codex logs upload to
+  OpenAI and the returned thread ID renders in the timeline and a copyable toast.
+  The wire method, its `AuthOrchestrationOperateScope` requirement, and the adapter
+  plumbing came with it.
+- Ported the `$` and `/` skill menu redesign behind a new `showSkillsInSlashMenu`
+  client setting, settled pinned threads moving into the Settled section, work-log
+  rows being reused during streaming, the right panel toggle accepting clicks again
+  after closing on desktop, server update banners sitting flush with the composer,
+  configured URLs with uppercase schemes being treated as secure, a legible provider
+  badge in dark themes, sidebar project menu row padding, deduplicated provider
+  update progress, and release notes staying visible while downloading.
+- Preserved this fork's new-thread model defaults. No commit in this range touches
+  thread creation or model selection; `useHandleNewThread.test.ts` and
+  `resolveNewDraftModelSelection` coverage are unchanged and passing.
+- Kept `apps/mobile`, Usage, Clerk, the cloud service launcher, and
+  `telemetry/AnalyticsService` deleted. Dropped the mobile halves of `3db38b881`,
+  `f70eeeeb0`, and `9da0fab08`, and removed the `AnalyticsService.layerTest` layer
+  from the `ProviderService` feedback test that came with `3db38b881`.
+- Kept `packages/client-runtime/src/providerSkills.ts` out of the tree. `9da0fab08`
+  adds `getProviderSkillsForSlashMenu` and `getProviderSlashCommandsForSlashMenu`
+  there to serve `apps/mobile`; both were applied to this fork's
+  `apps/web/src/providerSkillPresentation.ts` instead.
+- Adapted `3db38b881` to this fork's composer. Upstream's `sendDisabledReason`
+  change lands inside the `chat-composer-glass-shell` JSX this fork replaced, so
+  only the `feedbackUploading` branch was taken and the fork's composer layout,
+  `terminalPanelOpenByThreadRef`, and `gitCwd` wiring were kept. Its
+  `RpcAuthorization` test hunk was trimmed to the feedback assertion, dropping the
+  relay-scope assertion for a surface removed here.
+- Rebranded incoming strings to Mognet: `T3 Code` in `docs/user/composer.md` and
+  `docs/providers/codex.md`, and the `t3code-git-manager-` temp-dir prefixes in
+  `GitManager.test.ts` that broke this file's existing `mognet-` convention.
+
+Skipped 4 commits:
+
+- `55c909334`, `5a7a7cf29` — mobile-only.
+- `25dcee00a` — restructures upstream's `release.yml` and its Windows `server.asar`
+  packaging. This fork has no release workflow and no `WINDOWS_SERVER_ASAR_IGNORE_GLOBS`
+  (`c9063f03e` remains skipped). Its one portable win, the `pnpm-workspace.yaml`
+  overrides dropping unused Claude SDK binaries, needs a lockfile change and belongs
+  in a dedicated dependency PR.
+- `2433f4c1c` — `.macroscope/approvability.md`, not present here.
+
+Still skipped from the previous review's range, unchanged: `9167622a4` (`.plans/`
+removal, a repo content decision for Bernardo), `9f12eab38` (PR-asset CI guard),
+`292c6dd8c` (model picker double border, which would strip Mognet's
+`dropdown-glass model-picker-surface` styling), plus `aa17ec6e7`, `035058a23`,
+`11f051373`, `d7b9a689f`, `8f7da3b99`, `7107a98a2`, and `45a2c4b2a`.
 
 Every sync, including scheduled task runs, must:
 
