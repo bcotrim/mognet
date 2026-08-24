@@ -907,7 +907,6 @@ export default function FilePreviewPanel({
               keybindings={keybindings}
               availableEditors={availableEditors}
               openInCwd={absolutePath}
-              compact
               enableShortcut={false}
             />
           ) : null}
