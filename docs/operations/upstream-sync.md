@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `b4be33f0747445f1c9df126e932c7b9792f322d5`
-- Reviewed on: `2026-08-24`
+- Last reviewed upstream commit: `99960383d094b850f0001d3067fa604aa3adf7d6`
+- Reviewed on: `2026-08-25`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -266,6 +266,88 @@ removal, a repo content decision for Bernardo), `9f12eab38` (PR-asset CI guard),
 `292c6dd8c` (model picker double border, which would strip Mognet's
 `dropdown-glass model-picker-surface` styling), plus `aa17ec6e7`, `035058a23`,
 `11f051373`, `d7b9a689f`, `8f7da3b99`, `7107a98a2`, and `45a2c4b2a`.
+
+### 2026-08-25 review
+
+Reviewed `b4be33f07..99960383d` (30 commits) and ported 19.
+
+- Ported server reliability: a thread's worktree is recreated before a turn starts
+  instead of failing, deleting a thread whose worktree is already gone no longer
+  errors (and prunes the stale registration), new worktrees check out submodules,
+  a failed provider interrupt recovers instead of wedging the thread, merged pull
+  request badges survive branch deletion, live pull request reads are no longer
+  served from a stale cache, OpenCode honours auto-accept edits, OpenCode skill
+  discovery output is bounded, and a subagent snapshot racing `task_started` no
+  longer overwrites the authoritative model.
+- Ported the CLI entrypoint fix (`3fd506433`): `import.meta.main` is undefined on
+  Node 22.16, 22.17 and 23.11, all inside `engines.node`, so the CLI loaded every
+  module and exited 0 without output. `isEntrypoint` falls back to comparing
+  `process.argv[1]`, resolving symlinks the way npm and npx install the binary.
+- Ported attachment pre-upload (`e9f50c3ef`): images upload while the user is still
+  typing, with a per-image queue, progress and retry affordances, a server-side
+  upload endpoint, and cleanup of orphaned uploads when a dispatch fails.
+- Ported web fixes: terminal sidebar groups read as Single/Stacked/Side by side with
+  a shared tab close button, terminal links only look clickable when they are, agent
+  and Windows file links open in the file viewer, client and server versions compare
+  as semver (so a server ahead of the client is not skew, and two nightlies on one
+  release still compare by build), and update notices stop showing through the
+  composer.
+- Preserved this fork's new-thread model defaults. No ported commit touches thread
+  creation or model selection; `useHandleNewThread.test.ts` and
+  `resolveNewDraftModelSelection` coverage are unchanged and passing.
+- Added `HostProcessExecutablePath` to `packages/shared/src/hostProcess.ts`. It
+  arrived upstream with the removed `t3 connect` surface, so this fork never had it,
+  and the incoming OpenCode inventory test needs it.
+- Adapted `e9f50c3ef` to this fork's composer and dispatch. Upstream's `ChatView`
+  hunk rewrites the composer glass wrapper and terminal state this fork replaced, so
+  only the `attachmentUploadsCapabilityKnown` and `supportsAttachmentUploads` props
+  were taken. `cleanupFailedUploadedAttachments` was wired into both the
+  `ThreadTurnBootstrapDispatcher` and engine dispatch paths, and the
+  `recordClientCommandAnalytics` call that came with the `ws.ts` hunk was dropped
+  with the rest of `AnalyticsService`. Its `ComposerPreviewAnnotationCards` test
+  asserting `data-slot="button"` on the removal control was dropped because this
+  fork's removal control is a plain element.
+- Rebranded incoming strings to Mognet: the `t3-entrypoint-test-` temp-dir prefix and
+  `t3` symlink name in `entrypoint.test.ts`, the `t3-opencode-inventory-` prefix and
+  `T3_TEST_*` env vars in `opencodeRuntime.inventory.test.ts`, and
+  `t3code/bootstrap-refName` in `server.test.ts`.
+- Fixed the incoming symlink case in `entrypoint.test.ts` for macOS, where
+  `os.tmpdir()` is itself reached through a symlink. The test now realpaths the
+  module URL the way Node hands it to a module; upstream's version only passes on
+  Linux.
+- Kept `apps/mobile`, `apps/marketing`, Usage, the cloud service launcher, and
+  `telemetry/AnalyticsService` deleted. Dropped `apps/server/src/serviceLauncher.ts`
+  from `3fd506433` and the mobile halves of `7c6163c67` and `99960383d`.
+
+Skipped 11 commits:
+
+- `17dbe8dda`, `8287f2c3a`, `a1379db81` — Usage-only.
+- `9eba1252c`, `2d2efff28`, `f9a726e62` — mobile-only.
+- `e31e568bd` — `apps/marketing` Vercel configuration.
+- `a00218741` — upstream contributor vouching.
+- `643daa516`, `c0047c252` — both only edit `patches/@legendapp__list@3.3.5.patch`.
+  Their `react.js`/`react.mjs` hunks are real web fixes (expanded tool calls hiding
+  thread content, follow-ups leaving blank space), but pnpm keys patches by exact
+  version and this fork pins `@legendapp/list` at `3.3.3` with no patch entry.
+  Adopting them means a version bump plus a lockfile change, which belongs in a
+  dedicated dependency PR.
+- `7c6163c67` (Codex app access approval prompts) — blocked on the Effect upgrade.
+  Codex sends the approval choices as `requestedSchema.properties.<field>.enum`, and
+  the generated `McpElicitationPrimitiveSchema` is
+  `Union([EnumSchema, StringSchema, NumberSchema, BooleanSchema])`. On this fork's
+  Effect beta.78 that union resolves `{ type: "string", enum: [...] }` to the plain
+  string member and drops `enum` during decode, so `toMcpElicitationResponse` finds
+  no acceptable option and every form elicitation is declined before it can reach the
+  user. Decoding `McpElicitationEnumSchema` on its own keeps `enum`, so the defect is
+  union member selection, not the schema. Upstream runs Effect beta.103, where its
+  own five elicitation integration tests pass. Porting it here would ship a feature
+  that declines exactly the prompts it exists to surface, so it was reverted in full
+  and should be revisited with the beta.103 migration.
+
+Still skipped from earlier reviews, unchanged: `9167622a4`, `9f12eab38`, `292c6dd8c`,
+`25dcee00a`, `2433f4c1c`, `c9063f03e`, `9885a845c`, plus `aa17ec6e7`, `035058a23`,
+`11f051373`, `d7b9a689f`, `8f7da3b99`, `7107a98a2`, `45a2c4b2a`, `55c909334`, and
+`5a7a7cf29`.
 
 Every sync, including scheduled task runs, must:
 
