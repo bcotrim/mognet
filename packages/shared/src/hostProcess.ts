@@ -37,4 +37,11 @@ export const HostProcessWorkingDirectory = Context.Reference<string>(
   },
 );
 
+export const HostProcessExecutablePath = Context.Reference<string>(
+  "@t3tools/shared/hostProcess/HostProcessExecutablePath",
+  {
+    defaultValue: () => process.execPath,
+  },
+);
+
 export const isHostWindows = Effect.map(HostProcessPlatform, (platform) => platform === "win32");
