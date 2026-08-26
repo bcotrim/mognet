@@ -92,6 +92,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           branch,
           worktree_path,
           origin_json,
+          linked_pull_request_json,
           latest_turn_id,
           latest_user_message_at,
           pending_approval_count,
@@ -113,6 +114,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           NULL,
           NULL,
           '{"type":"scheduled-task","scheduledTaskId":"task-1","scheduledTaskTitle":"Nightly check"}',
+          '{"projectId":"project-1","repository":"bcotrim/mognet","number":42,"url":"https://github.com/bcotrim/mognet/pull/42"}',
           'turn-1',
           '2026-02-24T00:00:04.000Z',
           1,
@@ -321,6 +323,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             scheduledTaskId: "task-1",
             scheduledTaskTitle: "Nightly check",
           },
+          linkedPullRequest: {
+            projectId: asProjectId("project-1"),
+            repository: "bcotrim/mognet",
+            number: 42,
+            url: "https://github.com/bcotrim/mognet/pull/42",
+          },
           latestTurn: {
             turnId: asTurnId("turn-1"),
             state: "completed",
@@ -445,6 +453,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             type: "scheduled-task",
             scheduledTaskId: "task-1",
             scheduledTaskTitle: "Nightly check",
+          },
+          linkedPullRequest: {
+            projectId: asProjectId("project-1"),
+            repository: "bcotrim/mognet",
+            number: 42,
+            url: "https://github.com/bcotrim/mognet/pull/42",
           },
           latestTurn: {
             turnId: asTurnId("turn-1"),

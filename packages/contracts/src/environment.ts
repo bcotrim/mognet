@@ -44,6 +44,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server understands regenerateTitle on thread.meta.update. Absent on
       older servers, so clients hide the action instead of sending it. */
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
+  /** Server persists a pull request reference on thread.meta.update. */
+  threadPullRequestLinking: Schema.optionalKey(Schema.Boolean),
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

@@ -298,6 +298,7 @@ import {
 import {
   resolveDisplayedThreadPr,
   threadChangeRequestSnapshotsAtom,
+  useLinkedThreadPullRequest,
 } from "./ThreadStatusIndicators";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { resolveScheduledThreadOrigin } from "../scheduledTaskOrigin";
@@ -2671,24 +2672,30 @@ function ChatViewContent(props: ChatViewProps) {
   );
   // The thread's own change request, placed against the project it belongs to. Without a
   // project there is nothing to resolve it against, so the caller falls back to the browser.
-  const threadRepository = activeProject?.repositoryIdentity?.displayName ?? null;
+  const linkedThreadPullRequest = activeThread?.linkedPullRequest ?? null;
+  const activeProjectRepository = activeProject?.repositoryIdentity?.displayName ?? null;
+  const threadRepository = linkedThreadPullRequest?.repository ?? activeProjectRepository;
   const openThreadPullRequest = useCallback(
     (number: number) => {
-      if (
-        !supportsPullRequests ||
-        !activeThreadRef ||
-        !activeProject ||
-        threadRepository === null
-      ) {
+      if (!supportsPullRequests || !activeThreadRef) {
         return;
       }
+      const projectId = linkedThreadPullRequest?.projectId ?? activeProject?.id;
+      const repository = linkedThreadPullRequest?.repository ?? activeProjectRepository;
+      if (projectId === undefined || repository === null) return;
       useRightPanelStore.getState().openPullRequest(activeThreadRef, {
-        projectId: activeProject.id,
-        repository: threadRepository,
+        projectId,
+        repository,
         number,
       });
     },
-    [activeProject, activeThreadRef, supportsPullRequests, threadRepository],
+    [
+      activeProject,
+      activeProjectRepository,
+      activeThreadRef,
+      linkedThreadPullRequest,
+      supportsPullRequests,
+    ],
   );
   const togglePreviewPanel = useCallback(() => {
     if (!activeThreadRef || !hasWorkspaceProject || !isPreviewSupportedInRuntime()) return;
@@ -3583,11 +3590,17 @@ function ChatViewContent(props: ChatViewProps) {
       : null;
   const autoSettleAfterDays = useClientSettings((settings) => settings.sidebarAutoSettleAfterDays);
   const autoSettleOnMerge = useClientSettings((settings) => settings.sidebarAutoSettleOnMerge);
+  const linkedPullRequestStatus = useLinkedThreadPullRequest(
+    activeThreadRef?.environmentId ?? null,
+    linkedThreadPullRequest,
+  );
   const activeThreadPr = resolveDisplayedThreadPr({
     threadBranch: activeThread?.branch ?? null,
     gitStatus: gitStatusQuery.data ?? null,
     snapshot: activeThreadKey ? changeRequestSnapshotByKey.get(activeThreadKey) : undefined,
     retainTerminalOnBranchMismatch: activeThread?.worktreePath === null,
+    linkedPullRequest: linkedThreadPullRequest,
+    linkedPullRequestStatus,
   });
   // The right panel offers the thread's own change request, so it can only offer it once the
   // branch has one; until then the picker says so rather than opening an empty panel.
@@ -5845,7 +5858,7 @@ function ChatViewContent(props: ChatViewProps) {
         context={
           isThreadOwnPullRequest(
             {
-              projectId: activeProject?.id ?? null,
+              projectId: linkedThreadPullRequest?.projectId ?? activeProject?.id ?? null,
               repository: threadRepository,
               number: activeThreadPr?.number ?? null,
             },
