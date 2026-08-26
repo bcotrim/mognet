@@ -2149,6 +2149,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
 
           assert.deepStrictEqual(status.slashCommands, [
             {
+              name: "compact",
+              description: "Summarize the conversation and reduce context usage",
+            },
+            {
               name: "review",
               description: "Review a pull request",
               input: { hint: "pr-or-branch" },
@@ -2191,6 +2195,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           );
 
           assert.deepStrictEqual(status.slashCommands, [
+            {
+              name: "compact",
+              description: "Summarize the conversation and reduce context usage",
+            },
             {
               name: "ui",
               description: "Explore and refine UI",
