@@ -19,6 +19,7 @@ import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   CLI_EXTERNAL_PACKAGE_UNPACK_GLOBS,
   findInlinedExternalPackages,
+  selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -636,6 +637,11 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   // are dead weight. The trailing dash keeps the SDK's own JS package.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
 ] as const;
+// Windows terminal helpers cannot run on macOS and slow signing and notarization.
+export const MAC_FILE_EXCLUSIONS = [
+  "!**/node_modules/node-pty/prebuilds/win32-*/**/*",
+  "!**/node_modules/node-pty/third_party/conpty/**/*",
+] as const;
 // The WSL backend launches the server with plain `wsl.exe -- node`, which cannot
 // read inside an asar archive, so everything it loads must be on the real
 // filesystem. This used to unpack `**\/node_modules\/**` wholesale, because the
@@ -682,6 +688,19 @@ export function resolveFffNativeDependencies(
       ["gnu", "musl"].map((libc) => [`@ff-labs/fff-bin-linux-${architecture}-${libc}`, version]),
     ),
   );
+}
+
+export function resolveMacStageDependencies(input: {
+  readonly serverDependencies: Record<string, string>;
+  readonly desktopDependencies: Record<string, string>;
+  readonly arch: typeof BuildArch.Type;
+  readonly fffNodeVersion: string;
+}) {
+  return {
+    ...selectCliRuntimeExternalDependencies(input.serverDependencies),
+    ...input.desktopDependencies,
+    ...resolveFffNativeDependencies("mac", input.arch, input.fffNodeVersion),
+  };
 }
 
 export function createStageWorkspaceConfig(input: {
@@ -1512,7 +1531,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     productName: resolveDesktopProductName(version),
     artifactName: "Mognet-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
-    files: [...DESKTOP_FILE_EXCLUSIONS],
+    files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
     directories: {
       buildResources: "apps/desktop/resources",
     },
@@ -1536,6 +1555,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "mac") {
+    const path = yield* Path.Path;
+    const repoRoot = yield* RepoRoot;
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -1546,6 +1567,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           schemes: ["mognet"],
         },
       ],
+      ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
     };
   }
 
@@ -1887,14 +1909,25 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
 
+  // macOS stages only the server packages that stay external to the bundle:
+  // every extra file in the app is another signing and notarization call.
   const stageDependencies = {
-    ...resolvedServerDependencies,
-    ...resolvedDesktopRuntimeDependencies,
-    ...resolveFffNativeDependencies(
-      options.platform,
-      options.arch,
-      serverPackageJson.dependencies["@ff-labs/fff-node"],
-    ),
+    ...(options.platform === "mac"
+      ? resolveMacStageDependencies({
+          serverDependencies: resolvedServerDependencies,
+          desktopDependencies: resolvedDesktopRuntimeDependencies,
+          arch: options.arch,
+          fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
+        })
+      : {
+          ...resolvedServerDependencies,
+          ...resolvedDesktopRuntimeDependencies,
+          ...resolveFffNativeDependencies(
+            options.platform,
+            options.arch,
+            serverPackageJson.dependencies["@ff-labs/fff-node"],
+          ),
+        }),
     // Windows artifacts also bundle the same-architecture WSL Linux backend, which loads the
     // fff native binary through ffi-rs. The platform fff binary above is the
     // host's (win32), so promote the matching Linux fff binaries too; without
@@ -2005,10 +2038,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     buildEnv.GYP_MSVS_VERSION = buildEnv.GYP_MSVS_VERSION ?? "2022";
   }
   if (options.verbose) {
-    buildEnv.DEBUG =
-      buildEnv.DEBUG === undefined
-        ? "electron-builder,electron-builder:*"
-        : `${buildEnv.DEBUG},electron-builder,electron-builder:*`;
+    const debugNamespaces = [
+      "electron-builder",
+      "electron-builder:*",
+      ...(options.platform === "mac" ? ["electron-osx-sign*", "electron-notarize*"] : []),
+    ];
+    buildEnv.DEBUG = [buildEnv.DEBUG, ...debugNamespaces].filter(Boolean).join(",");
   }
 
   yield* Effect.log(

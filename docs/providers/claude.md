@@ -29,6 +29,18 @@ Claude HOME path: empty
 
 An empty `Claude HOME path` means Mognet uses your normal home directory.
 
+## Reduce Context Usage
+
+In Settings, open your Claude provider and set **Auto-compact after** to a token count between
+`100000` and `1000000`. For example, `300000` compacts the conversation into a summary once it
+reaches about 300,000 tokens, without changing the model's context window. Leave the field
+empty to keep Claude Code's default behavior.
+
+When you return to an older Claude thread with a large context, Mognet offers to compact the
+conversation before you continue. You can also select **Compact context** from the context meter,
+or enter `/compact` in the message composer. Claude can show its own resume prompt when you
+continue an old session.
+
 ## Where Claude Skills Are Loaded
 
 Mognet looks for Claude skills in the Claude config directory's `skills` folder, then

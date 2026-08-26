@@ -23,6 +23,7 @@ import {
   terminalStatusFromRunningIds,
   ThreadStatusLabel,
   ThreadWorktreeIndicator,
+  useLinkedThreadPullRequest,
   useSyncThreadTitleFromPr,
 } from "./ThreadStatusIndicators";
 import { ProjectFavicon } from "./ProjectFavicon";
@@ -496,7 +497,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   const gitCwd = thread.worktreePath ?? threadProjectCwd ?? props.projectCwd;
   const scheduledOrigin = useScheduledThreadOrigin(thread);
   const gitStatus = useEnvironmentQuery(
-    thread.branch != null && gitCwd !== null
+    thread.linkedPullRequest == null && thread.branch != null && gitCwd !== null
       ? vcsEnvironment.status({
           environmentId: thread.environmentId,
           input: { cwd: gitCwd },
@@ -537,13 +538,23 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       lastVisitedAt,
     },
   });
-  const pr = resolveThreadPr({
-    threadBranch: thread.branch,
-    gitStatus: gitStatus.data,
-    hasDedicatedWorktree: thread.worktreePath !== null,
-  });
+  const linkedPullRequestStatus = useLinkedThreadPullRequest(
+    thread.environmentId,
+    thread.linkedPullRequest,
+  );
+  const pr =
+    thread.linkedPullRequest == null
+      ? resolveThreadPr({
+          threadBranch: thread.branch,
+          gitStatus: gitStatus.data,
+          hasDedicatedWorktree: thread.worktreePath !== null,
+        })
+      : (linkedPullRequestStatus?.pr ?? null);
   useSyncThreadTitleFromPr(thread, pr);
-  const prStatus = prStatusIndicator(pr, gitStatus.data?.sourceControlProvider);
+  const prStatus = prStatusIndicator(
+    pr,
+    linkedPullRequestStatus?.sourceControlProvider ?? gitStatus.data?.sourceControlProvider,
+  );
   const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
   const isConfirmingArchive = confirmingArchiveThreadKey === threadKey && !isThreadRunning;
   const threadMetaClassName = isConfirmingArchive

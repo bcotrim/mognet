@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `99960383d094b850f0001d3067fa604aa3adf7d6`
-- Reviewed on: `2026-08-25`
+- Last reviewed upstream commit: `994372ba43810e64027c537231da200988faa7ca`
+- Reviewed on: `2026-08-26`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -557,3 +557,37 @@ Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
 - Skipped `292c6dd8c` (model picker double border). This fork already avoids the double
   border by neutralizing the popover instead of the content surface; taking upstream's
   fix would strip Mognet's `dropdown-glass model-picker-surface` styling.
+
+### 2026-08-26 review
+
+- Ported desktop/web/server work through `994372ba4`: thread pull-request linking
+  (migration renumbered `042` -> `045` to clear this fork's numbering), Claude
+  auto-compaction with the resume-compaction banner, HEIC/HEIF composer attachments,
+  the `mod+shift+s` settle/restore shortcut, chat file chips that reveal in the system
+  file manager, the ACP cumulative tool-output bound, the projection-refresh skip for
+  routine events, query retry after connection interruption, provider settings surviving
+  upgrades, Cursor now defaulting to disabled, grouped project renames, the dictation
+  jump-hint fix, the shortcut-hint delay, and the push-to-base-branch fix.
+- Adapted the macOS signing batch from `63eb0429f` by hand: this fork has no Windows
+  `server.asar` sidecar, so only `MAC_FILE_EXCLUSIONS`, the `scripts/sign-macos.ts`
+  batching hook, the mac-only stage-dependency narrowing, and the verbose signing
+  namespaces were taken. `selectCliRuntimeExternalDependencies` was reintroduced in
+  `scripts/lib/cli-external-packages.ts` for the mac path only. Needs a real signed mac
+  build to confirm.
+- Rebranded incoming fixtures and strings: `pingdotgg/t3code` test repositories became
+  `bcotrim/mognet`, the resume-compaction localStorage key became
+  `mognet:resume-compaction-dismissed:*`, and the compaction paragraph in
+  `docs/providers/claude.md` says Mognet.
+- Dropped the `apps/mobile` halves of `3c75eb113` and skipped `bce680926` entirely: it
+  is mobile device/OS analytics plumbing, and its shared `appendClientConnectionParams`
+  branch is gated on `surface === "mobile"`.
+- Skipped `1baf99195` (`apps/server/src/cloud/bootService.ts` is removed here) and
+  `1a4a7596c` (release doc for the remote self-update surface this fork does not ship).
+- Skipped `c6b8bb825` (macOS preview builds from a PR label). It needs upstream's
+  Blacksmith macOS runners and a `preview:mac` label workflow; the accompanying
+  `isDesktopPreviewVersion` build-script branch is unreachable without it.
+- Kept the removed `ChatHeader` pull-request button out of `3c75eb113`, so upstream's
+  new `openProjectPullRequest` callback was dropped as dead code while the linked
+  pull-request `openThreadPullRequest` path was kept.
+- Kept `.macroscope/check-run-agents/ui-consistency.md` deleted when `082e6ea52`
+  extended it.

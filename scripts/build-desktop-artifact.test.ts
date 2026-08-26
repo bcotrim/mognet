@@ -18,10 +18,12 @@ import {
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
+  MAC_FILE_EXCLUSIONS,
   InvalidMockUpdateServerPortError,
   UnsupportedDesktopBuildArchitectureError,
   LinuxIconResizeError,
   resolveDesktopRuntimeDependencies,
+  resolveMacStageDependencies,
   resolveFffNativeDependencies,
   resolveBuildOptions,
   resolveDesktopBuildIconAssets,
@@ -326,12 +328,58 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
         { name: "Mognet", schemes: ["mognet"] },
       ]);
-      for (const config of [mac, linux, win]) {
+      assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
+      assert.notProperty(mac.mac as Record<string, unknown>, "sign");
+      for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
+      assert.deepStrictEqual(mac.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
+
+  it.effect("signs macOS packages through the batching hook", () =>
+    Effect.gen(function* () {
+      const mac = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined);
+      assert.match(String((mac.mac as Record<string, unknown>).sign), /\/scripts\/sign-macos\.ts$/);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it("excludes Windows terminal binaries only from macOS packages", () => {
+    assert.deepStrictEqual(MAC_FILE_EXCLUSIONS, [
+      "!**/node_modules/node-pty/prebuilds/win32-*/**/*",
+      "!**/node_modules/node-pty/third_party/conpty/**/*",
+    ]);
+  });
+
+  it("stages only server runtime externals in macOS packages", () => {
+    assert.deepStrictEqual(
+      resolveMacStageDependencies({
+        serverDependencies: {
+          "@anthropic-ai/claude-agent-sdk": "^0.3.170",
+          "@ff-labs/fff-node": "0.9.4",
+          "@opencode-ai/sdk": "^1.3.15",
+          "@pierre/diffs": "1.3.0",
+          "msgpackr-extract": "3.0.4",
+          "node-pty": "1.1.0",
+        },
+        desktopDependencies: {
+          "@clerk/electron": "0.0.34",
+          effect: "4.0.0-beta.103",
+        },
+        arch: "arm64",
+        fffNodeVersion: "0.9.4",
+      }),
+      {
+        "@ff-labs/fff-node": "0.9.4",
+        "msgpackr-extract": "3.0.4",
+        "node-pty": "1.1.0",
+        "@clerk/electron": "0.0.34",
+        effect: "4.0.0-beta.103",
+        "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
+      },
+    );
+  });
 
   it.effect("preserves both Linux icon resize failures with structural context", () => {
     const commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> = [];
