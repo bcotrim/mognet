@@ -8,14 +8,8 @@ import { memo, useCallback, useEffect, useMemo } from "react";
 import { isOpenFavoriteEditorShortcut } from "../../keybindings";
 import { usePreferredEditor } from "../../editorPreferences";
 import { editorLabelForPlatform } from "../../editorLabels";
-import {
-  openRemoteEditorUrl,
-  useRemoteCapableEditors,
-  useRemoteOpenHint,
-  useRemoteOpenState,
-} from "../../remoteOpen";
-import { useEnvironment } from "../../state/environments";
-import { ChevronDownIcon, FolderClosedIcon } from "lucide-react";
+import { openRemoteEditorUrl, useRemoteCapableEditors, useRemoteOpenState } from "../../remoteOpen";
+import { FolderClosedIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {

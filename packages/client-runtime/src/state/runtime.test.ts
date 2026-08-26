@@ -270,6 +270,16 @@ describe("environmentRpcKey", () => {
   });
 });
 
+// The supervisor state and session reach the query atom through a zipLatest
+// stream, which needs several scheduler ticks to propagate on this Effect
+// version. A single yieldNow leaves the atom on its previous input, so the
+// assertions below would measure scheduling instead of behavior.
+const settleQueryAtomScheduling = Effect.forEach(
+  Array.from({ length: 20 }),
+  () => Effect.yieldNow,
+  { discard: true },
+);
+
 describe("environment query lifecycle", () => {
   it.effect(
     "retries an interrupted query without exposing a failure during session replacement",
@@ -318,7 +328,7 @@ describe("environment query lifecycle", () => {
 
           yield* firstStarted.await;
           yield* SubscriptionRef.set(harness.supervisorSession, Option.none());
-          yield* Effect.yieldNow;
+          yield* settleQueryAtomScheduling;
           failFirst.openUnsafe();
           yield* firstSettled.await;
           yield* Effect.yieldNow;

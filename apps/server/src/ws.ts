@@ -15,7 +15,6 @@ import {
   AuthSessionId,
   CommandId,
   type DiscoveredLocalServerList,
-  type EditorId,
   type FileManagerRevealKind,
   type OrchestrationCommand,
   type GitActionProgressEvent,
