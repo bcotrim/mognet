@@ -15,6 +15,8 @@ import {
   AuthSessionId,
   CommandId,
   type DiscoveredLocalServerList,
+  type EditorId,
+  type FileManagerRevealKind,
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
@@ -124,15 +126,24 @@ import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-const LAUNCHER_DISCOVERY_TIMEOUT = Duration.seconds(5);
+const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
+
+const resolveDiscoveryForConfig = <A, E, R>(
+  discovery: Effect.Effect<A, E, R>,
+  onTimeout: () => A,
+) =>
+  discovery.pipe(
+    Effect.timeoutOption(CONFIG_DISCOVERY_TIMEOUT),
+    Effect.map(Option.getOrElse(onTimeout)),
+  );
 
 export const resolveAvailableLaunchersForConfig = <A, E, R>(
   discovery: Effect.Effect<ReadonlyArray<A>, E, R>,
-) =>
-  discovery.pipe(
-    Effect.timeoutOption(LAUNCHER_DISCOVERY_TIMEOUT),
-    Effect.map(Option.getOrElse(() => [])),
-  );
+) => resolveDiscoveryForConfig(discovery, () => []);
+
+export const resolveFileManagerRevealKindForConfig = <E, R>(
+  discovery: Effect.Effect<FileManagerRevealKind | undefined, E, R>,
+) => resolveDiscoveryForConfig(discovery, () => undefined);
 
 function unexpectedCompatibilityError(error: never): never {
   throw new Error(`Unhandled compatibility error: ${String(error)}`);
@@ -721,6 +732,11 @@ const makeWsRpcLayer = (
             ],
             { concurrency: "unbounded" },
           );
+        const fileManagerRevealKind = availableEditors.includes("file-manager")
+          ? yield* resolveFileManagerRevealKindForConfig(
+              externalLauncher.resolveFileManagerRevealKind(),
+            )
+          : undefined;
 
         return {
           environment,
@@ -746,6 +762,12 @@ const makeWsRpcLayer = (
           },
           settings,
           shellResumeCompletionMarker: true,
+          ...(fileManagerRevealKind === undefined
+            ? {}
+            : {
+                shellRevealInFileManager: true,
+                shellRevealInFileManagerKind: fileManagerRevealKind,
+              }),
           threadResumeCompletionMarker: true,
           threadSnapshotPagination: true,
         };
