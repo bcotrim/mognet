@@ -569,6 +569,9 @@ importers:
       '@effect/platform-node':
         specifier: 4.0.0-beta.78
         version: 4.0.0-beta.78(patch_hash=2992b378490a4853fc24bad013570894e290d6df878a5a57effa91f34529f98a)(bufferutil@4.1.0)(effect@4.0.0-beta.78(patch_hash=01f79a6b79df2e27c0c18b4dcfad188440c3662fbe075c8f4a15fdf709cf07bd))(ioredis@5.11.0)(utf-8-validate@6.0.6)
+      '@electron/osx-sign':
+        specifier: 2.7.0
+        version: 2.7.0
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../packages/contracts
@@ -928,6 +931,11 @@ packages:
     engines: {node: '>=12.0.0'}
     hasBin: true
 
+  '@electron/osx-sign@2.7.0':
+    resolution: {integrity: sha512-9DGhNqKMl6ibkhUoXbN7OHX2gZznfY10L3ZwG0u6r667Kfb6kec4JEfFTXftoqzmOfZ+OzwDbr4p/nKBMHnz0g==, tarball: https://registry.npmjs.org/@electron/osx-sign/-/osx-sign-2.7.0.tgz}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+
   '@electron/rebuild@4.2.0':
     resolution: {integrity: sha512-RKL/O+jGoXJMxrx/5771y1n0xTKmFuOYGO3gMmwypBM6rsH0kou0mswwdXA2JrhIkE4xyC7v9vGk0n6NPzgOxQ==, tarball: https://registry.npmjs.org/@electron/rebuild/-/rebuild-4.2.0.tgz}
     engines: {node: '>=22.12.0'}
@@ -1270,7 +1278,7 @@ packages:
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==, tarball: https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz}
 
   '@legendapp/list@3.3.3':
-    resolution: {integrity: sha512-p3g4xG6f//s4XQKhuus2189GCQgOHEIbJXHePqeDxj+6UQQQyij4YBjyArNSCgqoP0c03sxDPSOuCFB128Ql6g==}
+    resolution: {integrity: sha512-p3g4xG6f//s4XQKhuus2189GCQgOHEIbJXHePqeDxj+6UQQQyij4YBjyArNSCgqoP0c03sxDPSOuCFB128Ql6g==, tarball: https://registry.npmjs.org/@legendapp/list/-/list-3.3.3.tgz}
     peerDependencies:
       react: '*'
       react-dom: '*'
@@ -2282,7 +2290,7 @@ packages:
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==, tarball: https://registry.npmjs.org/@types/connect/-/connect-3.4.38.tgz}
 
   '@types/culori@4.0.1':
-    resolution: {integrity: sha512-43M51r/22CjhbOXyGT361GZ9vncSVQ39u62x5eJdBQFviI8zWp2X5jzqg7k4M6PVgDQAClpy2bUe2dtwEgEDVQ==}
+    resolution: {integrity: sha512-43M51r/22CjhbOXyGT361GZ9vncSVQ39u62x5eJdBQFviI8zWp2X5jzqg7k4M6PVgDQAClpy2bUe2dtwEgEDVQ==, tarball: https://registry.npmjs.org/@types/culori/-/culori-4.0.1.tgz}
 
   '@types/debug@4.1.13':
     resolution: {integrity: sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==, tarball: https://registry.npmjs.org/@types/debug/-/debug-4.1.13.tgz}
@@ -5640,6 +5648,15 @@ snapshots:
       isbinaryfile: 4.0.10
       minimist: 1.2.8
       plist: 3.1.1
+    transitivePeerDependencies:
+      - supports-color
+
+  '@electron/osx-sign@2.7.0':
+    dependencies:
+      debug: 4.4.3
+      isbinaryfile: 4.0.10
+      plist: 3.1.1
+      semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
 

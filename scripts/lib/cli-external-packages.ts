@@ -84,6 +84,17 @@ export function isExternalCliDependency(id: string): boolean {
   return CLI_EXTERNAL_PACKAGE_PREFIXES.some((prefix) => id.startsWith(prefix));
 }
 
+/** Select direct dependency roots whose runtime closure must exist as real files. */
+export function selectCliRuntimeExternalDependencies(
+  dependencies: Readonly<Record<string, string>>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(dependencies).filter(([name]) =>
+      CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => name.startsWith(prefix)),
+    ),
+  );
+}
+
 /** True when the CLI bundle should inline `id` rather than leave it external. */
 export function shouldBundleCliDependency(id: string): boolean {
   if (id.startsWith("node:")) return false;
