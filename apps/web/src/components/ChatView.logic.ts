@@ -336,6 +336,21 @@ export function resolveSendEnvMode(input: {
   return input.isGitRepo ? input.requestedEnvMode : "local";
 }
 
+/**
+ * Whether the composer must be locked until the user picks a project.
+ *
+ * A standalone chat is deliberately projectless: its reserved project row is
+ * only created by the server when the first turn bootstraps, so gating on a
+ * resolved project would leave the very first chat permanently unsendable.
+ */
+export function shouldRequireProjectSelection(input: {
+  readonly isLocalDraftThread: boolean;
+  readonly hasResolvedProject: boolean;
+  readonly isProjectlessChat: boolean;
+}): boolean {
+  return input.isLocalDraftThread && !input.hasResolvedProject && !input.isProjectlessChat;
+}
+
 export function shouldIncludeTurnStartBootstrap(input: {
   readonly isLocalDraftThread: boolean;
   readonly hasBaseBranchForWorktree: boolean;
