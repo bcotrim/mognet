@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `994372ba43810e64027c537231da200988faa7ca`
-- Reviewed on: `2026-08-26`
+- Last reviewed upstream commit: `a3a8cbd60539b4af4de8f96c892dbd07a2b6c041`
+- Reviewed on: `2026-08-27`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -591,3 +591,25 @@ Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
   pull-request `openThreadPullRequest` path was kept.
 - Kept `.macroscope/check-run-agents/ui-consistency.md` deleted when `082e6ea52`
   extended it.
+
+### 2026-08-27 review
+
+- Ported `3b86ef941`: un-settled threads return to the top of the thread list. The new
+  `unsettled_at` projection column, the `unsettledAt` contract field, the projector and
+  pipeline re-entry stamp, and the `activeThreadAnchorTimestampMs` sidebar anchor were
+  all taken, along with the focused projector/decider/sidebar regression tests. The
+  migration was renumbered `043` -> `046` to clear this fork's numbering.
+- Ported `badae6a5c`: legacy model classification now comes from a hosted
+  `model-manifest.json` instead of hardcoded `CURRENT_CLAUDE_MODELS` /
+  `CURRENT_CODEX_MODELS` sets. The manifest URL was rebranded to
+  `raw.githubusercontent.com/bcotrim/mognet/main/...` so this fork refreshes from its own
+  `main` rather than upstream's.
+- Kept `docs/internals/providers.md` deleted; only the glossary entry landed, in this
+  fork's renamed `docs/reference/encyclopedia.md`.
+- Dropped the `apps/mobile` half of `3b86ef941`.
+- Skipped `a3a8cbd60` (release CI). This fork has no `.github/workflows/release.yml`; its
+  CI is a single `quality` job.
+- Skipped `b0a028126` and `504177797` (Clerk). Clerk is removed from this fork, so there
+  is no `main.tsx` Clerk mount to fix and no `@clerk/electron` dependency to bump.
+- Skipped `860caaa60` (upstream's v0.0.34 version bump). This fork tracks its own version
+  line at `0.0.28`.
