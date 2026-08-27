@@ -105,6 +105,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         archivedAt: null,
         settledOverride: null,
         settledAt: null,
+        unsettledAt: null,
         snoozedUntil: null,
         snoozedAt: null,
         pinnedAt: null,
@@ -168,6 +169,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         archivedAt: null,
         settledOverride: "settled",
         settledAt: "2026-03-25T00:00:00.000Z",
+        unsettledAt: null,
         snoozedUntil: "2026-03-26T09:00:00.000Z",
         snoozedAt: "2026-03-25T00:00:00.000Z",
         pinnedAt: "2026-03-25T00:00:00.000Z",
@@ -197,6 +199,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         ...row,
         settledOverride: "active",
         settledAt: null,
+        unsettledAt: "2026-03-26T00:00:00.000Z",
         snoozedUntil: null,
         snoozedAt: null,
         pinnedAt: null,
@@ -207,6 +210,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       const updated = Option.getOrNull(repersisted);
       assert.strictEqual(updated?.settledOverride, "active");
       assert.strictEqual(updated?.settledAt, null);
+      assert.strictEqual(updated?.unsettledAt, "2026-03-26T00:00:00.000Z");
       assert.strictEqual(updated?.snoozedUntil, null);
       assert.strictEqual(updated?.snoozedAt, null);
       assert.strictEqual(updated?.pinnedAt, null);
@@ -242,6 +246,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         archivedAt: null,
         settledOverride: null,
         settledAt: null,
+        unsettledAt: null,
         snoozedUntil: null,
         snoozedAt: null,
         pinnedAt: null,
