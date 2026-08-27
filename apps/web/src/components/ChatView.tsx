@@ -358,6 +358,7 @@ import {
   revokeUserMessagePreviewUrls,
   scheduleEnvironmentReconnectWarning,
   shouldIncludeTurnStartBootstrap,
+  shouldRequireProjectSelection,
   shouldWriteThreadErrorToCurrentServerThread,
   startNewThreadForProject,
   waitForStartedServerThread,
@@ -6261,6 +6262,7 @@ function ChatViewContent(props: ChatViewProps) {
                         <DraftHeroHeadline
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
+                          isProjectlessChat={isProjectlessChat}
                         />
                       </div>
                       <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
@@ -6301,7 +6303,11 @@ function ChatViewContent(props: ChatViewProps) {
                         isServerThread={isServerThread}
                         isLocalDraftThread={isLocalDraftThread}
                         forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
-                        projectSelectionRequired={isLocalDraftThread && activeProject === null}
+                        projectSelectionRequired={shouldRequireProjectSelection({
+                          isLocalDraftThread,
+                          hasResolvedProject: activeProject !== null,
+                          isProjectlessChat,
+                        })}
                         phase={phase}
                         isConnecting={isConnecting}
                         isSendBusy={isSendBusy}

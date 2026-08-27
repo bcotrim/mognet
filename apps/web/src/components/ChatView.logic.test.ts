@@ -35,6 +35,7 @@ import {
   resolveDraftHeroState,
   scheduleEnvironmentReconnectWarning,
   shouldIncludeTurnStartBootstrap,
+  shouldRequireProjectSelection,
   startNewThreadForProject,
   shouldDockDraftHeroForSubmission,
   shouldReleaseTimelineAnchorForToolActivity,
@@ -602,6 +603,45 @@ describe("getStartedThreadModelChangeBlockReason", () => {
       description:
         "This provider does not allow switching models after a conversation has started.",
     });
+  });
+});
+
+describe("shouldRequireProjectSelection", () => {
+  it("keeps a standalone chat draft sendable before its project row exists", () => {
+    expect(
+      shouldRequireProjectSelection({
+        isLocalDraftThread: true,
+        hasResolvedProject: false,
+        isProjectlessChat: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("blocks a workspace draft until a project resolves", () => {
+    expect(
+      shouldRequireProjectSelection({
+        isLocalDraftThread: true,
+        hasResolvedProject: false,
+        isProjectlessChat: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("never blocks a resolved project or a started thread", () => {
+    expect(
+      shouldRequireProjectSelection({
+        isLocalDraftThread: true,
+        hasResolvedProject: true,
+        isProjectlessChat: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRequireProjectSelection({
+        isLocalDraftThread: false,
+        hasResolvedProject: false,
+        isProjectlessChat: false,
+      }),
+    ).toBe(false);
   });
 });
 
