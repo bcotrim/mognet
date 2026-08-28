@@ -648,3 +648,12 @@ Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
   `.github/workflows/desktop-macos-preview.yml`; its CI is a single `quality` job.
 - Skipped `d3c24a14b` (upstream's v0.0.35 version bump). This fork tracks its own
   version line at `0.0.28`.
+- Fixed two `ead4ce52a` fallout points that typecheck did not catch, both in
+  `GrokAdapter.ts`. Upstream imported `stableStringify` from
+  `@t3tools/shared/relaySigning`, which does not exist here because relay is removed,
+  so six server suites failed at import; the function is now defined locally at its only
+  call site. Upstream also called `Clock.monotonicTimeNanos`, which Effect beta.78 does
+  not export, so all five liveness-watchdog reads yielded `undefined`; they now use
+  `Clock.currentTimeNanos`, which is the same bigint nanosecond source, is TestClock
+  aware, and is only ever read as an elapsed-time delta here. Revisit both if this fork
+  ever takes the beta.103 upgrade.
