@@ -915,7 +915,7 @@ function ChatViewContent(props: ChatViewProps) {
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
   const threadDetailLoading = threadSyncPhase === "loading";
   const handleNewThread = useNewThreadHandler();
-  const { settleThread, pinThread, unpinThread } = useThreadActions();
+  const { settleThread, pinThread, confirmAndUnpinThread } = useThreadActions();
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -4391,17 +4391,19 @@ function ChatViewContent(props: ChatViewProps) {
         event.stopPropagation();
         if (!isServerThread || !activeThreadRef || !supportsPinning) return;
         const pinned = activeThreadPinned;
-        void (pinned ? unpinThread(activeThreadRef) : pinThread(activeThreadRef)).then((result) => {
-          if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
-          const error = squashAtomCommandFailure(result);
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: pinned ? "Failed to unpin thread" : "Failed to pin thread",
-              description: error instanceof Error ? error.message : "An error occurred.",
-            }),
-          );
-        });
+        void (pinned ? confirmAndUnpinThread(activeThreadRef) : pinThread(activeThreadRef)).then(
+          (result) => {
+            if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: pinned ? "Failed to unpin thread" : "Failed to pin thread",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+          },
+        );
         return;
       }
 
@@ -4509,7 +4511,7 @@ function ChatViewContent(props: ChatViewProps) {
     settleThread,
     supportsPinning,
     supportsSettlement,
-    unpinThread,
+    confirmAndUnpinThread,
     toggleRightPanel,
     toggleRightPanelMaximized,
     toggleTerminalPanel,

@@ -172,6 +172,7 @@ export const ClientSettingsSchema = Schema.Struct({
   confirmQuit: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  confirmThreadUnpin: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -922,6 +923,7 @@ export const ClientSettingsPatch = Schema.Struct({
   confirmQuit: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
+  confirmThreadUnpin: Schema.optionalKey(Schema.Boolean),
   defaultEditor: Schema.optionalKey(Schema.NullOr(EditorId)),
   defaultTerminal: Schema.optionalKey(Schema.NullOr(ExternalTerminalId)),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),

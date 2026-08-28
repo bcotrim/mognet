@@ -21,6 +21,7 @@ const clientSettings: ClientSettings = {
   confirmQuit: true,
   confirmThreadArchive: true,
   confirmThreadDelete: false,
+  confirmThreadUnpin: false,
   defaultEditor: null,
   defaultTerminal: null,
   dismissedProviderUpdateNotificationKeys: [],
