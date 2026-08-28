@@ -14,7 +14,6 @@ import {
 } from "@t3tools/contracts";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
-import { stableStringify } from "@t3tools/shared/relaySigning";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -203,6 +202,20 @@ function appendPromptResultToTurn(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    return `{${Object.entries(value)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 const resolveNotificationTurnId = (ctx: GrokSessionContext): TurnId | undefined => ctx.activeTurnId;
@@ -465,7 +478,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
       }
       ctx.livenessUpdatesInFlight += 1;
       try {
-        const activityAtNanos = yield* Clock.monotonicTimeNanos;
+        const activityAtNanos = yield* Clock.currentTimeNanos;
         if (ctx.livenessTurnId !== turnId || ctx.interruptedTurnIds.has(turnId)) {
           return;
         }
@@ -516,7 +529,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
       }
       // An approval or user-input wait can last longer than the watchdog.
       // Its resolution gives the provider a fresh window to resume output.
-      ctx.lastTurnActivityAtNanos = yield* Clock.monotonicTimeNanos;
+      ctx.lastTurnActivityAtNanos = yield* Clock.currentTimeNanos;
       yield* signalTurnLiveness(ctx, turnId);
     });
 
@@ -531,7 +544,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
         ) {
           return;
         }
-        ctx.lastTurnActivityAtNanos = yield* Clock.monotonicTimeNanos;
+        ctx.lastTurnActivityAtNanos = yield* Clock.currentTimeNanos;
         yield* signalTurnLiveness(ctx, turnId);
       },
     );
@@ -731,7 +744,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           if (lastActivityAtNanos === undefined) {
             return;
           }
-          const nowNanos = yield* Clock.monotonicTimeNanos;
+          const nowNanos = yield* Clock.currentTimeNanos;
           if (
             ctx.interruptedTurnIds.has(turnId) ||
             !isLiveTurn(ctx, turnId) ||
@@ -782,7 +795,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             yield* Queue.take(ctx.livenessSignals);
             continue;
           }
-          const nowNanos = yield* Clock.monotonicTimeNanos;
+          const nowNanos = yield* Clock.currentTimeNanos;
           const remainingNanos = livenessTimeoutFor(ctx).nanos - (nowNanos - lastActivityAtNanos);
           if (remainingNanos <= 0n) {
             yield* settleStalledTurn(ctx, turnId);
