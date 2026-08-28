@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `a3a8cbd60539b4af4de8f96c892dbd07a2b6c041`
-- Reviewed on: `2026-08-27`
+- Last reviewed upstream commit: `94401d01b956828eaa989ff4a80046c20d7b6088`
+- Reviewed on: `2026-08-28`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -613,3 +613,38 @@ Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
   is no `main.tsx` Clerk mount to fix and no `@clerk/electron` dependency to bump.
 - Skipped `860caaa60` (upstream's v0.0.34 version bump). This fork tracks its own version
   line at `0.0.28`.
+
+### 2026-08-28 review
+
+- Ported `ead4ce52a` (Grok skills, plans, and turn reliability): the new
+  `GrokSkills` driver module, ACP session-update/plan handling in `AcpRuntimeModel`,
+  reasoning-effort propagation through `applyGrokAcpModelSelection`, xAI ACP extension
+  work, and the expanded adapter/provider regression suites.
+- Ported `f925d6394` and `94401d01b` (Codex 0.150): regenerated
+  `effect-codex-app-server` schemas for multi-agent events and the new account plans,
+  plus `CodexProvider` plan mapping. This also restored the package's
+  `schema.test.ts`, which this fork had been missing.
+- Ported `a6797b3b9`: projection bootstrap now replays every un-applied event instead
+  of stopping at the first gap.
+- Ported `230c5d4a5`: stale Codex approval callbacks are recovered instead of leaving
+  the turn wedged.
+- Ported `e2d4d12a8` (provider settings split into a list pane and an editor pane).
+  Upstream's files were taken wholesale, then this fork's divergences were re-applied:
+  the `ConnectionStatusDot` import stays pointed at `./ConnectionsSettings`, and the
+  `RelayConnectionTarget` / `relayManaged` "T3 Connect" branches stay deleted because
+  relay is removed here.
+- Ported the test-pruning commits `73f8cfc02`, `f6f2be32d`, and `64ca3b650`, except
+  `apps/web/src/components/threadSidebarWidth.test.ts`. That test was rewritten in this
+  fork to assert the Mognet sidebar wordmark against shipped CSS, so it is regression
+  coverage for our branding rather than upstream's trivial layout assertion; the
+  `THREAD_SIDEBAR_DEFAULT_WIDTH` export it needs was kept as well.
+- Dropped the usage-tracking half of `ead4ce52a` (`apps/server/src/usage`,
+  `packages/shared/src/usageMerge.ts`, `packages/contracts/src/usage.ts`,
+  `apps/web/src/components/usage`) and its `docs/user/{install,permission-modes,usage}.md`
+  updates. Those surfaces are removed from this fork.
+- Dropped the `apps/mobile` half of `ead4ce52a`.
+- Skipped `348367dcc` (Android adaptive launcher icon). Mobile is removed here.
+- Skipped `33b650a5b` (macOS preview DMG downloads). This fork has no
+  `.github/workflows/desktop-macos-preview.yml`; its CI is a single `quality` job.
+- Skipped `d3c24a14b` (upstream's v0.0.35 version bump). This fork tracks its own
+  version line at `0.0.28`.
