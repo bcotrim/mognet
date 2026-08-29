@@ -178,6 +178,10 @@
     "./claudeCompaction": {
       "types": "./src/claudeCompaction.ts",
       "import": "./src/claudeCompaction.ts"
+    },
+    "./themePalettes": {
+      "types": "./src/themePalettes.ts",
+      "import": "./src/themePalettes.ts"
     }
   },
   "scripts": {

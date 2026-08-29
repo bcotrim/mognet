@@ -38,6 +38,7 @@ import {
   themeColorToHex,
   toCanonicalThemeColor,
   THEME_FILE_VERSION,
+  singleAppearanceOf,
 } from "./themePalette";
 
 function asHex(value: string): string {
@@ -1061,5 +1062,13 @@ describe("stored theme preferences", () => {
 
     vi.unstubAllGlobals();
     invalidateCustomThemes();
+  });
+});
+
+describe("singleAppearanceOf", () => {
+  it("reports the only half a theme can claim, and null for a pair", () => {
+    const { variants: _pair, ...base } = MOGNET_THEME;
+    expect(singleAppearanceOf({ ...base, id: "x", appearance: "dark" })).toBe("dark");
+    expect(singleAppearanceOf(MOGNET_THEME)).toBe(null);
   });
 });

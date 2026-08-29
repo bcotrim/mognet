@@ -12,6 +12,7 @@ import { sharedServerCommandFlags } from "./cli/config.ts";
 import { isEntrypoint } from "./entrypoint.ts";
 import { projectCommand } from "./cli/project.ts";
 import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
+import { themeCommand } from "./cli/theme.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
@@ -19,7 +20,14 @@ export const makeCli = () =>
   Command.make("t3", { ...sharedServerCommandFlags }).pipe(
     Command.withDescription("Run the Mognet server."),
     Command.withHandler((flags) => runServerCommand(flags)),
-    Command.withSubcommands([startCommand, serveCommand, pairCommand, authCommand, projectCommand]),
+    Command.withSubcommands([
+      startCommand,
+      serveCommand,
+      pairCommand,
+      authCommand,
+      projectCommand,
+      themeCommand,
+    ]),
   );
 
 export const cli = makeCli();
