@@ -3654,7 +3654,7 @@ function ChatViewContent(props: ChatViewProps) {
       ? activePlan.steps
       : null;
   const autoSettleAfterDays = useClientSettings((settings) => settings.sidebarAutoSettleAfterDays);
-  const autoSettleMode = useClientSettings((settings) => settings.sidebarAutoSettleMode);
+  const autoSettleOnMerge = useClientSettings((settings) => settings.sidebarAutoSettleOnMerge);
   const linkedPullRequestStatus = useLinkedThreadPullRequest(
     activeThreadRef?.environmentId ?? null,
     linkedThreadPullRequest,
@@ -3725,8 +3725,10 @@ function ChatViewContent(props: ChatViewProps) {
   const activeThreadWokeVisible = useMemo(() => {
     if (activeThreadWokeAt === null) return false;
     if (
-      autoSettleMode === "change-request" &&
-      changeRequestAutoSettles(activeThreadChangeRequest, { thread: activeThreadShell })
+      changeRequestAutoSettles(activeThreadChangeRequest, {
+        autoSettleOnMerge,
+        thread: activeThreadShell,
+      })
     ) {
       return false;
     }
@@ -3752,21 +3754,21 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadChangeRequest,
     activeThreadShell,
     activeThreadWokeAt,
-    autoSettleMode,
+    autoSettleOnMerge,
   ]);
   const activeThreadSettled = useMemo(() => {
     if (activeThreadShell === null || !supportsSettlement) return false;
     return effectiveSettled(activeThreadShell, {
       now: `${nowMinute}:00.000Z`,
       autoSettleAfterDays,
-      autoSettleMode,
+      autoSettleOnMerge,
       changeRequest: activeThreadChangeRequest,
     });
   }, [
     activeThreadChangeRequest,
     activeThreadShell,
     autoSettleAfterDays,
-    autoSettleMode,
+    autoSettleOnMerge,
     changeRequestSnapshotByKey,
     nowMinute,
     supportsSettlement,
