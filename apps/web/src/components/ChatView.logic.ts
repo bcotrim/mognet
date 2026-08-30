@@ -13,6 +13,11 @@ import {
 } from "@t3tools/contracts";
 import { truncate } from "@t3tools/shared/String";
 import {
+  appendCodexArtifactTemplateUsePrompt,
+  codexArtifactTemplateUsePrompt,
+  type CodexArtifactTemplate,
+} from "@t3tools/client-runtime/codex-artifact-templates";
+import {
   type ChatMessage,
   isImageAttachment,
   type SessionPhase,
@@ -34,6 +39,14 @@ import type { TimelineEntry } from "../session-logic";
 export const MAX_HIDDEN_MOUNTED_PREVIEW_THREADS = 3;
 export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
 
+export function codexArtifactTemplatePromptToAppend(
+  currentDraft: string,
+  template: CodexArtifactTemplate,
+): string | null {
+  return appendCodexArtifactTemplateUsePrompt(currentDraft, template) === currentDraft
+    ? null
+    : codexArtifactTemplateUsePrompt(template);
+}
 export function shoulderTabReserve(overlay: HTMLElement): number {
   if (overlay.querySelector(".chat-composer-tasks-tab")) return 0;
   const tab = overlay.querySelector<HTMLElement>(".chat-composer-shoulder-tab");
