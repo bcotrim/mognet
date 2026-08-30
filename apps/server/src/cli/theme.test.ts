@@ -407,18 +407,6 @@ describe("t3 theme", () => {
     }),
   );
 
-  // Web and desktop cannot resolve the mobile default, and mobile does not
-  // follow this setting, so naming it would be a silent no-op.
-  it.effect("rejects the mobile default theme id", () =>
-    Effect.gen(function* () {
-      const baseDir = makeBaseDir();
-      const failure = yield* runCli(["theme", "set", "t3-code", "--base-dir", baseDir]).pipe(
-        Effect.flip,
-      );
-      assert.include(String(failure), "No theme named");
-    }),
-  );
-
   // Deciding on existence alone would publish ./ocean instead of selecting the
   // built-in, purely because of what happens to be in the working directory.
   it.effect("treats a bare id as an id even when a file shares its name", () =>

@@ -206,7 +206,6 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ProviderRuntimeIngestionLive),
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
-  Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );
 
@@ -339,6 +338,10 @@ const RuntimeCoreBaseLive = ReactorLayerLive.pipe(
   // Core Services
   Layer.provideMerge(ScheduledTasks.layerLive),
   Layer.provideMerge(ThreadTurnBootstrapDispatcher.layer),
+  // Built before the bootstrap dispatcher: a bootstrap create must drain the
+  // prior incarnation's deletion cleanup before it hands the reused thread id
+  // to setup or turn start.
+  Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(ProjectSetupScriptRunner.layer),
   Layer.provideMerge(ServerSettingsLayerLive),
   Layer.provideMerge(CheckpointingLayerLive),

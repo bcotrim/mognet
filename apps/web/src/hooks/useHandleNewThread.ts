@@ -9,7 +9,6 @@ import {
   DEFAULT_SERVER_SETTINGS,
   STANDALONE_CHAT_PROJECT_ID,
   type EnvironmentId,
-  type ModelSelection,
   type ScopedProjectRef,
   type ServerSettings,
   type ThreadId,
