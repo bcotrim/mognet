@@ -8,7 +8,6 @@ vi.mock("./branding", () => branding);
 
 import { APP_VERSION } from "./branding";
 import {
-  appendVersionMismatchHint,
   buildVersionMismatchDismissalKey,
   dismissVersionMismatch,
   isVersionMismatchDismissed,
@@ -137,11 +136,33 @@ describe("versionSkew", () => {
     ).toBe(false);
   });
 
-  it("appends a hint to connection errors when the server is behind", () => {
-    const mismatch = resolveVersionMismatch("0.0.33");
+  it("reads desktop-managed update capabilities from config descriptors", () => {
+    expect(
+      resolveServerSelfUpdateCapability({
+        environment: {
+          environmentId: EnvironmentId.make("environment-desktop"),
+          label: "Desktop",
+          platform: { os: "darwin", arch: "arm64" },
+          serverVersion: "9.9.9",
+          capabilities: {
+            repositoryIdentity: true,
+            serverSelfUpdate: "desktop-managed",
+          },
+        },
+      }),
+    ).toBe("desktop-managed");
+    expect(resolveServerSelfUpdateCapability(null)).toBeNull();
+  });
 
-    expect(appendVersionMismatchHint("Socket closed.", mismatch)).toBe(
-      `Socket closed. Hint: ${MISMATCH_HINT}`,
+  it("matches version-drift guidance to the advertised update path", () => {
+    expect(serverUpdateGuidance("respawn", "Remote server")).toBe(
+      "Update the Remote server so they stay in sync.",
+    );
+    expect(serverUpdateGuidance("desktop-managed", "Desktop server")).toBe(
+      "Update the desktop app that runs the Desktop server.",
+    );
+    expect(serverUpdateGuidance(null, "Local server")).toBe(
+      "Relaunch the Local server with the copied command to sync them.",
     );
   });
 });
