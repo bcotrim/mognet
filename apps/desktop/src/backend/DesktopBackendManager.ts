@@ -64,6 +64,9 @@ const DEFAULT_BACKEND_READINESS_TIMEOUT = Duration.minutes(1);
 const DEFAULT_BACKEND_READINESS_INTERVAL = Duration.millis(100);
 const DEFAULT_BACKEND_READINESS_REQUEST_TIMEOUT = Duration.seconds(1);
 const DEFAULT_BACKEND_TERMINATE_GRACE = Duration.seconds(2);
+// Bounded so a wedged run scope can never stall app quit forever; callers
+// that need a different budget pass their own.
+const DEFAULT_BACKEND_STOP_TIMEOUT = Duration.seconds(5);
 const BACKEND_READINESS_PATH = "/.well-known/mognet/environment";
 const DEFAULT_BACKEND_OUTPUT_DRAIN_TIMEOUT = Duration.seconds(5);
 const { logWarning: logBackendProcessWarning } =
@@ -1070,7 +1073,9 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
       onNone: () => Effect.void,
       onSome: (run) =>
         Effect.gen(function* () {
-          const closed = yield* closeRun(run, parentScope, options);
+          const closed = yield* closeRun(run, parentScope, {
+            timeout: options?.timeout ?? DEFAULT_BACKEND_STOP_TIMEOUT,
+          });
           if (!closed) {
             return;
           }
