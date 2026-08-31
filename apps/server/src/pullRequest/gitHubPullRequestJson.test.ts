@@ -789,6 +789,30 @@ describe("viewer permission decoding", () => {
       didAuthor: false,
     });
   });
+
+  it("counts only the review threads that are still unresolved", () => {
+    expect(
+      expectSuccess(
+        decodeViewerPermissionsJson(
+          viewerJson({
+            viewerPermission: "WRITE",
+            pullRequest: {
+              viewerCanUpdate: true,
+              viewerDidAuthor: true,
+              reviewThreads: {
+                nodes: [{ isResolved: false }, { isResolved: true }, { isResolved: false }],
+              },
+            },
+          }),
+        ),
+      ),
+    ).toEqual({
+      canWrite: true,
+      canUpdate: true,
+      didAuthor: true,
+      unresolvedReviewThreadCount: 2,
+    });
+  });
 });
 
 describe("review thread decoding", () => {

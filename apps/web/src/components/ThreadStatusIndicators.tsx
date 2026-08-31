@@ -35,6 +35,7 @@ export interface PrStatusIndicator {
   tooltipLead: string;
   tooltipTitle: string;
   url: string;
+  unresolvedCommentCount: number | null;
 }
 
 export interface TerminalStatusIndicator {
@@ -102,10 +103,20 @@ export function prStatusIndicator(
   const presentation = resolveChangeRequestPresentation(provider);
   const status = getChangeRequestStatusDisplay(pr);
 
-  const tooltipLead =
+  const unresolvedCommentCount =
+    pr.state === "open" && (pr.unresolvedReviewThreadCount ?? 0) > 0
+      ? (pr.unresolvedReviewThreadCount ?? 0)
+      : null;
+  const baseLead =
     status.label === pr.state
       ? `${presentation.shortName} #${pr.number} - ${pr.state.charAt(0).toUpperCase()}${pr.state.slice(1)}`
       : `#${pr.number} ${presentation.shortName} ${status.label}`;
+  const tooltipLead =
+    unresolvedCommentCount === null
+      ? baseLead
+      : `${baseLead} · ${unresolvedCommentCount} unresolved ${
+          unresolvedCommentCount === 1 ? "comment" : "comments"
+        }`;
   return {
     label: `${presentation.shortName} ${status.label}`,
     colorClass: status.colorClass,
@@ -113,6 +124,7 @@ export function prStatusIndicator(
     tooltipLead,
     tooltipTitle: pr.title,
     url: pr.url,
+    unresolvedCommentCount,
   };
 }
 

@@ -1218,6 +1218,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         aria-label={prStatus.tooltip}
       >
         #{pr.number}
+        {prStatus.unresolvedCommentCount === null ? null : (
+          <span className="ml-1 inline-flex items-center gap-0.5 align-middle">
+            <MessageSquareIcon className="size-2.5" />
+            {prStatus.unresolvedCommentCount}
+          </span>
+        )}
       </a>
     ) : null;
   const terminalStatusIcon = terminalStatus ? (
