@@ -1029,6 +1029,42 @@ describe("DesktopBackendManager", () => {
     ),
   );
 
+  it.effect("stops with no explicit timeout even when the run scope wedges", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const teardownStarted = yield* Deferred.make<void>();
+
+        const spawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() =>
+            Effect.gen(function* () {
+              const scope = yield* Scope.Scope;
+              yield* Scope.addFinalizer(
+                scope,
+                Deferred.succeed(teardownStarted, undefined).pipe(
+                  Effect.andThen(Effect.never),
+                  Effect.asVoid,
+                ),
+              );
+              return makeProcess({ exitCode: Effect.never });
+            }),
+          ),
+        );
+
+        const instance = yield* makeTestInstance({
+          spawnerLayer,
+          httpClientLayer: httpClientLayer(() => Effect.never),
+        });
+
+        yield* instance.start;
+        const stopFiber = yield* instance.stop().pipe(Effect.forkChild);
+        yield* Deferred.await(teardownStarted).pipe(Effect.timeout("1 second"));
+        yield* TestClock.adjust(Duration.seconds(5));
+        yield* Fiber.join(stopFiber).pipe(Effect.timeout("1 second"));
+      }).pipe(Effect.provide(TestClock.layer())),
+    ),
+  );
+
   it.effect("keeps a timed-out run active until its process exits", () =>
     Effect.scoped(
       Effect.gen(function* () {

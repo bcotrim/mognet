@@ -1,6 +1,8 @@
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -65,6 +67,8 @@ export class DesktopLifecycle extends Context.Service<
 const { logInfo: logLifecycleInfo, logError: logLifecycleError } =
   makeComponentLogger("desktop-lifecycle");
 
+const SHUTDOWN_COMPLETE_TIMEOUT = Duration.seconds(10);
+
 function addScopedListener<Args extends ReadonlyArray<unknown>>(
   target: unknown,
   eventName: string,
@@ -95,7 +99,16 @@ const requestDesktopShutdownAndWait = Effect.fn("desktop.lifecycle.requestShutdo
     yield* desktopWindow.flushMainWindowBounds;
     yield* afterBoundsFlush;
     yield* shutdown.request;
-    yield* shutdown.awaitComplete;
+    // Quit must never be able to hang: if any scope finalizer wedges, the
+    // shutdown fence is abandoned so electronApp.quit still runs.
+    const completed = yield* shutdown.awaitComplete.pipe(
+      Effect.timeoutOption(SHUTDOWN_COMPLETE_TIMEOUT),
+    );
+    if (Option.isNone(completed)) {
+      yield* logLifecycleError("shutdown did not complete in time; quitting anyway", {
+        timeoutMs: Duration.toMillis(SHUTDOWN_COMPLETE_TIMEOUT),
+      });
+    }
   },
 );
 
