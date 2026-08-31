@@ -35,6 +35,7 @@ import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
+  ArchiveIcon,
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
@@ -752,6 +753,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
   onSettle: (threadRef: ScopedThreadRef) => void;
   onUnsettle: (threadRef: ScopedThreadRef) => void;
+  onArchive: (threadRef: ScopedThreadRef, title: string) => void;
   onSnooze: (threadRef: ScopedThreadRef, preset: SnoozePreset) => void;
   onUnsnooze: (threadRef: ScopedThreadRef) => void;
   onUnpin: (threadRef: ScopedThreadRef) => void;
@@ -770,6 +772,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     onCancelRename,
     onCommitRename,
     onContextMenu,
+    onArchive,
     onRenameTitleChange,
     onSettle,
     onSnooze,
@@ -829,6 +832,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
   const status = resolveSidebarThreadStatus(thread);
+  const isRunningSession =
+    thread.session?.status === "running" && thread.session.activeTurnId != null;
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -1048,6 +1053,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       onSettle(threadRef);
     },
     [onSettle, threadRef],
+  );
+  const handleArchiveClick = useCallback(
+    (event: ReactMouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onArchive(threadRef, thread.title);
+    },
+    [onArchive, threadRef, thread.title],
   );
   const handleUnsettleClick = useCallback(
     (event: ReactMouseEvent) => {
@@ -1509,46 +1522,43 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     threadTimeLabel(thread)
                   )}
                 </span>
-                {props.settlementSupported || showSnoozeButton ? (
-                  <span
-                    className={cn(
-                      // focus-visible, not focus-within: a mouse click leaves
-                      // the Settle button focused, and a plain focus-within
-                      // would keep the controls pinned over the status label
-                      // once the pointer moves away (e.g. after a failed
-                      // settle) instead of cross-fading back.
-                      "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:static group-hover/sidebar-row:opacity-100",
-                      snoozeMenuOpen && "pointer-events-auto static opacity-100",
-                    )}
-                  >
-                    {showSnoozeButton ? (
-                      <SnoozePopoverButton
-                        open={snoozeMenuOpen}
-                        onOpenChange={setSnoozeMenuOpen}
-                        onSnooze={handleSnoozePreset}
-                        timestampFormat={props.timestampFormat}
-                      />
-                    ) : null}
-                    {props.settlementSupported ? (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              aria-label="Settle thread"
-                              onClick={handleSettleClick}
-                              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-2 text-xs text-muted-foreground hover:text-foreground"
-                            />
-                          }
-                        >
-                          <CheckIcon className="size-3" />
-                          Settle
-                        </TooltipTrigger>
-                        <TooltipPopup>Settle thread</TooltipPopup>
-                      </Tooltip>
-                    ) : null}
-                  </span>
-                ) : null}
+                <span
+                  className={cn(
+                    // focus-visible, not focus-within: a mouse click leaves
+                    // the Archive button focused, and a plain focus-within
+                    // would keep the controls pinned over the status label
+                    // once the pointer moves away (e.g. after a failed
+                    // archive) instead of cross-fading back.
+                    "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:static group-hover/sidebar-row:opacity-100",
+                    snoozeMenuOpen && "pointer-events-auto static opacity-100",
+                  )}
+                >
+                  {showSnoozeButton ? (
+                    <SnoozePopoverButton
+                      open={snoozeMenuOpen}
+                      onOpenChange={setSnoozeMenuOpen}
+                      onSnooze={handleSnoozePreset}
+                      timestampFormat={props.timestampFormat}
+                    />
+                  ) : null}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Archive thread"
+                          disabled={isRunningSession}
+                          onClick={handleArchiveClick}
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-2 text-xs text-muted-foreground hover:text-foreground disabled:cursor-default disabled:opacity-50 disabled:hover:text-muted-foreground"
+                        />
+                      }
+                    >
+                      <ArchiveIcon className="size-3" />
+                      Archive
+                    </TooltipTrigger>
+                    <TooltipPopup>Archive thread</TooltipPopup>
+                  </Tooltip>
+                </span>
               </span>
             </div>
             <div className="mt-1 flex min-w-0">
@@ -2605,6 +2615,39 @@ export default function Sidebar() {
     },
     [unsettleThread],
   );
+  const attemptArchive = useCallback(
+    (threadRef: ScopedThreadRef, title: string) => {
+      void (async () => {
+        if (confirmThreadArchive) {
+          const api = readLocalApi();
+          if (!api) return;
+          const confirmed = await settlePromise(() =>
+            api.dialogs.confirm(`Archive thread "${title}"?`),
+          );
+          if (confirmed._tag === "Failure" || !confirmed.value) return;
+        }
+        let didArchive = false;
+        const result = await archiveThread(threadRef, {
+          onArchived: () => {
+            didArchive = true;
+          },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: didArchive
+                ? "Thread archived, but navigation failed"
+                : "Failed to archive thread",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      })();
+    },
+    [archiveThread, confirmThreadArchive],
+  );
   const attemptUnsnooze = useCallback(
     (threadRef: ScopedThreadRef) => {
       void (async () => {
@@ -3250,34 +3293,9 @@ export default function Sidebar() {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
-          case "archive": {
-            if (confirmThreadArchive) {
-              const confirmed = await settlePromise(() =>
-                api.dialogs.confirm(`Archive thread "${thread.title}"?`),
-              );
-              if (confirmed._tag === "Failure" || !confirmed.value) return;
-            }
-            let didArchive = false;
-            const result = await archiveThread(threadRef, {
-              onArchived: () => {
-                didArchive = true;
-              },
-            });
-            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-              const error = squashAtomCommandFailure(result);
-              toastManager.add(
-                stackedThreadToast({
-                  type: "error",
-                  title: didArchive
-                    ? "Thread archived, but navigation failed"
-                    : "Failed to archive thread",
-                  description: error instanceof Error ? error.message : "An error occurred.",
-                }),
-              );
-              return;
-            }
+          case "archive":
+            attemptArchive(threadRef, thread.title);
             return;
-          }
           case "delete": {
             if (confirmThreadDelete) {
               const confirmed = await settlePromise(() =>
@@ -3311,14 +3329,13 @@ export default function Sidebar() {
       })();
     },
     [
-      archiveThread,
+      attemptArchive,
       attemptPin,
       attemptSettle,
       attemptSnooze,
       attemptUnsettle,
       attemptUnsnooze,
       attemptUnpin,
-      confirmThreadArchive,
       confirmThreadDelete,
       copyBranchToClipboard,
       copyPathToClipboard,
@@ -3856,6 +3873,7 @@ export default function Sidebar() {
                         onContextMenu={handleThreadContextMenu}
                         onSettle={attemptSettle}
                         onUnsettle={attemptUnsettle}
+                        onArchive={attemptArchive}
                         onSnooze={attemptSnooze}
                         onUnsnooze={attemptUnsnooze}
                         onUnpin={attemptUnpin}
