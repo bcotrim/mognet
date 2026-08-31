@@ -213,6 +213,7 @@ describe("ElectronProtocol", () => {
       "http:",
       "https:",
     ]);
+    assert.deepEqual(directives["media-src"], ["'self'", "mognet:", "blob:"]);
     assert.deepEqual(directives["font-src"], ["'self'", "mognet:", "data:"]);
     assert.deepEqual(directives["frame-src"], ["'self'"]);
   });
