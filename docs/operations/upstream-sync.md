@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `1f8ed54add4133ac39effceded8fc1fff12d8e03`
-- Reviewed on: `2026-08-30`
+- Last reviewed upstream commit: `8b817cbcaad71a53e2ef73f3881067f8aa8094bc`
+- Reviewed on: `2026-08-31`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -721,3 +721,41 @@ Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
   and `6a9d9f988` (upstream repo policy files), `5766dfbf5` (nightly release schedule; CI here
   is a single `quality` job), and `3251b7548` (upstream's v0.0.36 bump; this fork tracks its own
   version line).
+
+### 2026-08-31 review
+
+- Ported inline video playback for chat attachments (`ac4aae101`): the server now signs video
+  attachments for inline delivery instead of forcing a download, the desktop CSP gained
+  `media-src`, and the expanded preview plays them. Adapted the CSP assertion and the composer
+  JSX to this fork's `chat-composer-glass-host` / lower-chrome layout.
+- Ported Codex file citations and artifact templates (`c1e70b5f8`), including the three new
+  `packages/client-runtime` modules and their `mdast-util-directive` /
+  `micromark-extension-directive` dependencies. Dropped upstream's
+  `LastInvokedScriptByProjectSchema` from `ChatView.logic.ts`: it has no consumer in this fork.
+- Ported the right-panel workspace-mutation refresh (`e09b88b6a`), replacing DiffPanel's
+  turn-id ref heuristic with the shared `useWorkspaceMutationRefresh` hook now also used by the
+  file browser and preview panels.
+- Ported repository-instruction following in generated source control text (`60f2ce027`).
+  `resolveStylePolicy` now takes the whole settings object so it can detect a Claude writer;
+  this fork's `resolveTextGenerationModelSelection` is untouched beside it.
+- Adapted the shared scroll-fade height reduction (`6e324b9bb`) to this fork's separate
+  `.chat-timeline-scroll-fade` / `.settings-page-scroll-fade` / `.pull-requests-scroll-fade`
+  classes: they now share `--workspace-titlebar-scroll-fade-height: 1.5rem`, and the 3rem
+  `sm:` bump plus the pull-request-only override are gone.
+- Also ported `12fe2d6d0` (strip quotes from repaired Windows PATH), `8f525af5a` (agent images
+  open in the expanded preview), `5885a68ad` (preview above the sidebar control), `7880a6e58`
+  (Grok model changes in existing threads), `7980dfddb` (snooze menu duplicate wake times),
+  `17c48f7fc` (fold interim turn responses), `8b817cbca` (circle-alert icon for failed tool
+  calls), and `2daff8c25` (drop unreachable helpers; `resolveSidebarStageBadgeLabel`,
+  `appendVersionMismatchHint`, and the eager provider-update dismissal readers were dead here
+  too).
+- Skipped `8dcb96314` (revert of the composer-banner unification). This fork skipped the
+  original `3d32797f6` at the 2026-08-30 review, so the revert is already in effect here.
+- Skipped `9072aa1fd` (cached Claude token pricing). `apps/server/src/usage` does not exist in
+  this fork.
+- Skipped `e4f7b14fa` (Windows setup script in `t3.json`); there is no `t3.json` here.
+- Skipped the mobile-only commits `f15680bd3` and `86c9a9288`. `f15680bd3` also extracts
+  `commandProgramName` and work-log presentation out of `MessagesTimeline.tsx` into
+  `packages/client-runtime/work-log/`, but the only consumer of that extraction is
+  `apps/mobile`, so the helper stays inline here.
+- Dropped the `apps/mobile` halves of `c1e70b5f8`.
