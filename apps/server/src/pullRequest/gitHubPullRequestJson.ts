@@ -2134,6 +2134,8 @@ export interface GitHubViewerAccess {
    * something to update" at once. Absent where the comparison was not read.
    */
   readonly canUpdateBranch?: boolean;
+  /** Counted from the first hundred review threads; absent where GitHub reported none at all. */
+  readonly unresolvedReviewThreadCount?: number;
 }
 
 /**
@@ -2145,7 +2147,11 @@ export interface GitHubViewerAccess {
 export const VIEWER_PERMISSIONS_GRAPHQL_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     viewerPermission
-    pullRequest(number: $number) { viewerCanUpdate viewerDidAuthor }
+    pullRequest(number: $number) {
+      viewerCanUpdate
+      viewerDidAuthor
+      reviewThreads(first: 100) { nodes { isResolved } }
+    }
   }
 }`;
 
@@ -2154,7 +2160,18 @@ const RawViewerPermissionsSchema = Schema.Struct({
     repository: Schema.Struct({
       viewerPermission: Schema.optional(Schema.NullOr(Schema.String)),
       /** Null for a number that names no pull request the viewer can see. */
-      pullRequest: Schema.NullOr(RawViewerFieldsSchema),
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          ...RawViewerFieldsSchema.fields,
+          reviewThreads: Schema.optional(
+            Schema.NullOr(
+              Schema.Struct({
+                nodes: Schema.Array(Schema.Struct({ isResolved: Schema.optional(Schema.Boolean) })),
+              }),
+            ),
+          ),
+        }),
+      ),
     }),
   }),
 });
@@ -2169,9 +2186,16 @@ export function decodeViewerPermissionsJson(
     return Result.fail(decoded.failure);
   }
   const repository = decoded.success.data.repository;
+  const threadNodes = repository.pullRequest?.reviewThreads?.nodes;
   return Result.succeed({
     canWrite: toCanWrite(repository.viewerPermission),
     ...toPullRequestViewerFields(repository.pullRequest),
+    ...(threadNodes === undefined
+      ? {}
+      : {
+          unresolvedReviewThreadCount: threadNodes.filter((node) => node.isResolved === false)
+            .length,
+        }),
   });
 }
 

@@ -278,6 +278,9 @@ export const make = Effect.gen(function* () {
             ...(detail.comparison?.behindBy == null
               ? {}
               : { behindBy: detail.comparison.behindBy }),
+            ...(viewerAccess.unresolvedReviewThreadCount === undefined
+              ? {}
+              : { unresolvedReviewThreadCount: viewerAccess.unresolvedReviewThreadCount }),
           }),
         ),
       ),

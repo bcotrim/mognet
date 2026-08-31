@@ -1182,6 +1182,12 @@ export const make = Effect.gen(function* () {
               ...(changeRequest.autoMergeEnabled === undefined
                 ? {}
                 : { autoMergeEnabled: changeRequest.autoMergeEnabled }),
+              ...(changeRequest.reviewDecision == null
+                ? {}
+                : { reviewDecision: changeRequest.reviewDecision }),
+              ...(changeRequest.unresolvedReviewThreadCount === undefined
+                ? {}
+                : { unresolvedReviewThreadCount: changeRequest.unresolvedReviewThreadCount }),
             }),
           ),
         ),

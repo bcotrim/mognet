@@ -38,9 +38,32 @@ export function createLinkedPullRequestDetailAtomFamily<R, E>(
   });
 }
 
+const VCS_REVIEW_DECISIONS = {
+  approved: "approved",
+  "changes-requested": "changes_requested",
+  "review-required": "review_required",
+} as const;
+
+function summarizeDetailChecks(
+  checks: PullRequestDetail["checks"],
+): NonNullable<VcsStatusResult["pr"]>["checks"] {
+  if (checks.length === 0) return undefined;
+  const failedCount = checks.filter(
+    (check) => check.status === "failure" || check.status === "cancelled",
+  ).length;
+  const pendingCount = checks.filter((check) => check.status === "pending").length;
+  return {
+    status: failedCount > 0 ? "failing" : pendingCount > 0 ? "pending" : "passing",
+    totalCount: checks.length,
+    failedCount,
+    pendingCount,
+  };
+}
+
 export function pullRequestDetailToVcsStatus(
   detail: PullRequestDetail,
 ): NonNullable<VcsStatusResult["pr"]> {
+  const checks = summarizeDetailChecks(detail.checks);
   return {
     number: detail.number,
     title: detail.title,
@@ -49,6 +72,15 @@ export function pullRequestDetailToVcsStatus(
     headRef: detail.headBranch,
     state: detail.state,
     updatedAt: detail.updatedAt,
+    isDraft: detail.isDraft,
+    ...(detail.mergeability === "conflicting" ? { mergeStatus: "conflicting" as const } : {}),
+    ...(detail.reviewDecision === undefined
+      ? {}
+      : { reviewDecision: VCS_REVIEW_DECISIONS[detail.reviewDecision] }),
+    ...(checks === undefined ? {} : { checks }),
+    ...(detail.unresolvedReviewThreadCount === undefined
+      ? {}
+      : { unresolvedReviewThreadCount: detail.unresolvedReviewThreadCount }),
   };
 }
 

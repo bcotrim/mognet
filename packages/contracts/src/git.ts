@@ -211,6 +211,7 @@ const VcsStatusChangeRequest = Schema.Struct({
   mergeStatus: Schema.optional(ChangeRequestMergeStatus),
   reviewDecision: Schema.optional(ChangeRequestReviewDecision),
   checks: Schema.optional(ChangeRequestChecksSummary),
+  unresolvedReviewThreadCount: Schema.optional(NonNegativeInt),
   /**
    * Last provider-side activity (ISO). For a merged/closed change request
    * this bounds when it reached that state, so clients can tell a PR that

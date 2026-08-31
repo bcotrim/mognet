@@ -668,6 +668,8 @@ export const PullRequestDetail = Schema.Struct({
   reviewers: Schema.Array(PullRequestActor),
   labels: Schema.Array(PullRequestLabel),
   checks: Schema.Array(PullRequestCheck),
+  reviewDecision: Schema.optional(PullRequestReviewDecision),
+  unresolvedReviewThreadCount: Schema.optional(NonNegativeInt),
   mergeCapabilities: PullRequestMergeCapabilities,
   /**
    * Who the host says the reader is, which is the one thing a conversation cannot be read without

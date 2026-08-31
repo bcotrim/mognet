@@ -607,6 +607,30 @@ describe("prStatusIndicator", () => {
       "text-red-600",
     );
   });
+
+  it("surfaces unresolved review comments on open pull requests", () => {
+    const openPr = status().pr;
+    if (!openPr) throw new Error("Expected pull request fixture");
+
+    expect(
+      prStatusIndicator({ ...openPr, unresolvedReviewThreadCount: 2 }, undefined),
+    ).toMatchObject({
+      unresolvedCommentCount: 2,
+      tooltipLead: "PR #42 - Open · 2 unresolved comments",
+    });
+    expect(
+      prStatusIndicator({ ...openPr, unresolvedReviewThreadCount: 1 }, undefined)?.tooltipLead,
+    ).toBe("PR #42 - Open · 1 unresolved comment");
+  });
+
+  it("drops the unresolved count once the pull request is no longer open", () => {
+    const openPr = status().pr;
+    if (!openPr) throw new Error("Expected pull request fixture");
+
+    expect(
+      prStatusIndicator({ ...openPr, state: "merged", unresolvedReviewThreadCount: 2 }, undefined),
+    ).toMatchObject({ unresolvedCommentCount: null, tooltipLead: "PR #42 - Merged" });
+  });
 });
 
 describe("settledPrHoverColorClass", () => {
