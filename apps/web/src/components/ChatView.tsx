@@ -1504,6 +1504,16 @@ function ChatViewContent(props: ChatViewProps) {
     }
   }, [activeThreadRef, hasWorkspaceProject]);
 
+  const defaultDiffOpenedThreadKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!activeThreadRef || !hasWorkspaceProject || shouldUseRightPanelSheet) return;
+    const threadKey = scopedThreadKey(activeThreadRef);
+    if (defaultDiffOpenedThreadKeysRef.current.has(threadKey)) return;
+    defaultDiffOpenedThreadKeysRef.current.add(threadKey);
+    if (threadKey in useRightPanelStore.getState().byThreadKey) return;
+    useRightPanelStore.getState().open(activeThreadRef, "diff");
+  }, [activeThreadRef, hasWorkspaceProject, shouldUseRightPanelSheet]);
+
   // Compute the list of environments this logical project spans, used to
   // drive the environment picker in BranchToolbar.
   const allProjects = useProjects();
