@@ -9,7 +9,6 @@ import {
   DEFAULT_SERVER_SETTINGS,
   STANDALONE_CHAT_PROJECT_ID,
   type EnvironmentId,
-  type ModelSelection,
   type ScopedProjectRef,
   type ServerSettings,
   type ThreadId,
@@ -32,11 +31,15 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { readThreadShell, useProjects, useServerConfigs, useThread } from "../state/entities";
-import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
+import {
+  resolveNewDraftStartFromOrigin,
+  resolveNewThreadModelSelectionOverride,
+} from "../lib/chatThreadActions";
 import { primaryServerSettingsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
+import { toastManager } from "../components/ui/toast";
 
 export function resolveNewThreadDefaults(
   settings: Pick<ServerSettings, "defaultThreadEnvMode" | "newWorktreesStartFromOrigin">,
@@ -51,13 +54,6 @@ export function resolveNewThreadDefaults(
       newWorktreesStartFromOrigin: settings.newWorktreesStartFromOrigin,
     }),
   };
-}
-
-export function resolveNewDraftModelSelection(
-  projectDefaultModelSelection: ModelSelection | null | undefined,
-  inheritedModelSelection: ModelSelection | null | undefined,
-): ModelSelection | null {
-  return projectDefaultModelSelection ?? inheritedModelSelection ?? null;
 }
 
 interface NewThreadWorkspaceOptions {
@@ -103,7 +99,7 @@ export function useNewThreadHandler() {
         startFromOrigin?: boolean;
         replace?: boolean;
         /**
-         * Move the viewed draft's typed content (prompt + images) into the
+         * Move the viewed draft's typed content and transferable attachments into the
          * draft this request lands on. Set by the draft repo picker: the
          * user started writing in the wrong project and the text should
          * follow them. Explicit new-thread surfaces leave this unset and
@@ -127,11 +123,10 @@ export function useNewThreadHandler() {
         setModelSelection,
       } = useComposerDraftStore.getState();
       const currentRouteTarget = getCurrentRouteTarget();
-      // A new thread carries the user's *working mode* from the thread being
-      // viewed: model (including options like reasoning effort and context
-      // window), permission mode, and interaction mode. Branch, worktree, and
-      // env mode never carry implicitly — those come from the configured
-      // defaults unless the caller passes them explicitly.
+      // A new thread carries the user's working mode from the thread being
+      // viewed. The target project's configured model still wins; runtime and
+      // interaction modes carry independently. Branch, worktree, and env mode
+      // come from configured defaults unless the caller passes them explicitly.
       const carrySourceShell =
         currentRouteTarget?.kind === "server"
           ? readThreadShell(currentRouteTarget.threadRef)
@@ -182,6 +177,18 @@ export function useNewThreadHandler() {
           composerDraftHasUserContent(getComposerDraft(carryContentSourceDraftId))
         ) {
           moveComposerPromptAndImages(carryContentSourceDraftId, destinationDraftId);
+          // The move caps at the destination's free slots and skips
+          // duplicates, so images and files can both stay behind.
+          const remainingDraft = getComposerDraft(carryContentSourceDraftId);
+          const remainingCount =
+            (remainingDraft?.files.length ?? 0) + (remainingDraft?.images.length ?? 0);
+          if (remainingCount > 0) {
+            toastManager.add({
+              type: "warning",
+              title: `${remainingCount} attachment${remainingCount === 1 ? " stayed" : "s stayed"} in the original draft`,
+              description: "Return to the original draft or attach the files again.",
+            });
+          }
         }
       };
       const project = projects.find(
@@ -189,6 +196,14 @@ export function useNewThreadHandler() {
           candidate.id === projectRef.projectId &&
           candidate.environmentId === projectRef.environmentId,
       );
+      const resolveModelSelectionOverride = (destinationDraftId: DraftId) =>
+        resolveNewThreadModelSelectionOverride({
+          projectDefaultSelection: project?.defaultModelSelection ?? null,
+          carrySelection: carryModelSelection,
+          carrySourceDraftId:
+            currentRouteTarget?.kind === "draft" ? currentRouteTarget.draftId : null,
+          destinationDraftId,
+        });
       const resolveDefaultEnvMode = async (): Promise<DraftThreadEnvMode> =>
         project?.defaultThreadEnvMode ?? primaryServerSettings.defaultThreadEnvMode;
       const logicalProjectKey = project
@@ -243,8 +258,10 @@ export function useNewThreadHandler() {
           // env context resets to the configured defaults so drafts seeded
           // before a defaults change (or by the old carry-over behavior) stop
           // landing on "current checkout" branches forever. When the draft is
-          // already open and no options were passed, leave it alone entirely —
-          // the user may have just picked a branch in the composer.
+          // already open and no options were passed, leave its workspace
+          // context alone entirely — the user may have just picked a branch
+          // in the composer. Model selection has its own explicit-pick rule
+          // below and does not follow this guard.
           let workspaceContext: NewThreadWorkspaceOptions | null = null;
           if (hasExplicitWorkspaceOption) {
             workspaceContext = pickExplicitWorkspaceOptions(options);
@@ -291,16 +308,31 @@ export function useNewThreadHandler() {
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             });
           }
-          const nextModelSelection = resolveNewDraftModelSelection(
-            project?.defaultModelSelection,
-            workspaceContext ? carryModelSelection : null,
-          );
-          if (nextModelSelection) {
-            // Project defaults also replace stale state when the reused draft
-            // is already open. Missing options mean "no options".
-            setModelSelection(emptyStoredDraftThread.draftId, nextModelSelection, {
-              replaceOptions: true,
-            });
+          // Model intent: an explicit human pick always stands. Seeds and
+          // legacy entries alike re-resolve here — sticky first, mirroring
+          // the mint-fresh path, then the project default or carried
+          // selection on top. This runs even when the draft is already open:
+          // without it, a changed pin could never reach the draft the user
+          // is looking at, because explicit picks are the only thing the
+          // flag protects.
+          const storedDraft = getComposerDraft(emptyStoredDraftThread.draftId);
+          const storedActiveSelection = storedDraft?.activeProvider
+            ? storedDraft.modelSelectionByProvider[storedDraft.activeProvider]
+            : undefined;
+          const storedDraftHasExplicitModelPick =
+            Boolean(storedActiveSelection) && storedDraft?.modelSelectionExplicit === true;
+          if (!storedDraftHasExplicitModelPick) {
+            applyStickyState(emptyStoredDraftThread.draftId);
+            const modelSelectionOverride = resolveModelSelectionOverride(
+              emptyStoredDraftThread.draftId,
+            );
+            if (modelSelectionOverride) {
+              // This is a complete snapshot: absent options mean "no options",
+              // not "keep the stale draft's options".
+              setModelSelection(emptyStoredDraftThread.draftId, modelSelectionOverride, {
+                replaceOptions: true,
+              });
+            }
           }
           // The workspace context must also ride along here: when projectRef
           // targets a different physical member of the logical project,
@@ -442,15 +474,12 @@ export function useNewThreadHandler() {
           runtimeMode: carryRuntimeMode ?? DEFAULT_RUNTIME_MODE,
           ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
         });
-        if (project?.defaultModelSelection == null) {
-          applyStickyState(draftId);
-        }
-        const initialModelSelection = resolveNewDraftModelSelection(
-          project?.defaultModelSelection,
-          carryModelSelection,
-        );
-        if (initialModelSelection) {
-          setModelSelection(draftId, initialModelSelection, { replaceOptions: true });
+        applyStickyState(draftId);
+        const modelSelectionOverride = resolveModelSelectionOverride(draftId);
+        if (modelSelectionOverride) {
+          // Project defaults and carried selections both outrank global sticky
+          // state. The project default wins when both are present.
+          setModelSelection(draftId, modelSelectionOverride, { replaceOptions: true });
         }
         carryComposerContentTo(draftId);
 

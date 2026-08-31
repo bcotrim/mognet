@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `a3a8cbd60539b4af4de8f96c892dbd07a2b6c041`
-- Reviewed on: `2026-08-27`
+- Last reviewed upstream commit: `1f8ed54add4133ac39effceded8fc1fff12d8e03`
+- Reviewed on: `2026-08-30`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -613,3 +613,111 @@ Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
   is no `main.tsx` Clerk mount to fix and no `@clerk/electron` dependency to bump.
 - Skipped `860caaa60` (upstream's v0.0.34 version bump). This fork tracks its own version
   line at `0.0.28`.
+
+### 2026-08-28 review
+
+- Ported `ead4ce52a` (Grok skills, plans, and turn reliability): the new
+  `GrokSkills` driver module, ACP session-update/plan handling in `AcpRuntimeModel`,
+  reasoning-effort propagation through `applyGrokAcpModelSelection`, xAI ACP extension
+  work, and the expanded adapter/provider regression suites.
+- Ported `f925d6394` and `94401d01b` (Codex 0.150): regenerated
+  `effect-codex-app-server` schemas for multi-agent events and the new account plans,
+  plus `CodexProvider` plan mapping. This also restored the package's
+  `schema.test.ts`, which this fork had been missing.
+- Ported `a6797b3b9`: projection bootstrap now replays every un-applied event instead
+  of stopping at the first gap.
+- Ported `230c5d4a5`: stale Codex approval callbacks are recovered instead of leaving
+  the turn wedged.
+- Ported `e2d4d12a8` (provider settings split into a list pane and an editor pane).
+  Upstream's files were taken wholesale, then this fork's divergences were re-applied:
+  the `ConnectionStatusDot` import stays pointed at `./ConnectionsSettings`, and the
+  `RelayConnectionTarget` / `relayManaged` "T3 Connect" branches stay deleted because
+  relay is removed here.
+- Ported the test-pruning commits `73f8cfc02`, `f6f2be32d`, and `64ca3b650`, except
+  `apps/web/src/components/threadSidebarWidth.test.ts`. That test was rewritten in this
+  fork to assert the Mognet sidebar wordmark against shipped CSS, so it is regression
+  coverage for our branding rather than upstream's trivial layout assertion; the
+  `THREAD_SIDEBAR_DEFAULT_WIDTH` export it needs was kept as well.
+- Dropped the usage-tracking half of `ead4ce52a` (`apps/server/src/usage`,
+  `packages/shared/src/usageMerge.ts`, `packages/contracts/src/usage.ts`,
+  `apps/web/src/components/usage`) and its `docs/user/{install,permission-modes,usage}.md`
+  updates. Those surfaces are removed from this fork.
+- Dropped the `apps/mobile` half of `ead4ce52a`.
+- Skipped `348367dcc` (Android adaptive launcher icon). Mobile is removed here.
+- Skipped `33b650a5b` (macOS preview DMG downloads). This fork has no
+  `.github/workflows/desktop-macos-preview.yml`; its CI is a single `quality` job.
+- Skipped `d3c24a14b` (upstream's v0.0.35 version bump). This fork tracks its own
+  version line at `0.0.28`.
+- Fixed two `ead4ce52a` fallout points that typecheck did not catch, both in
+  `GrokAdapter.ts`. Upstream imported `stableStringify` from
+  `@t3tools/shared/relaySigning`, which does not exist here because relay is removed,
+  so six server suites failed at import; the function is now defined locally at its only
+  call site. Upstream also called `Clock.monotonicTimeNanos`, which Effect beta.78 does
+  not export, so all five liveness-watchdog reads yielded `undefined`; they now use
+  `Clock.currentTimeNanos`, which is the same bigint nanosecond source, is TestClock
+  aware, and is only ever read as an elapsed-time delta here. Revisit both if this fork
+  ever takes the beta.103 upgrade.
+
+### 2026-08-30 review
+
+- Ported the web/desktop/server work from `b0ae3f3a8` through `c0e09f323`: muted tool-failure
+  markers, preview automation in agent-created threads, provider-settings editor stability and
+  list/editor cleanup, **Open on GitHub** on pull-request load failure, Codex sub-agent models,
+  PDF/ZIP/other attachments end to end (50 MB server uploads plus the composer half), keyboard
+  pin toggle, project-settings back button, searchable sidebar project filter, draft first-send
+  retry after a failed bootstrap, hidden-preview battery fix, OAuth popups from the browser
+  preview, small-screen task drawers, OpenCode child approvals/stops/model catalogs, the
+  configured stash shortcut, unpin confirmation, quadratic Codex input buffering, Claude
+  context-usage polling after turns, keybinding settings rows, environment-published themes,
+  the project picker popup staying inside the sidebar, thread-title generation retries, edited
+  pull-request comment refresh, four composer spacing defects, duplicate browser updates, and
+  nested markdown images.
+- Ported `84b9d9bc2` (project default models in new threads). Upstream's
+  `resolveNewThreadModelSelectionOverride` and the draft store's `modelSelectionExplicit` flag
+  replace this fork's home-grown `resolveNewDraftModelSelection`; the project default still
+  outranks sticky state, the carried thread selection, and stale reused-draft state, including
+  provider options. This fork's focused regression test moved onto the new resolver and kept its
+  provider-options assertions.
+- Ported `0bbecfabf` and `38154388d` as a pair. The second is an exact revert of the first, so
+  opt-in thread settling nets out to no change here; both were taken so the marker can advance
+  cleanly.
+- Ported the server half of `94f194816` (DPoP failure categories in `packages/shared/src/dpop.ts`,
+  the server auth paths, and the contract field). Dropped the client half: this fork's
+  `RemoteEnvironmentAuthorization` is bearer-only, so `relay/errorPresentation.ts`,
+  `mapRemoteDpopEnvironmentError`, and `connection/errors.test.ts` had no reachable caller.
+- Adapted `c1c2d5401` (environment-published themes). Upstream's `packages/shared/themePalettes`
+  arrived with the mobile built-in themes in `d23b181da`, which this fork skipped, so the shared
+  module here was written fresh: just `BUILT_IN_THEME_IDS` / `RESERVED_THEME_IDS` /
+  `UNPUBLISHABLE_THEME_IDS` with Mognet ids, which is all the CLI and the server watcher import.
+  `apps/web/src/themePalette.ts` keeps its own Mognet palettes and now reads the reserved set from
+  shared instead of duplicating it. Only `themeCommand` was added to `bin.ts`; upstream's
+  `service`, `servicePreflight`, `triage`, and `connect` subcommands do not exist here.
+- Added the `compact` size to `apps/web/src/components/ui/{input,select,toggle}.tsx` so
+  `be218ac76` (keybinding settings rows) could be taken as-is. This fork had been hand-rewriting
+  every `size="compact"` call site; the primitives now match upstream, and the local
+  glass-shadow and `cuelume` divergences in select/toggle are untouched.
+- Rebranded the incoming user docs to Mognet and moved `docs/user/providers-opencode.md` to this
+  fork's `docs/providers/opencode.md` layout, dropping its mobile paragraph. `docs/internals/`
+  additions were dropped; the `c1c2d5401` glossary entry landed in
+  `docs/reference/encyclopedia.md` instead.
+- Dropped the `apps/mobile` halves throughout, plus `infra/relay`, the relay/cloud halves of
+  `94f194816`, `docs/internals/providers.md`, and
+  `oxlint-plugin-t3code/rules/no-mobile-uniwind-theme-escape-hatches.ts`.
+- Skipped every mobile-only commit: `b982847ab`, `850e4582e`, `018d7f277`, `acb599d2d`,
+  `45c0dff8e`, `e89800895`, `8fc7f2294`, `4669eab8e`, `3e6ab36f6`, `38dcd7a40`, `053affbed`,
+  and `1f8ed54ad`.
+- Skipped `f94a0d646` (cache the WSL runtime on the Linux filesystem). It builds on the Windows
+  `server.asar` sidecar and `DesktopWslServerTree` from `c9063f03e`, which this fork has
+  skipped since the 2026-08-14 review.
+- Skipped `88be5631f` (connected-client platform analytics). There is no
+  `apps/server/src/telemetry` here.
+- Skipped `3d32797f6` (unify activity logs and composer banners). Its new
+  `ComposerServerUpdateStatus` needs `ServerUpdateAction`,
+  `resolveServerSelfUpdateCapability`, and `serverEnvironment.updateStateAtom` — all part of the
+  server self-update surface removed from this fork — and the rest is a `ComposerSurface`
+  restructure that collides with this fork's diverged glass-host and external-drawer composer
+  layout. Revisit when upstream's shape settles.
+- Skipped `ac3a33191` (removes an `experiments/` glass lab this fork never had), `2bc9e8ef6`
+  and `6a9d9f988` (upstream repo policy files), `5766dfbf5` (nightly release schedule; CI here
+  is a single `quality` job), and `3251b7548` (upstream's v0.0.36 bump; this fork tracks its own
+  version line).

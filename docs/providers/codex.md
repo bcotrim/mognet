@@ -33,6 +33,18 @@ In an existing Codex thread, send `/feedback` or `/feedback` followed by a descr
 issue. Mognet uploads the thread and Codex logs to OpenAI and shows a thread ID that you can copy
 and share with OpenAI employees.
 
+## Sub-agent models
+
+The web and desktop Agents panel shows each sub-agent's model and reasoning effort when Codex
+reports them. If Codex does not report either value, Mognet leaves it out instead of using the
+parent agent's settings.
+
+## Approve access to other apps
+
+When a Codex tool needs access to an app such as Safari, Mognet shows the app name and asks for
+approval. You can approve, decline, or cancel the request from the desktop app or web app. Some
+tools also offer approval for the current session or permanent approval.
+
 ## I Want Work And Personal Codex Accounts
 
 Use one real Codex home and one shadow home.
