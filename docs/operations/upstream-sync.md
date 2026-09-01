@@ -16,8 +16,8 @@ asks for them.
 
 ## Last Reviewed Upstream
 
-- Last reviewed upstream commit: `8b817cbcaad71a53e2ef73f3881067f8aa8094bc`
-- Reviewed on: `2026-08-31`
+- Last reviewed upstream commit: `85b656ff3`
+- Reviewed on: `2026-09-01`
 
 Use this marker for selective syncs that manually port or skip upstream commits.
 Those commits may continue to appear in `HEAD..upstream/main` because they were
@@ -759,3 +759,55 @@ Reviewed `beab6886f..5a7a7cf29` (56 commits) and ported 46.
   `packages/client-runtime/work-log/`, but the only consumer of that extraction is
   `apps/mobile`, so the helper stays inline here.
 - Dropped the `apps/mobile` halves of `c1e70b5f8`.
+
+### 2026-09-01 review
+
+Reviewed `8b817cbca..85b656ff3` (32 commits) and ported 14.
+
+- Ported web fixes: pull request row and chat header metadata no longer overlap at narrow
+  widths, pull request links open externally, invalid slash skill completions are hidden,
+  wide markdown tables get a scrollbar, WSL settings are searchable from the settings search,
+  and the files surface gained an expand/collapse all control.
+- Ported server fixes: `HTTP_ROUTER_CONFIG` raises find-my-way's `maxParamLength` to 512 so
+  MCP handoff thread IDs resolve over HTTP, and Claude capability probes skip IDE detection.
+- Ported `929f7e647` (Windows shell PATH priority) into `packages/shared/src/shell.ts`.
+- Ported browser recording quality (`395811105`): a `browserRecordingFrameRate` client
+  setting (30/60 fps) with the desktop preview Manager and web recorder rewritten around it.
+- Ported the server half of `31c1c5996`: `assetFileResponse` serves HTTP byte ranges for
+  video assets so the web player can seek. Kept this fork's gzip `httpCompressionLayer`
+  instead of upstream's `HttpMiddleware.compression()` re-definition, and dropped the mobile
+  client half.
+- Ported the web half of `ef84bc987` (smooth worktree setup status): the timeline working row
+  now shows a shimmering "Setting up worktree…" instead of the composer's static
+  "Preparing worktree..." text, and `resolveDraftPromotionNavigationTarget` keeps the draft
+  mounted until a turn actually starts or startup fails. Kept this fork's projectless-chat
+  bootstrap branch and `workingStepLabel` suffix, and inlined `isWorktreeSetupActivity` in
+  `apps/web/src/session-logic.ts` rather than adding the mobile-only
+  `packages/client-runtime/src/work-log/presentation.ts` module (still absent here per the
+  2026-08-31 review).
+- Ported only the `effect-service-conventions.md` hunk of `ad38700ac`; `.macroscope/approvability.md`
+  is still not present in this fork.
+- Preserved this fork's new-thread model defaults. No ported commit touches thread creation or
+  model selection; `useHandleNewThread.test.ts` and `resolveNewDraftModelSelection` coverage are
+  unchanged and passing.
+
+Skipped 18 commits:
+
+- `352710d49`, `e3dcc1615`, `f9137a0c8`, `9b2d04317`, `746c932e1`, `5ce92c2f1`, `f8e4accf2` —
+  mobile-only (offline iPhone voice input, composer attachment menu, Expo glass, draft
+  navigation, tool row shimmer, native image/PDF previews).
+- `30175a8af`, `9842518c9`, `3f62e6fa6` — the re-land of the composer banner unification this
+  fork skipped as `3d32797f6` on 2026-08-30. `ComposerServerUpdateStatus` still needs
+  `ServerUpdateAction`, `resolveServerSelfUpdateCapability`, and
+  `serverEnvironment.updateStateAtom`, all part of the server self-update surface removed here,
+  and there is no `ComposerSurface`/`ComposerBanner` in this tree. `3f62e6fa6` only drops
+  `workingStepLabel`, which upstream replaced with that composer activity strip; removing it
+  here would lose the plan step with nothing taking its place.
+- `2921050c6` — adds a `"cli"` member to `ClientSurface`. This fork's
+  `packages/contracts/src/baseSchemas.ts` has no `ClientSurface` and no event `origin` metadata.
+- `6d15c5bbc` — `apps/server/src/usage` does not exist in this fork.
+- `4e8e64fc0`, `0df043fd4`, `85b656ff3` — `.coderabbit.yaml` is not present here.
+- `038bf3739` — deletes a root `app.json` this fork does not have.
+- `7963ac740` — upstream's v0.0.37 bump; this fork tracks its own version line (0.0.28).
+- `4a9d2d0ce` — Electron 43.4.0 to 43.4.1. This fork pins Electron 41.5.0, so the bump does not
+  apply and moving to the 43 line needs a dedicated dependency migration.
